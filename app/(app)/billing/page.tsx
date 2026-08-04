@@ -1,8 +1,9 @@
-import { ModulePlaceholder } from "@/components/layout/ModulePlaceholder";
+import { RoleRestrictedModule } from "@/components/layout/RoleRestrictedModule";
 
 export default function BillingPage() {
   return (
-    <ModulePlaceholder
+    <RoleRestrictedModule
+      href="/billing"
       title="Billing"
       description="Configure billing rates, fee arrangements, billing cycles, and pre-invoice review."
       iconName="billing"

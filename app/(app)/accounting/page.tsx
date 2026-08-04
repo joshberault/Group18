@@ -1,10 +1,11 @@
-import { ModulePlaceholder } from "@/components/layout/ModulePlaceholder";
+import { RoleRestrictedModule } from "@/components/layout/RoleRestrictedModule";
 
 export default function AccountingPage() {
   return (
-    <ModulePlaceholder
+    <RoleRestrictedModule
+      href="/accounting"
       title="Accounting"
-      description="Trust accounting, retainers, write-downs, write-offs, and audit controls."
+      description="General ledger, trust accounting, reconciliation, and financial controls."
       iconName="accounting"
     />
   );

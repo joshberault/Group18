@@ -1,10 +1,11 @@
-import { ModulePlaceholder } from "@/components/layout/ModulePlaceholder";
+import { RoleRestrictedModule } from "@/components/layout/RoleRestrictedModule";
 
 export default function ReportsPage() {
   return (
-    <ModulePlaceholder
+    <RoleRestrictedModule
+      href="/reports"
       title="Reports"
-      description="Matter and client profitability, operational metrics, and firm performance reporting."
+      description="Profitability, utilization, collections, and operational analytics across the firm."
       iconName="reports"
     />
   );

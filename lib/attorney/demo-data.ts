@@ -135,6 +135,3 @@ export const DEMO_TASKS: Task[] = [
   },
 ];
 
-export function isDevPreview() {
-  return process.env.NEXT_PUBLIC_DEV_PREVIEW === "true";
-}

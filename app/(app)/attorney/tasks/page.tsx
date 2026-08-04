@@ -1,25 +1,11 @@
 import { formatDate, statusBadgeClass } from "@/lib/attorney/format";
-import { DEMO_TASKS, isDevPreview } from "@/lib/attorney/demo-data";
-import { createClient } from "@/lib/supabase/server";
-import { requireStaffRole } from "@/lib/auth/require-role";
+import { DEMO_TASKS } from "@/lib/attorney/demo-data";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-export default async function AttorneyTasksPage() {
-  const profile = await requireStaffRole();
 
-  let tasks = DEMO_TASKS;
-
-  if (!isDevPreview()) {
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from("tasks")
-      .select(`*, matter:matters ( title )`)
-      .eq("profile_id", profile.id)
-      .order("due_date", { ascending: true });
-
-    tasks = data ?? [];
-  }
+export default function AttorneyTasksPage() {
+  const tasks = DEMO_TASKS;
 
   return (
     <div>

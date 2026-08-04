@@ -1,12 +1,25 @@
 # Attorney Workflow (George Giddens)
 
-Branch: `feature/attorney-workflow-george-giddens`
-
 ## What this feature owns
 
 - **Tables:** `time_entries`, `tasks`, `deadlines`, `attorney_notes`, `expense_submissions`
 - **Pages:** `/attorney/dashboard`, `/attorney/matters`, `/attorney/time`, `/attorney/expenses`, `/attorney/tasks`
 - **RLS:** Staff see/insert own time & expenses; managers/admins see all
+
+## Demo role access (no login)
+
+Use the **Demo role** dropdown in the header to switch roles and see who can access each area:
+
+| Role | Attorney Hub | Billing / Accounting | Client Portal |
+|------|--------------|----------------------|---------------|
+| Managing Partner | Yes | Yes | Yes |
+| Attorney | Yes | No | No |
+| Paralegal | Yes | No | No |
+| Billing Specialist | Time only | Yes | No |
+| Firm Administrator | No | Yes | Yes |
+| Client | No | No | Yes |
+
+Sidebar nav and page guards update automatically when you change roles. Sample data is shown until real Supabase auth is added.
 
 ## Shared stubs (coordinate with teammates)
 
@@ -20,21 +33,13 @@ Branch: `feature/attorney-workflow-george-giddens`
 ## Setup
 
 1. `npm install`
-2. Ensure `.env.local` has Supabase URL + publishable key
+2. Optional: add Supabase URL + publishable key to `.env.local` for future auth
 3. Migration already applied: `supabase/migrations/20260804180000_attorney_workflow.sql`
-4. Create auth user in Supabase Dashboard
-5. Set role: `UPDATE profiles SET role = 'attorney' WHERE id = '<your-user-id>';`
-6. Run `supabase/seed_assignments.sql` with your user ID
-7. `npm run dev` → visit `/attorney/dashboard`
-
-## Role access
-
-Allowed: `attorney`, `manager`, `paralegal`, `staffer`, `admin`  
-Blocked: `client` (redirected to home with unauthorized message)
+4. `npm run dev` → visit `/dashboard` and switch demo roles in the header
 
 ## Team boundaries
 
-Do **not** modify on this branch:
+Do **not** modify without coordinating:
 - Client portal (Reigan)
 - Billing/invoicing (Allyson)
 - Accounting engine (Josh) — except `expense_submissions` handoff

@@ -1,10 +1,11 @@
-import { ModulePlaceholder } from "@/components/layout/ModulePlaceholder";
+import { RoleRestrictedModule } from "@/components/layout/RoleRestrictedModule";
 
 export default function InvoicesPage() {
   return (
-    <ModulePlaceholder
+    <RoleRestrictedModule
+      href="/invoices"
       title="Invoices & Collections"
-      description="Generate invoices, track payment status, manage collections, and monitor accounts receivable."
+      description="Generate invoices, track payments, manage collections, and monitor accounts receivable."
       iconName="invoices"
     />
   );
