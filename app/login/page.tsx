@@ -1,9 +1,16 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import { LoginForm } from "@/components/auth/LoginForm";
 import { Card } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const params = await searchParams;
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-4">
       <Card className="w-full max-w-md" padding="lg">
@@ -15,29 +22,26 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <form className="space-y-4">
-          <Input
-            label="Email"
-            type="email"
-            placeholder="you@firm.com"
-            disabled
-          />
-          <Input
-            label="Password"
-            type="password"
-            placeholder="Enter your password"
-            disabled
-          />
-          <p className="text-xs text-muted">
-            Authentication will be connected to Supabase on a future branch.
-            For now, use the dashboard to explore the application foundation.
+        {params.error === "auth-callback-failed" && (
+          <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            Email link failed or expired. Sign in with your password below.
           </p>
-          <Link href="/dashboard" className="block">
-            <Button className="w-full" type="button">
-              Continue to Dashboard (Demo)
+        )}
+
+        <Suspense fallback={<p className="text-sm text-muted">Loading...</p>}>
+          <LoginForm />
+        </Suspense>
+
+        <div className="mt-4 space-y-2">
+          <Link href="/attorney/dashboard" className="block">
+            <Button variant="secondary" className="w-full" type="button">
+              Continue to Attorney Dashboard (Demo)
             </Button>
           </Link>
-        </form>
+          <Link href="/dashboard" className="block text-center text-sm text-muted hover:text-navy-900">
+            Back to firm dashboard
+          </Link>
+        </div>
       </Card>
     </div>
   );

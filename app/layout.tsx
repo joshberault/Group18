@@ -9,8 +9,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "CounselFlow | Law Firm Matter and Revenue Management",
-  description:
-    "Contract-to-cash management system for mid-sized law firms.",
+  description: "Contract-to-cash management system for mid-sized law firms.",
 };
 
 export default function RootLayout({
