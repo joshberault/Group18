@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { TimeEntryForm } from "@/components/attorney/TimeEntryForm";
 import { TimeEntryList } from "@/components/attorney/TimeEntryList";
-import { createClient } from "@/lib/supabase/client";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { createClientSafe } from "@/lib/supabase/client";
 import type { Matter, TimeEntry } from "@/types/database";
 
 type Props = {
@@ -22,7 +23,9 @@ export function TimeEntriesPageClient({
   const [entries, setEntries] = useState(initialEntries);
 
   async function refreshEntries() {
-    const supabase = createClient();
+    const supabase = createClientSafe();
+    if (!supabase) return;
+
     const { data } = await supabase
       .from("time_entries")
       .select(`*, matter:matters ( title )`)
@@ -34,13 +37,10 @@ export function TimeEntriesPageClient({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-brand-700">Time Entries</h1>
-        <p className="mt-1 text-slate-600">
-          Log billable and non-billable hours. Entries stay pending until a manager
-          approves them (Reagan&apos;s approval queue).
-        </p>
-      </div>
+      <PageHeader
+        title="Time Entries"
+        description="Log billable and non-billable hours. Entries stay pending until a manager approves them."
+      />
 
       <TimeEntryForm
         matters={initialMatters}
@@ -50,7 +50,7 @@ export function TimeEntriesPageClient({
       />
 
       <div>
-        <h2 className="mb-3 text-lg font-semibold text-brand-700">Your entries</h2>
+        <h2 className="mb-3 text-lg font-semibold text-navy-900">Your entries</h2>
         <TimeEntryList entries={entries} />
       </div>
     </div>

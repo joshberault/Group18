@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { ExpenseForm } from "@/components/attorney/ExpenseForm";
 import { ExpenseList } from "@/components/attorney/ExpenseList";
-import { createClient } from "@/lib/supabase/client";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { createClientSafe } from "@/lib/supabase/client";
 import type { ExpenseSubmission, Matter } from "@/types/database";
 
 type Props = {
@@ -22,7 +23,9 @@ export function ExpensesPageClient({
   const [expenses, setExpenses] = useState(initialExpenses);
 
   async function refreshExpenses() {
-    const supabase = createClient();
+    const supabase = createClientSafe();
+    if (!supabase) return;
+
     const { data } = await supabase
       .from("expense_submissions")
       .select(`*, matter:matters ( title )`)
@@ -34,13 +37,10 @@ export function ExpensesPageClient({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-brand-700">Reimbursable Expenses</h1>
-        <p className="mt-1 text-slate-600">
-          Submit matter expenses for manager approval. Josh&apos;s accounting feature can
-          consume approved submissions later.
-        </p>
-      </div>
+      <PageHeader
+        title="Reimbursable Expenses"
+        description="Submit matter expenses for manager approval."
+      />
 
       <ExpenseForm
         matters={initialMatters}
@@ -50,7 +50,7 @@ export function ExpensesPageClient({
       />
 
       <div>
-        <h2 className="mb-3 text-lg font-semibold text-brand-700">Your submissions</h2>
+        <h2 className="mb-3 text-lg font-semibold text-navy-900">Your submissions</h2>
         <ExpenseList expenses={expenses} />
       </div>
     </div>

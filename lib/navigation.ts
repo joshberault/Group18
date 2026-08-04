@@ -39,14 +39,20 @@ export const NAV_ITEMS: NavItem[] = [
     description: "Legal matters and engagements",
   },
   {
+    label: "Attorney Hub",
+    href: "/attorney/dashboard",
+    icon: Briefcase,
+    description: "Assigned matters, time entries, and expenses",
+  },
+  {
     label: "Time & Expenses",
-    href: "/time",
+    href: "/attorney/time",
     icon: Clock,
     description: "Attorney time and billable expenses",
   },
   {
     label: "Tasks & Deadlines",
-    href: "/tasks",
+    href: "/attorney/tasks",
     icon: ListTodo,
     description: "Matter tasks and deadline tracking",
   },

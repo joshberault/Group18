@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { createClientSafe } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/Button";
+import { Card, CardTitle } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 import type { Matter } from "@/types/database";
 
 type Props = {
@@ -30,7 +35,13 @@ export function ExpenseForm({ matters, profileId, onCreated, previewMode = false
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
+    const supabase = createClientSafe();
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      setLoading(false);
+      return;
+    }
+
     const { error: insertError } = await supabase.from("expense_submissions").insert({
       matter_id: matterId,
       profile_id: profileId,
@@ -53,66 +64,49 @@ export function ExpenseForm({ matters, profileId, onCreated, previewMode = false
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-4 text-lg font-semibold text-brand-700">Log Reimbursable Expense</h2>
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="block text-sm">
-          <span className="mb-1 block text-slate-600">Matter</span>
-          <select
-            className="w-full rounded-md border border-slate-300 px-3 py-2"
+    <Card padding="md">
+      <CardTitle className="mb-4">Log Reimbursable Expense</CardTitle>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Select
+            label="Matter"
             value={matterId}
             onChange={(e) => setMatterId(e.target.value)}
+            options={matters.map((matter) => ({ value: matter.id, label: matter.title }))}
             required
-          >
-            {matters.map((matter) => (
-              <option key={matter.id} value={matter.id}>
-                {matter.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-slate-600">Date</span>
-          <input
+          />
+          <Input
+            label="Date"
             type="date"
-            className="w-full rounded-md border border-slate-300 px-3 py-2"
             value={expenseDate}
             onChange={(e) => setExpenseDate(e.target.value)}
             required
           />
-        </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-slate-600">Amount</span>
-          <input
+          <Input
+            label="Amount"
             type="number"
             min="0.01"
             step="0.01"
-            className="w-full rounded-md border border-slate-300 px-3 py-2"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="125.00"
             required
           />
-        </label>
-        <label className="block text-sm md:col-span-2">
-          <span className="mb-1 block text-slate-600">Description</span>
-          <textarea
-            className="min-h-24 w-full rounded-md border border-slate-300 px-3 py-2"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Court filing fee, travel, expert invoice..."
-            required
-          />
-        </label>
-      </div>
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-      <button
-        type="submit"
-        disabled={loading || matters.length === 0}
-        className="mt-4 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-      >
-        {loading ? "Submitting..." : "Submit for Manager Approval"}
-      </button>
-    </form>
+          <div className="md:col-span-2">
+            <Textarea
+              label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Court filing fee, travel, expert invoice..."
+              required
+            />
+          </div>
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <Button type="submit" disabled={loading || matters.length === 0}>
+          {loading ? "Submitting..." : "Submit for Manager Approval"}
+        </Button>
+      </form>
+    </Card>
   );
 }

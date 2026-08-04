@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { Briefcase, Clock, ListTodo } from "lucide-react";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { KPICard } from "@/components/ui/KPICard";
 import { requireStaffRole } from "@/lib/auth/require-role";
 import {
   DEMO_MATTERS,
@@ -39,27 +42,22 @@ export default async function AttorneyDashboardPage() {
   }
 
   const cards = [
-    { label: "Assigned matters", value: matterCount, href: "/attorney/matters" },
-    { label: "Pending time entries", value: pendingTime, href: "/attorney/time" },
-    { label: "Open tasks", value: openTasks, href: "/attorney/tasks" },
+    { label: "Assigned matters", value: String(matterCount), href: "/attorney/matters", icon: Briefcase },
+    { label: "Pending time entries", value: String(pendingTime), href: "/attorney/time", icon: Clock },
+    { label: "Open tasks", value: String(openTasks), href: "/attorney/tasks", icon: ListTodo },
   ];
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-brand-700">Attorney Dashboard</h1>
-      <p className="mt-1 text-slate-600">
-        Daily work hub for matters, time, expenses, and tasks.
-      </p>
+      <PageHeader
+        title="Attorney Hub"
+        description={`Welcome back, ${profile.full_name}. Track matters, time, and tasks.`}
+      />
 
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3">
         {cards.map((card) => (
-          <Link
-            key={card.label}
-            href={card.href}
-            className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-brand-200"
-          >
-            <p className="text-sm text-slate-500">{card.label}</p>
-            <p className="mt-2 text-3xl font-bold text-brand-700">{card.value}</p>
+          <Link key={card.label} href={card.href} className="block transition hover:opacity-95">
+            <KPICard title={card.label} value={card.value} icon={card.icon} />
           </Link>
         ))}
       </div>

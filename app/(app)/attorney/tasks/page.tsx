@@ -1,11 +1,10 @@
-import {
-  DEMO_TASKS,
-  isDevPreview,
-} from "@/lib/attorney/demo-data";
+import { formatDate, statusBadgeClass } from "@/lib/attorney/format";
+import { DEMO_TASKS, isDevPreview } from "@/lib/attorney/demo-data";
 import { createClient } from "@/lib/supabase/server";
 import { requireStaffRole } from "@/lib/auth/require-role";
-import { formatDate, statusBadgeClass } from "@/lib/utils";
-
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 export default async function AttorneyTasksPage() {
   const profile = await requireStaffRole();
 
@@ -24,26 +23,20 @@ export default async function AttorneyTasksPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-brand-700">Tasks</h1>
-      <p className="mt-1 text-slate-600">Today&apos;s work items tied to your matters.</p>
+      <PageHeader title="Tasks" description="Work items tied to your assigned matters." />
 
       {tasks.length === 0 ? (
-        <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white p-8 text-sm text-slate-500">
-          No tasks yet.
-        </div>
+        <EmptyState title="No tasks yet" description="Tasks will appear here once assigned." />
       ) : (
-        <div className="mt-6 space-y-3">
+        <div className="space-y-3">
           {tasks.map((task) => (
-            <article
-              key={task.id}
-              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-            >
+            <Card key={task.id} padding="md">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="font-semibold text-brand-700">{task.title}</h2>
-                  <p className="text-sm text-slate-600">{task.matter?.title}</p>
+                  <h2 className="font-semibold text-navy-900">{task.title}</h2>
+                  <p className="text-sm text-muted">{task.matter?.title}</p>
                   {task.description && (
-                    <p className="mt-2 text-sm text-slate-600">{task.description}</p>
+                    <p className="mt-2 text-sm text-muted">{task.description}</p>
                   )}
                 </div>
                 <span
@@ -52,8 +45,8 @@ export default async function AttorneyTasksPage() {
                   {task.status.replace("_", " ")}
                 </span>
               </div>
-              <p className="mt-3 text-sm text-slate-500">Due {formatDate(task.due_date)}</p>
-            </article>
+              <p className="mt-3 text-sm text-muted">Due {formatDate(task.due_date)}</p>
+            </Card>
           ))}
         </div>
       )}

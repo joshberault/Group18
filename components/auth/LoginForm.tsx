@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { createClientSafe } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 export function LoginForm() {
   const router = useRouter();
@@ -19,7 +21,13 @@ export function LoginForm() {
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
+    const supabase = createClientSafe();
+    if (!supabase) {
+      setError("Supabase is not configured. Use demo mode or add .env.local.");
+      setLoading(false);
+      return;
+    }
+
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -38,30 +46,23 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <label className="block text-sm">
-        <span className="mb-1 block text-slate-600">Email</span>
-        <input
-          type="email"
-          autoComplete="email"
-          className="w-full rounded-md border border-slate-300 px-3 py-2"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          required
-        />
-      </label>
-
-      <label className="block text-sm">
-        <span className="mb-1 block text-slate-600">Password</span>
-        <input
-          type="password"
-          autoComplete="current-password"
-          className="w-full rounded-md border border-slate-300 px-3 py-2"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-      </label>
+      <Input
+        label="Email"
+        type="email"
+        autoComplete="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@firm.com"
+        required
+      />
+      <Input
+        label="Password"
+        type="password"
+        autoComplete="current-password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        required
+      />
 
       {error && (
         <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -69,13 +70,9 @@ export function LoginForm() {
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-      >
+      <Button type="submit" disabled={loading} className="w-full">
         {loading ? "Signing in..." : "Sign in"}
-      </button>
+      </Button>
     </form>
   );
 }
