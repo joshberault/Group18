@@ -106,19 +106,23 @@ Assign modules to teammates and record branch names here as work begins:
 app/
   (app)/          # Authenticated shell routes (sidebar layout)
   login/          # Login page (minimal layout)
-  page.tsx        # Redirects to /dashboard
+  page.tsx        # Redirects to role default workspace
 components/
-  layout/         # App shell, sidebar, header, navigation
+  layout/         # App shell, sidebar, header, role guard
   ui/             # Reusable design system components
   dashboard/      # Dashboard-specific components
+  accounting/     # Accounting workspace components
 lib/
+  roles/          # Centralized demo role and permission config
   supabase/       # Supabase browser client
   types/          # Shared TypeScript types
   mock-data/      # Mock dashboard data (replace with Supabase later)
   navigation.ts   # Single source of truth for sidebar nav
+docs/
+  role-access.md  # How teammates connect modules to the role system
 ```
 
-Navigation items are defined in `lib/navigation.ts`. Update that file instead of editing sidebar links in multiple places.
+Navigation items are defined in `lib/navigation.ts`. Role visibility is configured in `lib/roles/role-config.ts`.
 
 ## Shared Types
 
@@ -128,7 +132,11 @@ Import domain types from `lib/types`:
 
 ## Demo Role Switcher
 
-The header includes a demonstration role switcher (not production auth). Selected role is stored in `localStorage` and updates the dashboard welcome message and role summary.
+The header includes a demonstration role switcher (not production auth). Selected role is stored in `localStorage`, filters navigation, protects routes, and updates dashboard content.
+
+See **[docs/role-access.md](docs/role-access.md)** for how to add routes, permissions, and connect your module to the role system.
+
+**Important:** Demo role checks are frontend-only. Supabase Row Level Security is still required for production security.
 
 ## License
 
