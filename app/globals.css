@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy-950: #0f1729;
+  --color-navy-900: #1e2a4a;
+  --color-navy-800: #2a3a5c;
+  --color-navy-700: #3d4f73;
+  --color-gold-500: #c9a227;
+  --color-gold-400: #d4b44a;
+  --color-gold-100: #f5ecd4;
+  --color-surface: #f8f9fb;
+  --color-muted: #6b7280;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-surface text-navy-900;
+  }
+}
