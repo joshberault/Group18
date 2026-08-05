@@ -19,6 +19,7 @@ import type {
   Invoice,
   InvoiceStatus,
 } from "@/lib/billing/invoice-types";
+import { BILLING_ROUTES } from "@/lib/billing/routes";
 
 type Props = {
   invoices?: Invoice[];
@@ -259,7 +260,11 @@ export function InvoiceManagementSection({ invoices }: Props) {
       <header className="inv-mgmt__header">
         <div>
           <p className="page-back">
-            <Link href="/billing">← Billing Dashboard</Link>
+            <Link href={BILLING_ROUTES.dashboard}>← Billing Dashboard</Link>
+            {" · "}
+            <Link href={BILLING_ROUTES.generateInvoice}>Generate Invoice</Link>
+            {" · "}
+            <Link href={BILLING_ROUTES.receivables}>Accounts Receivable</Link>
           </p>
           <h2 id="inv-mgmt-heading">
             {attorney !== "all"

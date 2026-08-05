@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { GenerateInvoicePreview } from "@/components/billing/GenerateInvoicePreview";
 import type {
   FinalizedInvoiceRecord,
@@ -15,15 +15,20 @@ import type {
   UnbilledTimeEntry,
 } from "@/lib/billing/generate-invoice-types";
 import {
-  GENERATE_CLIENTS,
-  getMattersForClient,
-} from "@/lib/billing/generate-invoice-seed";
-import {
   allocateNextInvoiceNumber,
   buildManagedInvoiceFromGeneration,
   upsertGeneratedInvoice,
 } from "@/lib/billing/invoice-management-store";
+import {
+  type CatalogSource,
+  loadBillingClients,
+  loadBillingMattersForClient,
+} from "@/lib/billing/counselflow-catalog";
 import { toIsoDate } from "@/lib/billing/billing-period";
+import {
+  BILLING_ROUTES,
+  invoicesHref,
+} from "@/lib/billing/routes";
 
 const STEPS = [
   "Select Client",
@@ -214,7 +219,7 @@ function isSessionClient(client: GenerateClient): boolean {
 
 /**
  * Matters created during this invoice workflow (Add legal matter or new-client starter).
- * Firm directory matters (seed ids like gm-1) are never editable.
+ * CounselFlow / seed firm matters are never editable here.
  */
 function isSessionCreatedMatter(matter: GenerateMatter): boolean {
   return (
@@ -292,7 +297,16 @@ function createStarterMatter(clientId: string, clientName: string): GenerateMatt
 export function GenerateInvoiceWizard() {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [clients, setClients] = useState<GenerateClient[]>(GENERATE_CLIENTS);
+  const [clients, setClients] = useState<GenerateClient[]>([]);
+  const [catalogSource, setCatalogSource] =
+    useState<CatalogSource>("empty");
+  const [catalogMessage, setCatalogMessage] = useState<string | null>(
+    "Loading firm clients…",
+  );
+  const [clientsLoading, setClientsLoading] = useState(true);
+  const [firmMatters, setFirmMatters] = useState<GenerateMatter[]>([]);
+  const [mattersLoading, setMattersLoading] = useState(false);
+  const [mattersMessage, setMattersMessage] = useState<string | null>(null);
   const [extraMatters, setExtraMatters] = useState<GenerateMatter[]>([]);
   const [showAddClient, setShowAddClient] = useState(false);
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
@@ -339,12 +353,56 @@ export function GenerateInvoiceWizard() {
     new Set(),
   );
 
+  /** Session-only “add client” when firm directory is empty or offline seed. */
+  const allowSessionClients =
+    catalogSource !== "counselflow" || clients.every(isSessionClient);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setClientsLoading(true);
+      const catalog = await loadBillingClients();
+      if (cancelled) return;
+      setClients(catalog.clients);
+      setCatalogSource(catalog.source);
+      setCatalogMessage(catalog.message);
+      setClientsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const reloadMattersForClient = useCallback(
+    async (firmClient: GenerateClient | null) => {
+      if (!firmClient) {
+        setFirmMatters([]);
+        setMattersMessage(null);
+        setMattersLoading(false);
+        return;
+      }
+      setMattersLoading(true);
+      setMattersMessage(null);
+      const catalog = await loadBillingMattersForClient(firmClient.id, {
+        catalogSource,
+      });
+      setFirmMatters(catalog.matters);
+      setMattersMessage(catalog.message);
+      setMattersLoading(false);
+    },
+    [catalogSource],
+  );
+
   const matters = useMemo(() => {
     if (!client) return [];
-    const seeded = getMattersForClient(client.id);
     const added = extraMatters.filter((m) => m.clientId === client.id);
-    return [...seeded, ...added];
-  }, [client, extraMatters]);
+    // Firm/seed matters first, then session-added for this client
+    const firmIds = new Set(firmMatters.map((m) => m.id));
+    return [
+      ...firmMatters,
+      ...added.filter((m) => !firmIds.has(m.id)),
+    ];
+  }, [client, firmMatters, extraMatters]);
 
   /** All unbilled (not locked) time shown on Step 3, including pending/rejected */
   const unbilledTimeEntries = useMemo(() => {
@@ -462,12 +520,15 @@ export function GenerateInvoiceWizard() {
     setInvoiceNumber("");
     setInvoiceDate("");
     setDueDate("");
+    void reloadMattersForClient(next);
   }
 
   function loadClientIntoForm(clientId: string) {
     setSelectedClientId(clientId);
     setSelectClientErrors([]);
     setClient(null);
+    setFirmMatters([]);
+    setMattersMessage(null);
     if (!clientId) {
       setAutofillName("");
       setAutofillClientId("");
@@ -546,6 +607,12 @@ export function GenerateInvoiceWizard() {
   }
 
   function openAddClientForm() {
+    if (!allowSessionClients) {
+      setMessages([
+        "Clients come from the CounselFlow Clients module. Add or edit clients there, then return to Generate Invoice.",
+      ]);
+      return;
+    }
     setEditingClientId(null);
     setNewClientForm(emptyClientForm());
     setAddClientErrors([]);
@@ -1219,7 +1286,7 @@ export function GenerateInvoiceWizard() {
   }
 
   function cancelWizard() {
-    router.push("/billing");
+    router.push(BILLING_ROUTES.dashboard);
   }
 
   return (
@@ -1228,7 +1295,7 @@ export function GenerateInvoiceWizard() {
         <div className="dashboard__brand-block">
           <p className="dashboard__firm">North &amp; Vale LLP · Billing</p>
           <p className="page-back">
-            <Link href="/billing">← Billing Dashboard</Link>
+            <Link href={BILLING_ROUTES.dashboard}>← Billing Dashboard</Link>
           </p>
           <h1 className="dashboard__title">Generate Invoice</h1>
           <p className="dashboard__lede">
@@ -1279,7 +1346,7 @@ export function GenerateInvoiceWizard() {
           {managementLinkNumber ? (
             <p style={{ margin: "0.55rem 0 0" }}>
               <Link
-                href={`/invoices?highlight=${encodeURIComponent(managementLinkNumber)}`}
+                href={invoicesHref({ highlight: managementLinkNumber })}
                 className="dashboard__create-btn"
                 style={{ display: "inline-flex" }}
               >
@@ -1302,24 +1369,40 @@ export function GenerateInvoiceWizard() {
           <div className="gi__stack">
             <div className="gi-step1-toolbar">
               <p className="gi-muted" style={{ margin: 0, flex: 1 }}>
-                Select an existing client to autofill basic details, then
-                complete the invoice amounts. Invoice number and dates appear
-                only on the Preview step.
+                {catalogSource === "counselflow"
+                  ? "Clients are loaded from the CounselFlow Clients module. Select a client to continue; matters for that client load on the next step."
+                  : "Select an existing client to autofill basic details, then complete the invoice amounts. Invoice number and dates appear only on the Preview step."}
               </p>
-              <button
-                type="button"
-                className="dashboard__create-btn"
-                onClick={() => {
-                  if (showAddClient) {
-                    closeClientForm();
-                  } else {
-                    openAddClientForm();
-                  }
-                }}
-              >
-                {showAddClient ? "Close form" : "Add client"}
-              </button>
+              {allowSessionClients ? (
+                <button
+                  type="button"
+                  className="dashboard__create-btn"
+                  onClick={() => {
+                    if (showAddClient) {
+                      closeClientForm();
+                    } else {
+                      openAddClientForm();
+                    }
+                  }}
+                >
+                  {showAddClient ? "Close form" : "Add client"}
+                </button>
+              ) : (
+                <Link
+                  href="/clients"
+                  className="dashboard__create-btn"
+                  style={{ display: "inline-flex", textDecoration: "none" }}
+                >
+                  Open Clients module
+                </Link>
+              )}
             </div>
+
+            {catalogMessage ? (
+              <p className="gi-muted" role="status" style={{ margin: 0 }}>
+                {clientsLoading ? "Loading firm clients…" : catalogMessage}
+              </p>
+            ) : null}
 
             <div className="gi-add-client panel" aria-label="Select existing client">
               <header className="panel__header">
@@ -1327,11 +1410,9 @@ export function GenerateInvoiceWizard() {
                   Select existing client
                 </h3>
                 <p>
-                  Choose a client from the firm list. Name and Client ID fill
-                  automatically. Edit Billing Contact if needed, then complete
-                  the money amounts for this invoice. Clients you added during
-                  this process can be fully edited anytime you return to this
-                  step.
+                  {catalogSource === "counselflow"
+                    ? "Choose a client from firm CRM records. Name and Client ID fill automatically. Adjust billing contact and amounts for this invoice only."
+                    : "Choose a client from the list. Name and Client ID fill automatically. Edit Billing Contact if needed, then complete the money amounts for this invoice."}
                 </p>
               </header>
 
@@ -1351,8 +1432,15 @@ export function GenerateInvoiceWizard() {
                   <select
                     value={selectedClientId}
                     onChange={(e) => loadClientIntoForm(e.target.value)}
+                    disabled={clientsLoading || clients.length === 0}
                   >
-                    <option value="">Choose a client…</option>
+                    <option value="">
+                      {clientsLoading
+                        ? "Loading clients…"
+                        : clients.length === 0
+                          ? "No clients available"
+                          : "Choose a client…"}
+                    </option>
                     {clients.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} ({c.clientId})
@@ -1649,7 +1737,9 @@ export function GenerateInvoiceWizard() {
                 Matters for <strong>{client.name}</strong>
                 {isSessionClient(client)
                   ? " — you can edit this client on Step 1 anytime."
-                  : ""}
+                  : catalogSource === "counselflow"
+                    ? " — from CounselFlow (matters linked to this client)."
+                    : ""}
               </p>
               <div className="gi-actions" style={{ margin: 0 }}>
                 {isSessionClient(client) ? (
@@ -1679,6 +1769,17 @@ export function GenerateInvoiceWizard() {
                 </button>
               </div>
             </div>
+
+            {mattersLoading ? (
+              <p className="gi-muted" role="status">
+                Loading matters for this client…
+              </p>
+            ) : null}
+            {mattersMessage && !mattersLoading ? (
+              <p className="gi-muted" role="status">
+                {mattersMessage}
+              </p>
+            ) : null}
 
             {showAddMatter ? (
               <div
@@ -1856,14 +1957,26 @@ export function GenerateInvoiceWizard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {matters.length === 0 ? (
+                  {mattersLoading ? (
                     <tr>
                       <td
                         colSpan={6}
                         className="gi-muted"
                         style={{ padding: "1rem" }}
                       >
-                        No matters for this client yet. Use Add legal matter.
+                        Loading matters…
+                      </td>
+                    </tr>
+                  ) : matters.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="gi-muted"
+                        style={{ padding: "1rem" }}
+                      >
+                        No matters for this client yet. Open the Clients module
+                        to add matters, or use Add legal matter for this invoice
+                        only.
                       </td>
                     </tr>
                   ) : (
@@ -2526,7 +2639,7 @@ export function GenerateInvoiceWizard() {
             Continue
           </button>
         ) : (
-          <Link href="/billing" className="gi-btn gi-btn--ghost">
+          <Link href={BILLING_ROUTES.dashboard} className="gi-btn gi-btn--ghost">
             Return to Dashboard
           </Link>
         )}

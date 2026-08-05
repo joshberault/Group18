@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { MetricCard } from "@/components/billing/MetricCard";
 import { RevenueByAttorney } from "@/components/billing/RevenueByAttorney";
@@ -18,6 +19,11 @@ import {
   getServerInvoicesSnapshot,
   subscribeInvoiceCatalog,
 } from "@/lib/billing/invoice-management-store";
+import {
+  BILLING_ROUTES,
+  invoicesHref,
+  receivablesHref,
+} from "@/lib/billing/routes";
 import type { BillingDashboardData } from "@/lib/billing/types";
 
 type Props = {
@@ -126,9 +132,12 @@ export function BillingDashboard({ data }: Props) {
           </p>
         </div>
         <div className="dashboard__actions">
-          <a href="/invoices/generate" className="dashboard__create-btn">
+          <Link
+            href={BILLING_ROUTES.generateInvoice}
+            className="dashboard__create-btn"
+          >
             Create Invoice
-          </a>
+          </Link>
           <p className="dashboard__source" role="status">
             Data source:{" "}
             <span>
@@ -215,7 +224,7 @@ export function BillingDashboard({ data }: Props) {
               : undefined
           }
           actionLabel="View invoices"
-          actionHref="/invoices"
+          actionHref={BILLING_ROUTES.invoices}
           actionStyle="button"
         />
         <MetricCard
@@ -224,7 +233,7 @@ export function BillingDashboard({ data }: Props) {
           value={formatCurrency(outstandingReceivable)}
           tone="attention"
           actionLabel="View Accounts"
-          actionHref="/receivables"
+          actionHref={BILLING_ROUTES.receivables}
           actionStyle="button"
         />
         <MetricCard
@@ -233,7 +242,7 @@ export function BillingDashboard({ data }: Props) {
           value={formatCurrency(collectionsInPeriod)}
           tone="positive"
           actionLabel="View completed"
-          actionHref="/invoices?view=completed"
+          actionHref={invoicesHref({ view: "completed" })}
           actionStyle="button"
         />
         <MetricCard
@@ -242,7 +251,7 @@ export function BillingDashboard({ data }: Props) {
           value={formatInteger(overdueInvoices)}
           tone={overdueInvoices > 0 ? "attention" : "default"}
           actionLabel="View Overdue"
-          actionHref="/receivables?view=overdue"
+          actionHref={receivablesHref({ view: "overdue" })}
           actionStyle="button"
         />
       </section>
