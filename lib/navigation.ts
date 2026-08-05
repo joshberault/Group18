@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   ListTodo,
   Receipt,
+  UserCog,
   Users,
   UserCircle,
 } from "lucide-react";
@@ -39,6 +40,10 @@ const BILLING_TEAM: UserRole[] = [
   "firm_administrator",
 ];
 
+/**
+ * Sidebar navigation with demo-role visibility.
+ * Admin/Staff Information is Firm Administrator only (Person 5).
+ */
 export const NAV_ITEMS: NavItem[] = [
   {
     label: "Dashboard",
@@ -60,6 +65,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Briefcase,
     description: "Legal matters and engagements",
     roles: STAFF,
+  },
+  {
+    label: "Admin/Staff Information",
+    href: "/admin",
+    icon: UserCog,
+    description:
+      "Employees, matters, assignments, approvals, workload, and roles",
+    roles: ["firm_administrator"],
   },
   {
     label: "Attorney Hub",
