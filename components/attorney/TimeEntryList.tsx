@@ -1,0 +1,51 @@
+import { formatDate, statusBadgeClass } from "@/lib/attorney/format";
+import { EmptyState } from "@/components/ui/EmptyState";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/Table";
+import type { TimeEntry } from "@/types/database";
+
+export function TimeEntryList({ entries }: { entries: TimeEntry[] }) {
+  if (entries.length === 0) {
+    return (
+      <EmptyState
+        title="No time entries yet"
+        description="Log your first entry using the form above."
+      />
+    );
+  }
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Date</TableHead>
+          <TableHead>Matter</TableHead>
+          <TableHead>Hours</TableHead>
+          <TableHead>Description</TableHead>
+          <TableHead>Status</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {entries.map((entry) => (
+          <TableRow key={entry.id}>
+            <TableCell>{formatDate(entry.entry_date)}</TableCell>
+            <TableCell>{entry.matter?.title ?? "—"}</TableCell>
+            <TableCell>{entry.hours}</TableCell>
+            <TableCell>{entry.description}</TableCell>
+            <TableCell>
+              <span className={`rounded-full px-2 py-1 text-xs font-medium capitalize ${statusBadgeClass(entry.status)}`}>
+                {entry.status}
+              </span>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}

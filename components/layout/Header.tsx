@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { Bell, Menu, Search } from "lucide-react";
 import { getActiveNotificationCount } from "@/lib/client-portal/notifications-store";
 import { USER_ROLE_LABELS, USER_ROLES, type UserRole } from "@/lib/types";
-import { DEMO_USER_NAME } from "@/lib/mock-data/dashboard";
 import { cn } from "@/lib/utils/cn";
 import { useDemoRole } from "./DemoRoleProvider";
 import { Button } from "@/components/ui/Button";
@@ -18,7 +17,7 @@ interface HeaderProps {
 
 export function Header({ onMenuClick, className }: HeaderProps) {
   const router = useRouter();
-  const { role, setRole } = useDemoRole();
+  const { selectedRole, setSelectedRole, identity } = useDemoRole();
 
   const roleOptions = USER_ROLES.map((r) => ({
     value: r,
@@ -26,7 +25,7 @@ export function Header({ onMenuClick, className }: HeaderProps) {
   }));
 
   function handleRoleChange(newRole: UserRole) {
-    setRole(newRole);
+    setSelectedRole(newRole);
 
     if (newRole === "client" && getActiveNotificationCount() > 0) {
       router.push("/client-portal/upload-documents");
@@ -66,9 +65,9 @@ export function Header({ onMenuClick, className }: HeaderProps) {
           <Select
             label="Demo role"
             options={roleOptions}
-            value={role}
+            value={selectedRole}
             onChange={(e) => handleRoleChange(e.target.value as UserRole)}
-            className="min-w-[180px]"
+            className="min-w-[200px]"
             aria-label="Switch demonstration role"
           />
         </div>
@@ -78,12 +77,12 @@ export function Header({ onMenuClick, className }: HeaderProps) {
         </Button>
 
         <div className="hidden text-right sm:block">
-          <p className="text-sm font-medium text-navy-900">{DEMO_USER_NAME}</p>
-          <p className="text-xs text-muted">{USER_ROLE_LABELS[role]}</p>
+          <p className="text-sm font-medium text-navy-900">{identity.fullName}</p>
+          <p className="text-xs text-muted">{USER_ROLE_LABELS[selectedRole]}</p>
         </div>
 
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-900 text-sm font-semibold text-gold-500">
-          AC
+          {identity.initials}
         </div>
       </div>
     </header>

@@ -1,11 +1,11 @@
-import { ModulePlaceholder } from "@/components/layout/ModulePlaceholder";
+import { BillingModuleShell } from "@/components/billing/BillingModuleShell";
+import { InvoiceManagementSection } from "@/components/billing/InvoiceManagementSection";
 
+/** Invoice Management — search, filter, and open invoice detail. */
 export default function InvoicesPage() {
   return (
-    <ModulePlaceholder
-      title="Invoices & Collections"
-      description="Generate invoices, track payment status, manage collections, and monitor accounts receivable."
-      iconName="invoices"
-    />
+    <BillingModuleShell>
+      <InvoiceManagementSection />
+    </BillingModuleShell>
   );
 }

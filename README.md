@@ -89,7 +89,7 @@ Assign modules to teammates and record branch names here as work begins:
 | Module | Route | Owner | Branch |
 |--------|-------|-------|--------|
 | Dashboard | `/dashboard` | Shared foundation | `main` |
-| Clients | `/clients` | TBD | TBD |
+| Clients | `/clients` | Joseph | `Joseph` |
 | Matters | `/matters` | TBD | TBD |
 | Time & Expenses | `/time` | TBD | TBD |
 | Tasks & Deadlines | `/tasks` | TBD | TBD |
@@ -98,24 +98,26 @@ Assign modules to teammates and record branch names here as work begins:
 | Accounting | `/accounting` | TBD | TBD |
 | Reports | `/reports` | TBD | TBD |
 | Client Portal | `/client-portal` | TBD | TBD |
-| Authentication | `/login` | TBD | TBD |
+
+Access is controlled by the **Demo role** dropdown in the header (no login required for now).
 
 ## Project Structure
 
 ```
 app/
-  (app)/          # Authenticated shell routes (sidebar layout)
-  login/          # Login page (minimal layout)
+  (app)/          # App shell routes (sidebar layout)
   page.tsx        # Redirects to /dashboard
 components/
   layout/         # App shell, sidebar, header, navigation
+  auth/           # Demo role guards
   ui/             # Reusable design system components
   dashboard/      # Dashboard-specific components
 lib/
-  supabase/       # Supabase browser client
+  auth/           # Demo role access helpers
+  supabase/       # Supabase browser client (for future auth)
   types/          # Shared TypeScript types
   mock-data/      # Mock dashboard data (replace with Supabase later)
-  navigation.ts   # Single source of truth for sidebar nav
+  navigation.ts   # Single source of truth for sidebar nav + role access
 ```
 
 Navigation items are defined in `lib/navigation.ts`. Update that file instead of editing sidebar links in multiple places.

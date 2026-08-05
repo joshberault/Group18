@@ -1,11 +1,5 @@
-import { ModulePlaceholder } from "@/components/layout/ModulePlaceholder";
+import { AccountingPageClient } from "./AccountingPageClient";
 
 export default function AccountingPage() {
-  return (
-    <ModulePlaceholder
-      title="Accounting"
-      description="Trust accounting, retainers, write-downs, write-offs, and audit controls."
-      iconName="accounting"
-    />
-  );
+  return <AccountingPageClient />;
 }
