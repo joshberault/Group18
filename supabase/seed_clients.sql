@@ -1,0 +1,2 @@
+-- Optional seed reference for Clients module demo data (already applied remotely).
+-- Fake data only — no real personal information.

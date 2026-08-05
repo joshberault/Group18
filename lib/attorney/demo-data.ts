@@ -23,6 +23,11 @@ export const DEMO_ATTORNEYS: DemoAttorney[] = [
   { id: "attorney-3", full_name: "James Porter" },
 ];
 
+/** True when demo preview is enabled (default for local CounselFlow demos). */
+export function isDevPreview(): boolean {
+  return process.env.NEXT_PUBLIC_DEV_PREVIEW !== "false";
+}
+
 export const DEMO_MATTERS: Matter[] = [
   {
     id: "matter-1",
