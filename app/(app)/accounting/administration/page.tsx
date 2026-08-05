@@ -1,12 +1,5 @@
-import { Settings } from "lucide-react";
-import { AccountingSectionPlaceholder } from "@/components/accounting/AccountingSectionPlaceholder";
+import { AccountingAdministrationView } from "@/components/accounting-manager/admin/AccountingAdministrationView";
 
 export default function AdministrationPage() {
-  return (
-    <AccountingSectionPlaceholder
-      title="Administration"
-      description="Role and permission settings, offices, billing rates, tax settings, matter types, accounting periods, integrations, and firm configuration."
-      icon={<Settings className="h-7 w-7" />}
-    />
-  );
+  return <AccountingAdministrationView />;
 }
