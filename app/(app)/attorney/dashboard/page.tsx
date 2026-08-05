@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { Briefcase, Clock, ListTodo } from "lucide-react";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { ParalegalAttorneyHub } from "@/components/paralegal/ParalegalAttorneyHub";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { KPICard } from "@/components/ui/KPICard";
 import {
@@ -10,6 +14,11 @@ import {
 } from "@/lib/attorney/demo-data";
 
 export default function AttorneyDashboardPage() {
+  const { role } = useDemoRole();
+  if (role === "paralegal") {
+    return <ParalegalAttorneyHub />;
+  }
+
   const matterCount = DEMO_MATTERS.length;
   const pendingTime = DEMO_TIME_ENTRIES.filter((e) => e.status === "pending").length;
   const openTasks = DEMO_TASKS.filter((t) => t.status !== "completed").length;

@@ -93,10 +93,10 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   paralegal: {
     displayName: USER_ROLE_LABELS.paralegal,
     defaultRoute: "/dashboard",
-    allowedRoutes: ["dashboard", "matters", "time", "tasks"],
+    allowedRoutes: ["dashboard", "clients", "matters", "time", "tasks"],
     dashboardTitle: "Paralegal Dashboard",
     dashboardDescription:
-      "Assigned tasks, matter deadlines, and document workflows.",
+      "Manage assigned tasks, upcoming deadlines, attorney reviews, and time-entry responsibilities.",
     permissions: [
       "view_assigned_matters",
       "enter_time",
