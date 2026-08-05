@@ -1,5 +1,19 @@
 import type { UserRole } from "@/lib/types";
 
+export const ROLE_WELCOME_MESSAGES: Record<UserRole, string> = {
+  managing_partner:
+    "Firm-wide revenue, collections, and profitability at a glance.",
+  attorney: "Your matters, deadlines, and unbilled time for the week.",
+  paralegal: "Assigned tasks, matter deadlines, and document workflows.",
+  billing_specialist:
+    "Billing queues, invoice status, and accounts receivable aging.",
+  accounting_manager:
+    "Trust accounting, revenue recognition, and financial controls.",
+  firm_administrator:
+    "Operational oversight across clients, staff, and firm settings.",
+  client: "Your matters, invoices, and trust balance summary.",
+};
+
 export const ROLE_SUMMARY_TITLES: Record<UserRole, string> = {
   managing_partner: "Managing Partner Summary",
   attorney: "Attorney Workload Summary",
