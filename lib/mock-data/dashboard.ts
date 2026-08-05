@@ -1,24 +1,11 @@
 import type { UserRole } from "@/lib/types";
 
-export const DEMO_USER_NAME = "A. Counsel";
-
-export const ROLE_WELCOME_MESSAGES: Record<UserRole, string> = {
-  managing_partner:
-    "Firm-wide revenue, collections, and profitability at a glance.",
-  attorney: "Your matters, deadlines, and unbilled time for the week.",
-  paralegal: "Assigned tasks, matter deadlines, and document workflows.",
-  billing_specialist:
-    "Billing queues, invoice status, and accounts receivable aging.",
-  firm_administrator:
-    "Operational oversight across clients, staff, and firm settings.",
-  client: "Your matters, invoices, and trust balance summary.",
-};
-
 export const ROLE_SUMMARY_TITLES: Record<UserRole, string> = {
   managing_partner: "Managing Partner Summary",
   attorney: "Attorney Workload Summary",
   paralegal: "Paralegal Task Summary",
   billing_specialist: "Billing Operations Summary",
+  accounting_manager: "Accounting Operations Summary",
   firm_administrator: "Firm Administration Summary",
   client: "Client Portal Preview",
 };
@@ -32,6 +19,8 @@ export const ROLE_SUMMARY_CONTENT: Record<UserRole, string> = {
     "8 tasks assigned across 4 matters. 2 filing deadlines are due within 48 hours.",
   billing_specialist:
     "18 invoices in draft, 7 awaiting approval, and $142,400 in outstanding receivables.",
+  accounting_manager:
+    "Trust balances reconciled through July. 4 invoices pending revenue recognition. 2 write-off requests awaiting review.",
   firm_administrator:
     "User access reviews due this month. 3 new client onboarding requests pending assignment.",
   client:

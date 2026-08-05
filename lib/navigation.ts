@@ -14,13 +14,33 @@ import {
 } from "lucide-react";
 import type { UserRole } from "@/lib/types";
 
+export type RouteKey =
+  | "dashboard"
+  | "clients"
+  | "matters"
+  | "admin"
+  | "time"
+  | "tasks"
+  | "billing"
+  | "invoices"
+  | "accounting"
+  | "reports"
+  | "client_portal"
+  | "trust_accounting"
+  | "revenue_ledger"
+  | "banking"
+  | "accounts_payable"
+  | "audit_log"
+  | "administration";
+
 export interface NavItem {
+  routeKey: RouteKey;
   label: string;
   href: string;
   icon: LucideIcon;
   description?: string;
-  /** Demo roles that can see this nav item */
-  roles: UserRole[];
+  /** Demo roles that can see this nav item (not used for Accounting Manager — see accounting-manager-nav.ts) */
+  roles?: UserRole[];
 }
 
 const ALL_ROLES: UserRole[] = [
@@ -28,6 +48,7 @@ const ALL_ROLES: UserRole[] = [
   "attorney",
   "paralegal",
   "billing_specialist",
+  "accounting_manager",
   "firm_administrator",
   "client",
 ];
@@ -37,15 +58,17 @@ const ATTORNEY_TEAM: UserRole[] = ["managing_partner", "attorney", "paralegal"];
 const BILLING_TEAM: UserRole[] = [
   "managing_partner",
   "billing_specialist",
+  "accounting_manager",
   "firm_administrator",
 ];
 
 /**
- * Sidebar navigation with demo-role visibility.
- * Admin/Staff Information is Firm Administrator only (Person 5).
+ * Sidebar navigation with demo-role visibility for all roles except Accounting Manager.
+ * Accounting Manager uses lib/navigation/accounting-manager-nav.ts.
  */
 export const NAV_ITEMS: NavItem[] = [
   {
+    routeKey: "dashboard",
     label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
@@ -53,6 +76,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ALL_ROLES,
   },
   {
+    routeKey: "clients",
     label: "Clients",
     href: "/clients",
     icon: Users,
@@ -60,6 +84,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: STAFF,
   },
   {
+    routeKey: "matters",
     label: "Matters",
     href: "/matters",
     icon: Briefcase,
@@ -67,6 +92,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: STAFF,
   },
   {
+    routeKey: "admin",
     label: "Admin/Staff Information",
     href: "/admin",
     icon: UserCog,
@@ -75,6 +101,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["firm_administrator"],
   },
   {
+    routeKey: "matters",
     label: "Attorney Hub",
     href: "/attorney/dashboard",
     icon: Briefcase,
@@ -82,6 +109,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ATTORNEY_TEAM,
   },
   {
+    routeKey: "time",
     label: "Time & Expenses",
     href: "/attorney/time",
     icon: Clock,
@@ -89,6 +117,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: [...ATTORNEY_TEAM, "billing_specialist"],
   },
   {
+    routeKey: "tasks",
     label: "Tasks & Deadlines",
     href: "/attorney/tasks",
     icon: ListTodo,
@@ -96,6 +125,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ATTORNEY_TEAM,
   },
   {
+    routeKey: "billing",
     label: "Billing",
     href: "/billing",
     icon: Receipt,
@@ -103,6 +133,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: BILLING_TEAM,
   },
   {
+    routeKey: "invoices",
     label: "Invoices & Collections",
     href: "/invoices",
     icon: FileText,
@@ -110,13 +141,15 @@ export const NAV_ITEMS: NavItem[] = [
     roles: BILLING_TEAM,
   },
   {
+    routeKey: "accounting",
     label: "Accounting",
     href: "/accounting",
     icon: Calculator,
     description: "Accounting controls and trust accounting",
-    roles: BILLING_TEAM,
+    roles: [...BILLING_TEAM, "managing_partner"],
   },
   {
+    routeKey: "reports",
     label: "Reports",
     href: "/reports",
     icon: BarChart3,
@@ -124,6 +157,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: BILLING_TEAM,
   },
   {
+    routeKey: "client_portal",
     label: "Client Portal",
     href: "/client-portal",
     icon: UserCircle,

@@ -1,5 +1,6 @@
 import { DemoRoleProvider } from "@/components/layout/DemoRoleProvider";
 import { AppShell } from "@/components/layout/AppShell";
+import { RoleGuard } from "@/components/layout/RoleGuard";
 
 export default function AppLayout({
   children,
@@ -8,7 +9,9 @@ export default function AppLayout({
 }) {
   return (
     <DemoRoleProvider>
-      <AppShell>{children}</AppShell>
+      <AppShell>
+        <RoleGuard>{children}</RoleGuard>
+      </AppShell>
     </DemoRoleProvider>
   );
 }
