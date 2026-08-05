@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Calendar,
@@ -163,6 +163,20 @@ export function Requests() {
   const [fulfilledRequestIds, setFulfilledRequestIds] = useState<Set<string>>(
     new Set(),
   );
+
+  useEffect(() => {
+    const requestedOption = new URLSearchParams(window.location.search).get(
+      "request",
+    );
+
+    if (requestedOption === "payment-schedule") {
+      setSelectedOption("payment-schedule");
+      setDescription("");
+      setRecipients([BILLING_RECIPIENT.value]);
+      setError(null);
+      setStep("form");
+    }
+  }, []);
 
   const selectedRequest = REQUEST_OPTIONS.find(
     (option) => option.id === selectedOption,
