@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { invoicesHref } from "@/lib/billing/routes";
 import type { RevenueByClient as ClientRevenue } from "@/lib/billing/types";
 
 type Props = {
@@ -14,7 +15,7 @@ function formatCurrency(value: number): string {
 }
 
 function clientInvoicesHref(clientName: string): string {
-  return `/invoices?client=${encodeURIComponent(clientName)}`;
+  return invoicesHref({ client: clientName });
 }
 
 export function RevenueByClient({ rows }: Props) {

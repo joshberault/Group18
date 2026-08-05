@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 type MetricCardProps = {
   /** Optional line above the main label (e.g. module name) */
   eyebrow?: string;
@@ -48,7 +50,7 @@ export function MetricCard({
         </p>
       ) : null}
       {actionLabel && actionHref ? (
-        <a
+        <Link
           href={actionHref}
           className={
             actionStyle === "button"
@@ -57,7 +59,7 @@ export function MetricCard({
           }
         >
           {actionLabel}
-        </a>
+        </Link>
       ) : null}
       {hint ? <p className="metric-card__hint">{hint}</p> : null}
     </>
@@ -66,13 +68,13 @@ export function MetricCard({
   // Avoid nested anchors when action link is present
   if (href && !(actionLabel && actionHref)) {
     return (
-      <a
+      <Link
         href={href}
         className={`metric-card metric-card--${tone} metric-card--link`}
         aria-label={`${eyebrow ? `${eyebrow}, ` : ""}${label}: ${value}. Open details`}
       >
         {body}
-      </a>
+      </Link>
     );
   }
 

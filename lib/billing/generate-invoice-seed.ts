@@ -1,3 +1,8 @@
+/**
+ * Demo catalog only — Generate Invoice prefers CounselFlow clients/matters via
+ * lib/billing/counselflow-catalog.ts. GENERATE_* is used only when Supabase is
+ * not configured (offline seed fallback).
+ */
 import type {
   GenerateClient,
   GenerateMatter,
