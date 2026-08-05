@@ -7,7 +7,6 @@ import {
   CalendarClock,
   Download,
   FileText,
-  Landmark,
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react";
@@ -24,11 +23,10 @@ import {
   accountRiskControls,
   clientAccountSummary,
   invoiceCharges,
-  trustLedgerEntries,
 } from "@/lib/mock-data/client-portal";
-import { cn, formatCurrency } from "@/lib/utils/cn";
+import { formatCurrency } from "@/lib/utils/cn";
 
-type SummaryView = "home" | "invoice" | "trust" | "payment-plan";
+type SummaryView = "home" | "invoice" | "payment-plan";
 
 const FREQUENCY_LABELS: Record<string, string> = {
   weekly: "Weekly",
@@ -105,25 +103,6 @@ export function AccountSummary() {
   const unpaidChargeTotal = invoiceCharges
     .filter((charge) => charge.status === "unpaid")
     .reduce((sum, charge) => sum + charge.amount, 0);
-
-  const trustAdditions = trustLedgerEntries.filter(
-    (entry) => entry.type === "addition",
-  );
-  const trustSubtractions = trustLedgerEntries.filter(
-    (entry) => entry.type === "subtraction",
-  );
-  const additionsTotal = trustAdditions.reduce(
-    (sum, entry) => sum + entry.amount,
-    0,
-  );
-  const subtractionsTotal = trustSubtractions.reduce(
-    (sum, entry) => sum + entry.amount,
-    0,
-  );
-  const computedTrustBalance =
-    clientAccountSummary.trust.beginningBalance +
-    additionsTotal -
-    subtractionsTotal;
 
   function handleDownloadInvoices() {
     const lines = [
@@ -316,126 +295,6 @@ export function AccountSummary() {
     );
   }
 
-  if (view === "trust") {
-    return (
-      <div className="space-y-6">
-        <button
-          type="button"
-          onClick={() => setView("home")}
-          className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-navy-900 hover:bg-gray-100"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Account Summary
-        </button>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Trust balance summary</CardTitle>
-            <CardDescription>
-              Beginning balance, current balance, additions, subtractions, and
-              trust safeguards.
-            </CardDescription>
-          </CardHeader>
-
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryMetric
-              label="Beginning balance"
-              value={formatCurrency(
-                clientAccountSummary.trust.beginningBalance,
-              )}
-            />
-            <SummaryMetric
-              label="Current balance"
-              value={formatCurrency(clientAccountSummary.trust.currentBalance)}
-            />
-            <SummaryMetric
-              label="Total additions"
-              value={formatCurrency(additionsTotal)}
-            />
-            <SummaryMetric
-              label="Total subtractions"
-              value={formatCurrency(subtractionsTotal)}
-            />
-          </div>
-
-          <dl className="mt-5 grid gap-4 sm:grid-cols-3">
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted">
-                Matter allocation
-              </dt>
-              <dd className="mt-1 text-sm font-medium text-navy-900">
-                {clientAccountSummary.trust.clientMatterNumber}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted">
-                Last reconciled
-              </dt>
-              <dd className="mt-1 text-sm font-medium text-navy-900">
-                {clientAccountSummary.trust.lastReconciledAt}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted">
-                Computed ledger balance
-              </dt>
-              <dd className="mt-1 text-sm font-medium text-navy-900">
-                {formatCurrency(computedTrustBalance)}
-              </dd>
-            </div>
-          </dl>
-        </Card>
-
-        <div className="grid gap-6 xl:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Additions information</CardTitle>
-              <CardDescription>
-                Deposits and other credits posted to client trust.
-              </CardDescription>
-            </CardHeader>
-            <LedgerList entries={trustAdditions} />
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Subtraction information</CardTitle>
-              <CardDescription>
-                Transfers and applications from trust to earned fees/costs.
-              </CardDescription>
-            </CardHeader>
-            <LedgerList entries={trustSubtractions} />
-          </Card>
-        </div>
-
-        <RiskControlsCard
-          title="Trust balance risk controls"
-          description="Controls that protect trust accounting integrity and prevent unsafe entries."
-        >
-          {accountRiskControls.trustControls.map((control) => (
-            <ControlRow
-              key={control.id}
-              status={control.status}
-              label={control.label}
-              detail={control.detail}
-            />
-          ))}
-          <ControlRow
-            status={
-              computedTrustBalance === clientAccountSummary.trust.currentBalance
-                ? "clear"
-                : "review"
-            }
-            label="Beginning + additions − subtractions = current balance"
-            detail={`Computed ${formatCurrency(computedTrustBalance)} vs current ${formatCurrency(
-              clientAccountSummary.trust.currentBalance,
-            )}.`}
-          />
-        </RiskControlsCard>
-      </div>
-    );
-  }
-
   if (view === "payment-plan") {
     return (
       <div className="space-y-6">
@@ -550,11 +409,11 @@ export function AccountSummary() {
         <CardHeader>
           <CardTitle>Choose a summary</CardTitle>
           <CardDescription>
-            Open invoice, trust, or payment plan details.
+            Open invoice balance details or payment plan details.
           </CardDescription>
         </CardHeader>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <button
             type="button"
             onClick={() => setView("invoice")}
@@ -569,23 +428,6 @@ export function AccountSummary() {
             <p className="mt-1 text-sm text-muted">
               Invoice total, remaining balance, hours, schedule, and charge
               breakdown.
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setView("trust")}
-            className="flex flex-col items-start rounded-2xl border border-gray-200 p-5 text-left transition-all hover:-translate-y-0.5 hover:border-navy-700/40 hover:shadow-md"
-          >
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-navy-900 text-gold-500">
-              <Landmark className="h-6 w-6" />
-            </div>
-            <h3 className="text-base font-semibold text-navy-900">
-              Trust balance summary
-            </h3>
-            <p className="mt-1 text-sm text-muted">
-              Beginning/current balances, additions, subtractions, and trust
-              controls.
             </p>
           </button>
 
@@ -616,48 +458,6 @@ function SummaryMetric({ label, value }: { label: string; value: string }) {
       <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-2 text-lg font-semibold text-navy-900">{value}</p>
     </div>
-  );
-}
-
-function LedgerList({
-  entries,
-}: {
-  entries: typeof trustLedgerEntries;
-}) {
-  if (entries.length === 0) {
-    return <p className="text-sm text-muted">No entries in this category.</p>;
-  }
-
-  return (
-    <ul className="space-y-3">
-      {entries.map((entry) => (
-        <li
-          key={entry.id}
-          className="rounded-xl border border-gray-200 px-3 py-3"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-navy-900">
-                {entry.description}
-              </p>
-              <p className="mt-1 text-xs text-muted">
-                {entry.date} · Ref {entry.reference} · Matter{" "}
-                {entry.matterNumber}
-              </p>
-            </div>
-            <p
-              className={cn(
-                "text-sm font-semibold",
-                entry.type === "addition" ? "text-green-700" : "text-red-700",
-              )}
-            >
-              {entry.type === "addition" ? "+" : "-"}
-              {formatCurrency(entry.amount)}
-            </p>
-          </div>
-        </li>
-      ))}
-    </ul>
   );
 }
 

@@ -1,0 +1,48 @@
+---
+description: Client portal case billing models, rates, and related case-status rules
+alwaysApply: true
+---
+
+# Client Portal Billing Rules
+
+Apply these billing models whenever implementing or updating client portal account, invoice, payment, or case-status behavior.
+
+## Hourly billing
+
+**Case types:** probate administration, commercial real estate, tax planning, insurance defense
+
+**Rates by employee title:**
+- Senior partners: $650/hour
+- Partners: $500/hour
+- Senior associates: $350/hour
+- Associates: $250/hour
+- Junior associates: $200/hour
+- Paralegals: $125/hour
+
+## Retainer-based billing
+
+**Case types:** corporate/business advisory, commercial litigation, civil litigation, employment counseling (employer), family law, intellectual property litigation, tax controversy, mergers and acquisitions, regulatory compliance
+
+**Rules:**
+- Retainer must be paid before work is completed
+- For any client with a retainer-based case, Case Status task progress must stay **0% complete** unless Account Summary shows all invoices paid
+
+## Flat-fee billing
+
+**Case types and amounts:**
+- Criminal defense: $5,000
+- Estate planning: $2,000
+- Residential real estate closings: $1,500
+- Bankruptcy: $2,500
+- Immigration: $3,500
+- Intellectual property prosecution: $2,000
+- Contract drafting: $2,000
+
+## Contingency-based billing
+
+**Case types:** personal injury (plaintiff), medical malpractice (plaintiff), employment litigation (employee), class action (plaintiff), debt collection
+
+**Rules:**
+- No invoice until the case is finished through the legal system and a verdict is reached
+- Client win: create and charge an invoice for **35%** of the amount won from the defendant
+- Client loss: create **no** invoice

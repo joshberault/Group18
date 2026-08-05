@@ -5,7 +5,7 @@ export default function AccountSummaryPage() {
   return (
     <PortalFeatureShell
       title="Account Summary"
-      description="Review invoice balance details, trust accounting, and built-in risk controls."
+      description="Review invoice balance details, payment plan, and built-in risk controls."
     >
       <AccountSummary />
     </PortalFeatureShell>
