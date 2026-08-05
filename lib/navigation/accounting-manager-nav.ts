@@ -53,8 +53,16 @@ export const ACCOUNTING_MANAGER_NAV_ITEMS: NavItem[] = [
   },
   {
     routeKey: "invoices",
-    label: "Accounts Receivable",
+    label: "Invoices",
     href: "/invoices",
+    icon: Receipt,
+    description:
+      "Invoice management, generation, status filters, and invoice detail",
+  },
+  {
+    routeKey: "receivables",
+    label: "Accounts Receivable",
+    href: "/receivables",
     icon: CircleDollarSign,
     description:
       "Outstanding invoices, aging, collections, payments, and write-offs",

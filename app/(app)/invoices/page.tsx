@@ -1,12 +1,11 @@
-import { RoleRestrictedModule } from "@/components/layout/RoleRestrictedModule";
+import { BillingModuleShell } from "@/components/billing/BillingModuleShell";
+import { InvoiceManagementSection } from "@/components/billing/InvoiceManagementSection";
 
+/** Invoice Management — search, filter, and open invoice detail. */
 export default function InvoicesPage() {
   return (
-    <RoleRestrictedModule
-      href="/invoices"
-      title="Invoices & Collections"
-      description="Generate invoices, track payments, manage collections, and monitor accounts receivable."
-      iconName="invoices"
-    />
+    <BillingModuleShell>
+      <InvoiceManagementSection />
+    </BillingModuleShell>
   );
 }

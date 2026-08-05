@@ -3,6 +3,7 @@ import {
   BarChart3,
   Briefcase,
   Calculator,
+  CircleDollarSign,
   Clock,
   FileText,
   LayoutDashboard,
@@ -23,6 +24,7 @@ export type RouteKey =
   | "tasks"
   | "billing"
   | "invoices"
+  | "receivables"
   | "accounting"
   | "reports"
   | "client_portal"
@@ -138,6 +140,14 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/invoices",
     icon: FileText,
     description: "Invoice generation and collections",
+    roles: BILLING_TEAM,
+  },
+  {
+    routeKey: "receivables",
+    label: "Accounts Receivable",
+    href: "/receivables",
+    icon: CircleDollarSign,
+    description: "Outstanding AR, payments, and reminders",
     roles: BILLING_TEAM,
   },
   {
