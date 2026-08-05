@@ -32,8 +32,10 @@ import {
   MOCK_APPROVALS,
   MOCK_ASSIGNMENTS,
   MOCK_EMPLOYEES,
+  MOCK_MATTERS,
   MOCK_VACATIONS,
 } from "@/lib/admin/mock-data";
+import { invoiceApprovedBillableTime } from "@/lib/billing/approved-time-billing";
 import type {
   AdminApproval,
   AdminEmployee,
@@ -282,6 +284,36 @@ export function ApprovalQueue() {
       return;
     }
 
+    let approvedInvoice:
+      | { invoiceNumber: string; amount: number; alreadyInvoiced: boolean }
+      | undefined;
+    if (
+      decision === "approved" &&
+      selected.type === "time_entry" &&
+      selected.timeEntryBillable
+    ) {
+      const employee = employees.find((row) => row.id === selected.employeeId);
+      const matter = MOCK_MATTERS.find((row) => row.id === selected.matterId);
+      if (!employee || !matter) {
+        setActionError(
+          "The employee or matter record needed to create the invoice was not found.",
+        );
+        return;
+      }
+
+      const billingResult = invoiceApprovedBillableTime({
+        approval: selected,
+        employee,
+        matter,
+        invoiceDate: ADMIN_REFERENCE_DATE,
+      });
+      if (!billingResult.ok) {
+        setActionError(billingResult.error);
+        return;
+      }
+      approvedInvoice = billingResult;
+    }
+
     processingLock.current = true;
     setProcessingId(selected.id);
     const reviewedAt = `${ADMIN_REFERENCE_DATE}T18:00:00Z`;
@@ -344,8 +376,14 @@ export function ApprovalQueue() {
       }
     }
 
+    const invoiceMessage = approvedInvoice
+      ? ` Invoice ${approvedInvoice.invoiceNumber} was ${approvedInvoice.alreadyInvoiced ? "already present" : "created"} for ${new Intl.NumberFormat(
+          "en-US",
+          { style: "currency", currency: "USD" },
+        ).format(approvedInvoice.amount)}, and the client was notified.`
+      : "";
     setSuccessMessage(
-      `${decision === "approved" ? "Approved" : decision === "rejected" ? "Rejected" : "Returned"} “${title}” as ${reviewerName}.`,
+      `${decision === "approved" ? "Approved" : decision === "rejected" ? "Rejected" : "Returned"} “${title}” as ${reviewerName}.${invoiceMessage}`,
     );
     processingLock.current = false;
     setProcessingId(null);
@@ -893,7 +931,11 @@ export function ApprovalQueue() {
       <DecisionModal
         open={modalMode === "confirm_approve"}
         title="Confirm approval"
-        description="Final approval will update local status and preserve the original submission."
+        description={
+          selected?.type === "time_entry" && selected.timeEntryBillable
+            ? "Final approval will calculate the title-based fee, add a sent invoice, and notify the client."
+            : "Final approval will update local status and preserve the original submission."
+        }
         notesRequired={false}
         reviewNotes={reviewNotes}
         notesError={notesError}

@@ -21,6 +21,7 @@ import {
   filterClientsForRole,
   getClientPermissions,
 } from "@/lib/clients/permissions";
+import { filterClientsForParalegalDemo } from "@/lib/paralegal/demo-data";
 import { CLIENTS_MODULE_ROLES } from "@/lib/clients/types";
 import type { ClientScheduleEvent, FirmClient } from "@/lib/clients/types";
 import { fetchClients, fetchScheduleEvents } from "@/lib/clients/queries";
@@ -65,17 +66,29 @@ export function ClientsDashboard() {
   }, [loadSchedule, scheduleMonth]);
 
   const visibleClients = useMemo(() => {
-    // assignedClientIds reserved for future attorney/paralegal matter scoping
-    const scoped = filterClientsForRole(clients, role, /* assignedClientIds */ []);
+    const scoped =
+      role === "paralegal"
+        ? filterClientsForParalegalDemo(clients)
+        : filterClientsForRole(clients, role, []);
     return applyClientFilters(scoped, filters);
   }, [clients, role, filters]);
+
+  const visibleEvents = useMemo(() => {
+    if (role !== "paralegal") return events;
+    const allowedIds = new Set(visibleClients.map((c) => c.id));
+    return events.filter((e) => allowedIds.has(e.client_id));
+  }, [events, role, visibleClients]);
 
   return (
     <ClientsAccessGuard allowedRoles={CLIENTS_MODULE_ROLES}>
       <div className="space-y-6">
         <PageHeader
           title="Clients"
-          description="Create, search, and maintain client records. Identify conflict risks before legal work begins."
+          description={
+            role === "paralegal"
+              ? "Assigned clients only — update approved contact fields; conflict clearing and status changes are restricted."
+              : "Create, search, and maintain client records. Identify conflict risks before legal work begins."
+          }
         >
           {permissions.canCreate && (
             <Link href="/clients/new">
@@ -113,7 +126,7 @@ export function ClientsDashboard() {
             )}
 
             <ClientScheduleCalendar
-              events={events}
+              events={visibleEvents}
               roleLabel={USER_ROLE_LABELS[role]}
               month={scheduleMonth}
               onMonthChange={setScheduleMonth}

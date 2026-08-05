@@ -18,6 +18,8 @@ import {
 } from "recharts";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { JobApplicationsPanel } from "@/components/admin/JobApplicationsPanel";
+import { ParalegalDashboard } from "@/components/dashboard/ParalegalDashboard";
+import { AttorneyDashboard } from "@/components/dashboard/AttorneyDashboard";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { KPICard } from "@/components/ui/KPICard";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -46,6 +48,14 @@ import { formatCurrency, formatHours } from "@/lib/utils/cn";
 
 export function DashboardContent() {
   const { role } = useDemoRole();
+
+  if (role === "paralegal") {
+    return <ParalegalDashboard />;
+  }
+
+  if (role === "attorney") {
+    return <AttorneyDashboard />;
+  }
 
   return (
     <>
