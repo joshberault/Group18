@@ -20,6 +20,8 @@ import {
 } from "@/lib/billing/receivables-utils";
 import type { Invoice, InvoiceStatus } from "@/lib/billing/invoice-types";
 import { BILLING_ROUTES } from "@/lib/billing/routes";
+import { findMatterByClientAndName } from "@/lib/client-related-matters/data";
+import { addPaymentReceivedNotification } from "@/lib/client-related-matters/notifications-store";
 
 type SortKey =
   | "invoiceNumber"
@@ -242,6 +244,8 @@ export function OutstandingReceivablesSection() {
   }
 
   function handleRecordPayment(invoice: Invoice, amount: number) {
+    const recordedAt = new Date();
+    const paymentId = `pay-rem-${recordedAt.getTime()}`;
     const paid = invoice.amountPaid + amount;
     const remaining = Math.max(0, Math.round((invoice.remainingBalance - amount) * 100) / 100);
     const newStatus =
@@ -250,14 +254,14 @@ export function OutstandingReceivablesSection() {
         : paid > 0
           ? "Partially Paid"
           : invoice.status;
-    updateManagedInvoice(invoice.invoiceNumber, {
+    const updated = updateManagedInvoice(invoice.invoiceNumber, {
       amountPaid: paid,
       remainingBalance: remaining,
       status: newStatus as InvoiceStatus,
       paymentHistory: [
         ...(invoice.paymentHistory ?? []),
         {
-          id: `pay-rem-${Date.now()}`,
+          id: paymentId,
           date: todayIso(),
           method: "Check",
           reference: `REM-${invoice.invoiceNumber}`,
@@ -265,9 +269,27 @@ export function OutstandingReceivablesSection() {
         },
       ],
     });
+    if (updated) {
+      const matter = findMatterByClientAndName(
+        invoice.client,
+        invoice.legalMatter,
+      );
+      addPaymentReceivedNotification({
+        notificationId: `crm-notif-${paymentId}`,
+        invoiceNumber: invoice.invoiceNumber,
+        clientName: invoice.client,
+        matterName: invoice.legalMatter,
+        matterReference: matter?.matterReference ?? "",
+        amount,
+        remainingBalance: remaining,
+        createdAt: recordedAt.toISOString(),
+      });
+    }
     setCatalog(getAllManagedInvoices());
     setActionNote(
-      `Payment of ${formatCurrency(amount)} recorded for ${invoice.invoiceNumber}.`,
+      updated
+        ? `Payment of ${formatCurrency(amount)} recorded for ${invoice.invoiceNumber}.`
+        : `Could not record payment for ${invoice.invoiceNumber}.`,
     );
   }
 
