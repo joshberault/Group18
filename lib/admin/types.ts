@@ -378,10 +378,55 @@ export interface AdminDashboardSummary {
   availableAttorneys: number;
   employeesOnApprovedLeave: number;
   pendingApprovals: number;
+  urgentPendingApprovals: number;
   overloadedEmployees: number;
   assignmentsDueWithin7Days: number;
+  overdueAssignments: number;
   unassignedMatters: number;
   averageAttorneyUtilization: number;
+}
+
+export type AttentionPriority = "urgent" | "high" | "normal";
+
+export interface AdminAttentionItem {
+  id: string;
+  priority: AttentionPriority;
+  issue: string;
+  subjectLabel: string;
+  subjectHref?: string;
+  dateOrAge: string;
+  actionLabel: string;
+  actionHref: string;
+  sortAgeDays: number;
+}
+
+export interface AdminActivityItem {
+  id: string;
+  action: string;
+  performedBy: string;
+  affected: string;
+  at: string;
+}
+
+/** Job / career applications awaiting Firm Administrator review. */
+export type JobApplicationStatus =
+  | "pending"
+  | "interview"
+  | "rejected"
+  | "hired";
+
+export interface AdminJobApplication {
+  id: string;
+  applicantName: string;
+  email: string;
+  phone: string;
+  appliedRole: string;
+  practiceArea: string;
+  submittedAt: string;
+  status: JobApplicationStatus;
+  yearsExperience: number;
+  notes: string;
+  resumeOnFile: boolean;
 }
 
 export type AdminSectionKey =

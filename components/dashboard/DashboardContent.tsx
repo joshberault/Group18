@@ -17,6 +17,7 @@ import {
   YAxis,
 } from "recharts";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { JobApplicationsPanel } from "@/components/admin/JobApplicationsPanel";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { KPICard } from "@/components/ui/KPICard";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -79,6 +80,12 @@ export function DashboardContent() {
           </p>
         </div>
       </Card>
+
+      {selectedRole === "firm_administrator" && (
+        <div className="mb-6">
+          <JobApplicationsPanel />
+        </div>
+      )}
 
       {(showFirmKpis || showMatters || showAR || showTrust || showCollections) && (
         <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
