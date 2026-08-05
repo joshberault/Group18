@@ -52,10 +52,12 @@ Helper functions are also exported from `lib/roles/role-config.ts`:
 
 ## How Navigation Is Filtered
 
-1. All sidebar links are defined once in `lib/navigation.ts` with a `routeKey`.
-2. Each role lists allowed `routeKey` values in `lib/roles/role-config.ts`.
-3. `DemoRoleProvider` exposes `navigationItems` filtered for the selected role.
-4. `Sidebar` renders only `navigationItems` from context.
+1. All sidebar links for **non–Accounting Manager** roles are defined in `lib/navigation.ts` with a `routeKey`.
+2. **Accounting Manager** uses a dedicated 12-item catalog in `lib/navigation/accounting-manager-nav.ts`.
+3. `getNavigationForRole()` returns the Accounting Manager catalog only when `role === "accounting_manager"`.
+4. Each other role lists allowed `routeKey` values in `lib/roles/role-config.ts` and filters `NAV_ITEMS` as before.
+5. `DemoRoleProvider` exposes `navigationItems` filtered for the selected role.
+6. `Sidebar` renders only `navigationItems` from context.
 
 ## Adding a Route to a Role
 
@@ -85,7 +87,9 @@ Example: `components/accounting/AccountingWorkspace.tsx`
 
 ## localStorage Persistence
 
-Selected demo role is stored in `localStorage` under `counselflow-demo-role` and restored on refresh via `useSyncExternalStore` to avoid hydration mismatches.
+Selected demo role is stored in `localStorage` under `counselflow-demo-role-v2` and restored on refresh via `useSyncExternalStore` to avoid hydration mismatches.
+
+On the **Accounting** branch, the default demo role is **Accounting Manager** (lands on `/dashboard` as Alex Morgan with the Accounting Manager sidebar).
 
 ## Backend Security Reminder
 

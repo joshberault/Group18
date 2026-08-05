@@ -4,6 +4,7 @@ export {
   canAccessRoute,
   DEFAULT_DEMO_ROLE,
   DEMO_IDENTITIES,
+  DEMO_ROLE_STORAGE_KEY,
   getDefaultRouteForRole,
   getNavigationForRole,
   getPermissionsForRole,

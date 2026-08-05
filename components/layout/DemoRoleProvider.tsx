@@ -14,6 +14,7 @@ import {
   canAccessRoute,
   DEFAULT_DEMO_ROLE,
   DEMO_IDENTITIES,
+  DEMO_ROLE_STORAGE_KEY,
   getDefaultRouteForRole,
   getNavigationForRole,
   getPermissionsForRole,
@@ -22,13 +23,11 @@ import {
 } from "@/lib/roles/role-config";
 import type { UserRole } from "@/lib/types";
 
-const STORAGE_KEY = "counselflow-demo-role";
-
 function getStoredRole(): UserRole {
   if (typeof window === "undefined") {
     return DEFAULT_DEMO_ROLE;
   }
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const stored = localStorage.getItem(DEMO_ROLE_STORAGE_KEY);
   if (stored && isValidDemoRole(stored)) {
     return stored;
   }
@@ -64,7 +63,7 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
 
   const setSelectedRole = useCallback(
     (newRole: UserRole) => {
-      localStorage.setItem(STORAGE_KEY, newRole);
+      localStorage.setItem(DEMO_ROLE_STORAGE_KEY, newRole);
       window.dispatchEvent(new Event("storage"));
 
       const currentPath = window.location.pathname;

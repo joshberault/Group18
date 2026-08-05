@@ -22,7 +22,13 @@ export type RouteKey =
   | "invoices"
   | "accounting"
   | "reports"
-  | "client_portal";
+  | "client_portal"
+  | "trust_accounting"
+  | "revenue_ledger"
+  | "banking"
+  | "accounts_payable"
+  | "audit_log"
+  | "administration";
 
 export interface NavItem {
   routeKey: RouteKey;

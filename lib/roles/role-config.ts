@@ -1,9 +1,17 @@
+import {
+  ACCOUNTING_MANAGER_NAV_ITEMS,
+  isAccountingManagerExclusivePath,
+  isAccountingManagerRoute,
+} from "@/lib/navigation/accounting-manager-nav";
 import { NAV_ITEMS, type NavItem, type RouteKey } from "@/lib/navigation";
 import type { UserRole } from "@/lib/types";
 import { USER_ROLE_LABELS } from "@/lib/types";
 import type { Permission } from "./permissions";
 
-export const DEFAULT_DEMO_ROLE: UserRole = "managing_partner";
+/** Accounting branch development default — lands on /dashboard as Alex Morgan */
+export const DEFAULT_DEMO_ROLE: UserRole = "accounting_manager";
+
+export const DEMO_ROLE_STORAGE_KEY = "counselflow-demo-role-v2";
 
 export const DEMO_IDENTITIES: Record<
   UserRole,
@@ -121,7 +129,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   accounting_manager: {
     displayName: USER_ROLE_LABELS.accounting_manager,
-    defaultRoute: "/accounting",
+    defaultRoute: "/dashboard",
     allowedRoutes: [
       "dashboard",
       "clients",
@@ -208,6 +216,14 @@ export function pathnameToRouteKey(pathname: string): RouteKey | null {
 }
 
 export function canAccessRoute(role: UserRole, pathname: string): boolean {
+  if (role === "accounting_manager") {
+    return isAccountingManagerRoute(pathname);
+  }
+
+  if (isAccountingManagerExclusivePath(pathname)) {
+    return false;
+  }
+
   const routeKey = pathnameToRouteKey(pathname);
   if (!routeKey) {
     return true;
@@ -216,6 +232,10 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
 }
 
 export function getNavigationForRole(role: UserRole): NavItem[] {
+  if (role === "accounting_manager") {
+    return ACCOUNTING_MANAGER_NAV_ITEMS;
+  }
+
   const allowed = new Set(ROLE_DEFINITIONS[role].allowedRoutes);
   return NAV_ITEMS.filter((item) => allowed.has(item.routeKey));
 }
