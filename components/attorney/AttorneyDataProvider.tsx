@@ -56,6 +56,7 @@ type AttorneyDataContextValue = AttorneyDataState & {
   deleteChecklistItem: (id: string) => void;
   getMatterById: (id: string) => Matter | undefined;
   getTaskById: (id: string) => Task | undefined;
+  getDeadlineById: (id: string) => Deadline | undefined;
   resetDemoData: () => void;
 };
 
@@ -301,6 +302,11 @@ export function AttorneyDataProvider({ children }: { children: React.ReactNode }
     [state.tasks],
   );
 
+  const getDeadlineById = useCallback(
+    (id: string) => state.deadlines.find((deadline) => deadline.id === id),
+    [state.deadlines],
+  );
+
   const value = useMemo<AttorneyDataContextValue>(
     () => ({
       ...state,
@@ -324,6 +330,7 @@ export function AttorneyDataProvider({ children }: { children: React.ReactNode }
       deleteChecklistItem,
       getMatterById,
       getTaskById,
+      getDeadlineById,
       resetDemoData,
     }),
     [
@@ -346,6 +353,7 @@ export function AttorneyDataProvider({ children }: { children: React.ReactNode }
       deleteChecklistItem,
       getMatterById,
       getTaskById,
+      getDeadlineById,
       resetDemoData,
     ],
   );

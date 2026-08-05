@@ -180,19 +180,23 @@ export function AttorneyDashboardClient() {
                   key={deadline.id}
                   className="flex items-center justify-between gap-4 border-b border-gray-100 pb-3 last:border-0 last:pb-0"
                 >
-                  <div>
+                  <Link
+                    href={`/attorney/deadlines/${deadline.id}`}
+                    className="min-w-0 flex-1 rounded-md px-2 py-1 -mx-2 transition hover:bg-gray-50"
+                  >
                     <p className="font-medium text-navy-900">{deadline.title}</p>
                     <p className="text-sm text-muted">{deadline.matter?.title}</p>
-                  </div>
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs font-medium ${
+                  </Link>
+                  <Link
+                    href={`/attorney/calendar?date=${deadline.due_date}`}
+                    className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium transition hover:opacity-80 ${
                       isPastDate(deadline.due_date)
                         ? "bg-red-100 text-red-800"
                         : "bg-amber-100 text-amber-800"
                     }`}
                   >
                     {formatDate(deadline.due_date)}
-                  </span>
+                  </Link>
                 </li>
               ))}
             </ul>

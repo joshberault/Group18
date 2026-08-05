@@ -217,22 +217,26 @@ export function TasksPageClient() {
             {deadlines.map((deadline) => (
               <Card key={deadline.id} padding="md">
                 <div className="flex items-start justify-between gap-4">
-                  <div>
+                  <Link
+                    href={`/attorney/deadlines/${deadline.id}`}
+                    className="min-w-0 flex-1 rounded-md px-2 py-1 -mx-2 transition hover:bg-gray-50"
+                  >
                     <h3 className="font-semibold text-navy-900">{deadline.title}</h3>
                     <p className="text-sm text-muted">{deadline.matter?.title}</p>
                     {deadline.description && (
                       <p className="mt-2 text-sm text-muted">{deadline.description}</p>
                     )}
-                  </div>
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs font-medium ${
+                  </Link>
+                  <Link
+                    href={`/attorney/calendar?date=${deadline.due_date}`}
+                    className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium transition hover:opacity-80 ${
                       isPastDate(deadline.due_date)
                         ? "bg-red-100 text-red-800"
                         : "bg-amber-100 text-amber-800"
                     }`}
                   >
                     Due {formatDate(deadline.due_date)}
-                  </span>
+                  </Link>
                 </div>
               </Card>
             ))}

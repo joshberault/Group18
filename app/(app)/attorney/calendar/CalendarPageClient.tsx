@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAttorneyData } from "@/components/attorney/AttorneyDataProvider";
 import { daysInMonth, monthLabel, todayIsoDate } from "@/lib/attorney/dates";
+import { formatDate } from "@/lib/attorney/format";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -14,10 +17,30 @@ type CalendarEvent = {
   type: "task" | "deadline";
 };
 
+function parseIsoDate(value: string | null): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export function CalendarPageClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { tasks, deadlines } = useAttorneyData();
   const today = new Date(`${todayIsoDate()}T00:00:00`);
-  const [viewDate, setViewDate] = useState(today);
+
+  const dateParam = searchParams.get("date");
+  const initialSelectedDate = parseIsoDate(dateParam);
+  const [viewDate, setViewDate] = useState(initialSelectedDate ?? today);
+  const [selectedDate, setSelectedDate] = useState<string | null>(dateParam);
+
+  useEffect(() => {
+    const parsed = parseIsoDate(dateParam);
+    if (parsed) {
+      setViewDate(parsed);
+      setSelectedDate(dateParam);
+    }
+  }, [dateParam]);
 
   const events = useMemo<CalendarEvent[]>(() => {
     const taskEvents = tasks
@@ -50,8 +73,23 @@ export function CalendarPageClient() {
       return acc;
     }, {});
 
+  const selectedDayEvents = selectedDate
+    ? events.filter((event) => event.date === selectedDate)
+    : [];
+
+  function selectDate(iso: string) {
+    setSelectedDate(iso);
+    router.replace(`/attorney/calendar?date=${iso}`, { scroll: false });
+  }
+
   function shiftMonth(delta: number) {
     setViewDate(new Date(year, month + delta, 1));
+  }
+
+  function eventHref(event: CalendarEvent) {
+    return event.type === "deadline"
+      ? `/attorney/deadlines/${event.id}`
+      : `/attorney/tasks/${event.id}`;
   }
 
   const cells: Array<number | null> = [
@@ -73,7 +111,14 @@ export function CalendarPageClient() {
             <Button size="sm" variant="secondary" onClick={() => shiftMonth(-1)}>
               Previous
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => setViewDate(today)}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setViewDate(today);
+                selectDate(todayIsoDate());
+              }}
+            >
               Today
             </Button>
             <Button size="sm" variant="secondary" onClick={() => shiftMonth(1)}>
@@ -94,12 +139,19 @@ export function CalendarPageClient() {
             const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
             const dayEvents = eventsByDay[iso] ?? [];
             const isToday = iso === todayIsoDate();
+            const isSelected = iso === selectedDate;
 
             return (
-              <div
+              <button
                 key={iso}
-                className={`min-h-24 rounded-lg border p-2 text-left ${
-                  isToday ? "border-gold-500 bg-gold-100/30" : "border-gray-200"
+                type="button"
+                onClick={() => selectDate(iso)}
+                className={`min-h-24 rounded-lg border p-2 text-left transition hover:border-navy-300 ${
+                  isSelected
+                    ? "border-navy-700 bg-navy-50 ring-2 ring-navy-700/20"
+                    : isToday
+                      ? "border-gold-500 bg-gold-100/30"
+                      : "border-gray-200"
                 }`}
               >
                 <p className="text-sm font-medium text-navy-900">{day}</p>
@@ -118,11 +170,44 @@ export function CalendarPageClient() {
                     </li>
                   ))}
                 </ul>
-              </div>
+              </button>
             );
           })}
         </div>
       </Card>
+
+      {selectedDate && (
+        <Card padding="md">
+          <h2 className="mb-4 text-lg font-semibold text-navy-900">
+            {formatDate(selectedDate)}
+          </h2>
+          {selectedDayEvents.length === 0 ? (
+            <p className="text-sm text-muted">No tasks or deadlines on this date.</p>
+          ) : (
+            <ul className="space-y-3">
+              {selectedDayEvents.map((event) => (
+                <li key={event.id}>
+                  <Link
+                    href={eventHref(event)}
+                    className="flex items-center justify-between gap-4 rounded-md px-2 py-2 -mx-2 transition hover:bg-gray-50"
+                  >
+                    <span className="font-medium text-navy-900">{event.title}</span>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${
+                        event.type === "deadline"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-blue-100 text-blue-800"
+                      }`}
+                    >
+                      {event.type === "deadline" ? "Deadline" : "Task"}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
     </div>
   );
 }
