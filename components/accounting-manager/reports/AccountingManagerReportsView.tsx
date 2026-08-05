@@ -168,7 +168,7 @@ const AP_AGING = [
   },
 ];
 
-function computeArAging() {
+function computeArAging(clients: typeof amClients) {
   const buckets = [
     { bucket: "0–30 Days", amount: 0, clients: 0 },
     { bucket: "31–60 Days", amount: 0, clients: 0 },
@@ -176,7 +176,7 @@ function computeArAging() {
     { bucket: "90+ Days", amount: 0, clients: 0 },
   ];
 
-  amClients.forEach((c) => {
+  clients.forEach((c) => {
     if (c.totalAr <= 0) return;
     const current = c.totalAr - c.pastDue;
     if (current > 0) {
@@ -214,7 +214,17 @@ export function AccountingManagerReportsView() {
     "margin" | "collected" | "name"
   >("margin");
 
-  const arAging = useMemo(() => computeArAging(), []);
+  const filteredArClients = useMemo(() => {
+    if (arOfficeFilter === "all") return amClients.filter((c) => c.totalAr > 0);
+    return amClients.filter(
+      (c) => c.totalAr > 0 && c.office === arOfficeFilter,
+    );
+  }, [arOfficeFilter]);
+
+  const arAging = useMemo(
+    () => computeArAging(filteredArClients),
+    [filteredArClients],
+  );
 
   const filteredCatalog = useMemo(() => {
     let list = REPORT_CATALOG;
@@ -348,13 +358,6 @@ export function AccountingManagerReportsView() {
       .filter((c) => c.trustBalance > 0)
       .sort((a, b) => b.trustBalance - a.trustBalance);
   }, []);
-
-  const filteredArClients = useMemo(() => {
-    if (arOfficeFilter === "all") return amClients.filter((c) => c.totalAr > 0);
-    return amClients.filter(
-      (c) => c.totalAr > 0 && c.office === arOfficeFilter,
-    );
-  }, [arOfficeFilter]);
 
   const renderReportWorkspace = () => {
     switch (activeReport) {

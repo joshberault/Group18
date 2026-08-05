@@ -200,6 +200,30 @@ export function ExpensesApView() {
           b.status,
         ]),
       );
+    } else if (activeTab === "payment-approvals") {
+      exportToCsv(
+        "payment-approvals.csv",
+        ["Vendor", "Bill", "Amount", "Due Date", "Status"],
+        filteredApprovals.map((a) => [
+          a.vendor,
+          a.billNumber,
+          String(a.amount),
+          a.dueDate,
+          a.status,
+        ]),
+      );
+    } else if (activeTab === "reimbursements") {
+      exportToCsv(
+        "reimbursements.csv",
+        ["Employee", "Date", "Category", "Amount", "Status"],
+        filteredReimbursements.map((r) => [
+          r.employee,
+          r.submitDate,
+          r.category,
+          String(r.amount),
+          r.status,
+        ]),
+      );
     } else if (activeTab === "matter-costs") {
       exportToCsv(
         "matter-costs.csv",
@@ -211,6 +235,18 @@ export function ExpensesApView() {
           c.category,
           String(c.amount),
           c.status,
+        ]),
+      );
+    } else if (activeTab === "vendors") {
+      exportToCsv(
+        "vendors.csv",
+        ["Vendor", "Category", "Terms", "Open Balance", "Status"],
+        filteredVendors.map((v) => [
+          v.name,
+          v.category,
+          v.paymentTerms,
+          String(v.totalOutstanding),
+          v.status,
         ]),
       );
     }

@@ -73,10 +73,11 @@ export function TrustAccountingView() {
   const [selectedTransaction, setSelectedTransaction] = useState<TrustTransaction | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; action: () => void } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState(trustTransactions);
   const [exceptions, setExceptions] = useState(trustExceptions);
 
   const filteredTransactions = useMemo(() => {
-    return trustTransactions.filter((t) => {
+    return transactions.filter((t) => {
       const matchesSearch =
         !search ||
         t.client.toLowerCase().includes(search.toLowerCase()) ||
@@ -85,7 +86,7 @@ export function TrustAccountingView() {
         accountFilter === "all" || t.trustAccountId === accountFilter;
       return matchesSearch && matchesAccount;
     });
-  }, [search, accountFilter]);
+  }, [search, accountFilter, transactions]);
 
   const filteredLedgers = useMemo(() => {
     return trustClientLedgers.filter(
@@ -582,6 +583,13 @@ export function TrustAccountingView() {
                     title: "Void Transaction",
                     message: `Void ${selectedTransaction.reference}? This cannot be undone.`,
                     action: () => {
+                      setTransactions((prev) =>
+                        prev.map((row) =>
+                          row.id === selectedTransaction.id
+                            ? { ...row, status: "Void" }
+                            : row,
+                        ),
+                      );
                       setToast("Transaction voided");
                       setSelectedTransaction(null);
                       setConfirmAction(null);

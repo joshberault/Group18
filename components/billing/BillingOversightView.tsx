@@ -13,8 +13,10 @@ import {
   billingExceptions,
   billingHealthKpis,
   billingMonthlyProgress,
+  billingQueueRecords,
   billingRecentActivity,
 } from "@/lib/mock-data/billing-oversight";
+import { downloadTextFile } from "@/lib/accounting-manager/download-text";
 import { formatCurrency } from "@/lib/utils/cn";
 import {
   BillingQueueSection,
@@ -27,6 +29,7 @@ import { KPICard } from "@/components/ui/KPICard";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Toast } from "@/components/ui/Toast";
 import {
   Table,
   TableBody,
@@ -48,7 +51,12 @@ export function BillingOversightView() {
   const queueRef = useRef<HTMLDivElement>(null);
   const [queueFilters, setQueueFilters] =
     useState<BillingQueueFilters>(defaultQueueFilters);
-  const [prototypeAction, setPrototypeAction] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string;
+    message: string;
+    action: () => void;
+  } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const progress = billingMonthlyProgress;
   const remaining = progress.total - progress.completed;
@@ -66,6 +74,44 @@ export function BillingOversightView() {
     setQueueFilters((prev) => ({ ...prev, ...filters }));
     scrollToQueue();
   };
+
+  function exportLedes() {
+    const lines = [
+      "LEDES98BI|V2|INVOICE_DATE|INVOICE_NUMBER|CLIENT_ID|LINE_ITEM_NUMBER|EXP/FEE/INV_ADJ_TYPE|LINE_ITEM_NUMBER|EXP/FEE/INV_ADJ_DATE|TASK|EXP/FEE/INV_ADJ_DESC|LINE_ITEM_AMOUNT",
+      ...billingQueueRecords.map(
+        (record, index) =>
+          `LEDES|${record.client}|${record.matter}|${record.attorney}|${record.status}|${record.draftAmount}|${index + 1}`,
+      ),
+    ];
+    downloadTextFile("billing-queue-ledes.txt", lines.join("\n"), "text/plain");
+    setToast("LEDES export downloaded from current billing queue.");
+  }
+
+  function generateDraftBills() {
+    const draftReady = billingQueueRecords.filter(
+      (record) => record.status === "Draft",
+    ).length;
+    applyExceptionFilter({ status: "Draft", exceptionsOnly: false });
+    setToast(
+      `${draftReady} matters marked Draft Ready in queue view (session preview).`,
+    );
+  }
+
+  function finalizeApprovedBills() {
+    setConfirmAction({
+      title: "Finalize approved bills",
+      message:
+        "Finalize all approved bills in the current session preview? No invoices will be sent externally.",
+      action: () => {
+        const approved = billingQueueRecords.filter(
+          (record) => record.status === "Approved",
+        ).length;
+        applyExceptionFilter({ status: "Ready to Send", exceptionsOnly: false });
+        setToast(`${approved} approved bills moved to Ready to Send (session only).`);
+        setConfirmAction(null);
+      },
+    });
+  }
 
   return (
     <>
@@ -295,10 +341,7 @@ export function BillingOversightView() {
           <CardDescription>Prototype manager actions</CardDescription>
         </CardHeader>
         <div className="flex flex-wrap gap-3 px-6 pb-6">
-          <Button
-            variant="secondary"
-            onClick={() => setPrototypeAction("Generate Draft Bills")}
-          >
+          <Button variant="secondary" onClick={generateDraftBills}>
             <FileText className="h-4 w-4" />
             Generate Draft Bills
           </Button>
@@ -311,17 +354,11 @@ export function BillingOversightView() {
             <AlertTriangle className="h-4 w-4" />
             Review Exceptions
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setPrototypeAction("Finalize Approved Bills")}
-          >
+          <Button variant="secondary" onClick={finalizeApprovedBills}>
             <Send className="h-4 w-4" />
             Finalize Approved Bills
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setPrototypeAction("Export LEDES")}
-          >
+          <Button variant="secondary" onClick={exportLedes}>
             <Upload className="h-4 w-4" />
             Export LEDES
           </Button>
@@ -329,19 +366,20 @@ export function BillingOversightView() {
       </Card>
 
       <Modal
-        isOpen={Boolean(prototypeAction)}
-        onClose={() => setPrototypeAction(null)}
-        title="Prototype action"
-        description={prototypeAction ?? undefined}
+        isOpen={Boolean(confirmAction)}
+        onClose={() => setConfirmAction(null)}
+        title={confirmAction?.title ?? "Confirm"}
+        description={confirmAction?.message}
       >
-        <p className="text-sm text-muted">
-          This action is not connected to a backend process in the current
-          prototype. No billing records were changed.
-        </p>
-        <Button className="mt-4" onClick={() => setPrototypeAction(null)}>
-          Close
-        </Button>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setConfirmAction(null)}>
+            Cancel
+          </Button>
+          <Button onClick={() => confirmAction?.action()}>Confirm</Button>
+        </div>
       </Modal>
+
+      <Toast message={toast} onDismiss={() => setToast(null)} />
     </>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   DollarSign,
@@ -17,16 +18,19 @@ import {
   type AmClientEntity,
 } from "@/lib/mock-data/accounting-manager/entities";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
+import { invoicesHref } from "@/lib/billing/routes";
 import { formatCurrency } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Drawer } from "@/components/ui/Drawer";
 import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { KPICard } from "@/components/ui/KPICard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Textarea } from "@/components/ui/Textarea";
 import { Toast } from "@/components/ui/Toast";
 import {
   Table,
@@ -76,6 +80,7 @@ function paymentStatusKey(status: AmClientEntity["paymentStatus"]) {
 }
 
 export function AccountingManagerClientsView() {
+  const router = useRouter();
   const [filters, setFilters] = useState<ClientFilters>(defaultFilters);
   const [sortKey, setSortKey] = useState<SortKey>("totalAr");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -83,6 +88,9 @@ export function AccountingManagerClientsView() {
     null,
   );
   const [toast, setToast] = useState<string | null>(null);
+  const [noteModalOpen, setNoteModalOpen] = useState(false);
+  const [collectionNote, setCollectionNote] = useState("");
+  const [noteError, setNoteError] = useState<string | null>(null);
 
   const kpis = useMemo(() => {
     const totalAr = amClients.reduce((s, c) => s + c.totalAr, 0);
@@ -235,8 +243,34 @@ export function AccountingManagerClientsView() {
     setToast("Client financial data exported to CSV.");
   };
 
-  const prototypeAction = (action: string) => {
-    setToast(`${action} — prototype action recorded.`);
+  const exportClientStatement = (client: AmClientEntity) => {
+    exportToCsv(
+      `client-statement-${client.clientNumber}.csv`,
+      ["Field", "Value"],
+      [
+        ["Client", client.name],
+        ["Client Number", client.clientNumber],
+        ["Total A/R", String(client.totalAr)],
+        ["Past Due", String(client.pastDue)],
+        ["90+ Balance", String(client.balance90Plus)],
+        ["Trust Balance", String(client.trustBalance)],
+        ["Unbilled WIP", String(client.unbilledWip)],
+        ["Payment Status", client.paymentStatus],
+        ["Risk Level", client.riskLevel],
+      ],
+    );
+    setToast(`Statement exported for ${client.name}.`);
+  };
+
+  const saveCollectionNote = () => {
+    if (!collectionNote.trim()) {
+      setNoteError("Collection note is required.");
+      return;
+    }
+    setToast("Collection note saved for this session.");
+    setNoteModalOpen(false);
+    setCollectionNote("");
+    setNoteError(null);
   };
 
   const relatedMatters = selectedClient
@@ -250,13 +284,19 @@ export function AccountingManagerClientsView() {
         description="Monitor client receivables, trust balances, unbilled work, and collection risk across the firm."
       >
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => prototypeAction("Send Payment Reminders")}>
+          <Button
+            onClick={() => {
+              setCollectionNote("");
+              setNoteError(null);
+              setNoteModalOpen(true);
+            }}
+          >
             <Mail className="h-4 w-4" />
             Send Reminders
           </Button>
           <Button
             variant="secondary"
-            onClick={() => prototypeAction("Record Payment")}
+            onClick={() => router.push("/receivables")}
           >
             <DollarSign className="h-4 w-4" />
             Record Payment
@@ -533,17 +573,19 @@ export function AccountingManagerClientsView() {
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
-                onClick={() =>
-                  prototypeAction(`Payment reminder sent to ${selectedClient.name}`)
-                }
+                onClick={() => {
+                  setCollectionNote("");
+                  setNoteError(null);
+                  setNoteModalOpen(true);
+                }}
               >
                 <Mail className="h-4 w-4" />
-                Send Reminder
+                Add Collection Note
               </Button>
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => prototypeAction("Record Payment")}
+                onClick={() => router.push("/receivables")}
               >
                 <DollarSign className="h-4 w-4" />
                 Record Payment
@@ -551,10 +593,33 @@ export function AccountingManagerClientsView() {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => prototypeAction("Client Statement generated")}
+                onClick={() => exportClientStatement(selectedClient)}
               >
                 <FileDown className="h-4 w-4" />
                 Export Statement
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() =>
+                  router.push(invoicesHref({ client: selectedClient.name }))
+                }
+              >
+                View Invoices
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => router.push("/matters")}
+              >
+                View Matters
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => router.push("/accounting/trust")}
+              >
+                View Trust Activity
               </Button>
             </div>
 
@@ -652,10 +717,16 @@ export function AccountingManagerClientsView() {
                 </h3>
                 <ul className="space-y-2">
                   {relatedMatters.map((m) => (
-                    <li
-                      key={m.id}
-                      className="rounded-lg border border-gray-200 p-3 text-sm"
-                    >
+                    <li key={m.id}>
+                      <button
+                        type="button"
+                        className="w-full rounded-lg border border-gray-200 p-3 text-left text-sm hover:bg-gray-50"
+                        onClick={() =>
+                          router.push(
+                            `/matters?matter=${encodeURIComponent(m.matterNumber)}`,
+                          )
+                        }
+                      >
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="font-medium text-navy-900">
@@ -671,6 +742,7 @@ export function AccountingManagerClientsView() {
                         <span>A/R: {formatCurrency(m.billedToDate - m.collectedToDate)}</span>
                         <span>WIP: {formatCurrency(m.unbilledWip)}</span>
                       </div>
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -689,6 +761,29 @@ export function AccountingManagerClientsView() {
           </div>
         )}
       </Drawer>
+
+      <Modal
+        isOpen={noteModalOpen}
+        onClose={() => setNoteModalOpen(false)}
+        title="Add Collection Note"
+        description="Saved for this session only."
+      >
+        <div className="space-y-4">
+          <Textarea
+            label="Collection note"
+            value={collectionNote}
+            onChange={(e) => setCollectionNote(e.target.value)}
+            required
+          />
+          {noteError && <p className="text-sm text-red-600">{noteError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setNoteModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveCollectionNote}>Save note</Button>
+          </div>
+        </div>
+      </Modal>
 
       <Toast message={toast} onDismiss={() => setToast(null)} />
     </>

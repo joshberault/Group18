@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { TimeEntryForm } from "@/components/attorney/TimeEntryForm";
 import { TimeEntryList } from "@/components/attorney/TimeEntryList";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { useDemoTimeWorkflow } from "@/hooks/useDemoTimeWorkflow";
+import { profileIdForRole } from "@/lib/demo/time-workflow-store";
 import { createClientSafe } from "@/lib/supabase/client";
 import type { Matter, TimeEntry } from "@/types/database";
 
@@ -20,9 +23,21 @@ export function TimeEntriesPageClient({
   initialEntries,
   previewMode = false,
 }: Props) {
-  const [entries, setEntries] = useState(initialEntries);
+  const { selectedRole } = useDemoRole();
+  const activeProfileId = previewMode ? profileIdForRole(selectedRole) : profileId;
+  const { timeEntries, refresh } = useDemoTimeWorkflow(
+    previewMode ? activeProfileId : undefined,
+  );
+  const [liveEntries, setLiveEntries] = useState(initialEntries);
+
+  const entries = previewMode ? timeEntries : liveEntries;
 
   async function refreshEntries() {
+    if (previewMode) {
+      refresh();
+      return;
+    }
+
     const supabase = createClientSafe();
     if (!supabase) return;
 
@@ -32,7 +47,7 @@ export function TimeEntriesPageClient({
       .eq("profile_id", profileId)
       .order("entry_date", { ascending: false });
 
-    setEntries((data ?? []) as TimeEntry[]);
+    setLiveEntries((data ?? []) as TimeEntry[]);
   }
 
   return (
@@ -44,7 +59,8 @@ export function TimeEntriesPageClient({
 
       <TimeEntryForm
         matters={initialMatters}
-        profileId={profileId}
+        profileId={activeProfileId}
+        submitterRole={selectedRole}
         onCreated={refreshEntries}
         previewMode={previewMode}
       />

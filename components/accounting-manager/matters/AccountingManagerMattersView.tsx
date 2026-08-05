@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Ban,
@@ -15,6 +16,7 @@ import {
   type AmMatterEntity,
 } from "@/lib/mock-data/accounting-manager/entities";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
+import { invoicesHref } from "@/lib/billing/routes";
 import { formatCurrency } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -85,6 +87,8 @@ function matterStatusKey(status: AmMatterEntity["matterStatus"]) {
 }
 
 export function AccountingManagerMattersView() {
+  const router = useRouter();
+  const [matters, setMatters] = useState(amMatters);
   const [filters, setFilters] = useState<MatterFilters>(defaultFilters);
   const [sortKey, setSortKey] = useState<SortKey>("unbilledWip");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -94,24 +98,24 @@ export function AccountingManagerMattersView() {
   const [toast, setToast] = useState<string | null>(null);
 
   const kpis = useMemo(() => {
-    const openMatters = amMatters.filter((m) => m.matterStatus === "Open");
-    const unbilledWip = amMatters.reduce((s, m) => s + m.unbilledWip, 0);
-    const unbilledExpenses = amMatters.reduce(
+    const openMatters = matters.filter((m) => m.matterStatus === "Open");
+    const unbilledWip = matters.reduce((s, m) => s + m.unbilledWip, 0);
+    const unbilledExpenses = matters.reduce(
       (s, m) => s + m.unbilledExpenses,
       0,
     );
-    const billingHolds = amMatters.filter((m) => m.billingHold).length;
-    const overBudget = amMatters.filter(
+    const billingHolds = matters.filter((m) => m.billingHold).length;
+    const overBudget = matters.filter(
       (m) => m.financialStatus === "Over Budget",
     ).length;
-    const trustTotal = amMatters.reduce((s, m) => s + m.trustBalance, 0);
+    const trustTotal = matters.reduce((s, m) => s + m.trustBalance, 0);
 
     return [
       {
         id: "open",
         title: "Open Matters",
         value: String(openMatters.length),
-        subtitle: `${amMatters.length} total matters`,
+        subtitle: `${matters.length} total matters`,
         kpiFilter: "open",
       },
       {
@@ -152,10 +156,10 @@ export function AccountingManagerMattersView() {
         kpiFilter: "has_trust",
       },
     ];
-  }, []);
+  }, [matters]);
 
   const filteredMatters = useMemo(() => {
-    let list = [...amMatters];
+    let list = [...matters];
 
     if (filters.search) {
       const q = filters.search.toLowerCase();
@@ -206,7 +210,7 @@ export function AccountingManagerMattersView() {
     });
 
     return list;
-  }, [filters, sortKey, sortDir]);
+  }, [filters, sortKey, sortDir, matters]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -274,7 +278,15 @@ export function AccountingManagerMattersView() {
         description="Track matter WIP, expenses, trust balances, budgets, and billing holds across the firm."
       >
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => prototypeAction("Release Billing Holds review")}>
+          <Button
+            onClick={() =>
+              setFilters((prev) => ({
+                ...prev,
+                billingHoldOnly: true,
+                kpiFilter: "billing_hold",
+              }))
+            }
+          >
             <PauseCircle className="h-4 w-4" />
             Review Holds
           </Button>
@@ -320,7 +332,7 @@ export function AccountingManagerMattersView() {
         <CardHeader>
           <CardTitle>Filters</CardTitle>
           <CardDescription>
-            {filteredMatters.length} of {amMatters.length} matters shown
+            {filteredMatters.length} of {matters.length} matters shown
           </CardDescription>
         </CardHeader>
         <div className="grid gap-4 px-6 pb-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -579,11 +591,29 @@ export function AccountingManagerMattersView() {
               {selectedMatter.billingHold && (
                 <Button
                   size="sm"
-                  onClick={() =>
-                    prototypeAction(
-                      `Billing hold released for ${selectedMatter.matterName}`,
-                    )
-                  }
+                  onClick={() => {
+                    setMatters((prev) =>
+                      prev.map((matter) =>
+                        matter.id === selectedMatter.id
+                          ? {
+                              ...matter,
+                              billingHold: false,
+                              financialStatus: "On Track",
+                            }
+                          : matter,
+                      ),
+                    );
+                    setSelectedMatter((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            billingHold: false,
+                            financialStatus: "On Track",
+                          }
+                        : prev,
+                    );
+                    setToast(`Billing hold released for ${selectedMatter.matterName}.`);
+                  }}
                 >
                   Release Hold
                 </Button>
@@ -591,14 +621,35 @@ export function AccountingManagerMattersView() {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => prototypeAction("Generate prebill")}
+                onClick={() =>
+                  router.push(
+                    invoicesHref({
+                      client: selectedMatter.client,
+                      matter: selectedMatter.matterName,
+                    }),
+                  )
+                }
+              >
+                View Invoices
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => router.push("/accounting/trust")}
+              >
+                View Trust Ledger
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setToast("Prebill draft queued for billing review (session only).")}
               >
                 Generate Prebill
               </Button>
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => prototypeAction("Budget adjustment")}
+                onClick={() => setToast("Budget adjustment form opened (session only).")}
               >
                 Adjust Budget
               </Button>

@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/Table";
 import { Toast } from "@/components/ui/Toast";
+import { useDemoTimeWorkflow } from "@/hooks/useDemoTimeWorkflow";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import {
   chartOfAccounts,
@@ -87,6 +88,7 @@ function closeTaskVariant(status: string) {
 export function RevenueLedgerView() {
   const [activeTab, setActiveTab] = useState<GlTab>("overview");
   const [entries, setEntries] = useState(journalEntries);
+  const { journalEntries: demoJournalEntries, payrollAccruals } = useDemoTimeWorkflow();
   const [tasks, setTasks] = useState(closeTasks);
   const [showJeForm, setShowJeForm] = useState(false);
   const [jeDate, setJeDate] = useState("2026-08-05");
@@ -124,6 +126,24 @@ export function RevenueLedgerView() {
     const complete = tasks.filter((t) => t.status === "Complete").length;
     return Math.round((complete / tasks.length) * 100);
   }, [tasks]);
+
+  const mergedJournalEntries = useMemo(() => {
+    const demoMapped: JournalEntry[] = demoJournalEntries.map((entry) => ({
+      id: entry.id,
+      entryNumber: entry.entryNumber,
+      date: entry.date,
+      description: entry.description,
+      status: entry.status,
+      totalDebit: entry.totalDebit,
+      totalCredit: entry.totalCredit,
+      createdBy: entry.createdBy,
+      postedDate: entry.postedDate,
+      lines: entry.lines,
+    }));
+    const demoIds = new Set(demoMapped.map((entry) => entry.id));
+    const localOnly = entries.filter((entry) => !demoIds.has(entry.id));
+    return [...demoMapped, ...localOnly];
+  }, [demoJournalEntries, entries]);
 
   const updateLine = (id: string, field: keyof DraftLine, value: string) => {
     setJeLines((prev) =>
@@ -266,6 +286,15 @@ export function RevenueLedgerView() {
         ))}
       </div>
 
+      {payrollAccruals.length > 0 && (
+        <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
+          {payrollAccruals.length} approved time{" "}
+          {payrollAccruals.length === 1 ? "entry has" : "entries have"} posted
+          payroll accruals to <strong>Accrued Wages Payable (2300)</strong>. View
+          them in Journal Entries below.
+        </div>
+      )}
+
       <AccountingTabs
         tabs={TABS}
         activeTab={activeTab}
@@ -306,7 +335,10 @@ export function RevenueLedgerView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(activeTab === "overview" ? entries.slice(0, 4) : entries).map(
+                {(activeTab === "overview"
+                  ? mergedJournalEntries.slice(0, 4)
+                  : mergedJournalEntries
+                ).map(
                   (entry) => (
                     <TableRow key={entry.id}>
                       <TableCell className="font-medium">

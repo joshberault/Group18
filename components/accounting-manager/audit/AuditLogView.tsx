@@ -236,36 +236,24 @@ export function AuditLogView() {
       </PageHeader>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <KPICard
-          title="Events Today"
-          value={String(kpis.eventsToday)}
-          icon={ShieldCheck}
-        />
-        <KPICard
-          title="High-Risk Changes"
-          value={String(kpis.highRiskChanges)}
-          icon={ShieldAlert}
-        />
-        <KPICard
-          title="Approval Actions"
-          value={String(kpis.approvalActions)}
-          icon={CheckCircle2}
-        />
-        <KPICard
-          title="Failed Access Attempts"
-          value={String(kpis.failedAccessAttempts)}
-          icon={XCircle}
-        />
-        <KPICard
-          title="Data Exports"
-          value={String(kpis.dataExports)}
-          icon={Download}
-        />
-        <KPICard
-          title="Unreviewed Exceptions"
-          value={String(kpis.unreviewedExceptions)}
-          icon={AlertTriangle}
-        />
+        <button type="button" className="text-left" onClick={() => { setDateFrom(""); setDateTo(""); setSearch(""); }}>
+          <KPICard title="Events Today" value={String(kpis.eventsToday)} icon={ShieldCheck} className="cursor-pointer transition-shadow hover:shadow-md" />
+        </button>
+        <button type="button" className="text-left" onClick={() => setRiskFilter("High")}>
+          <KPICard title="High-Risk Changes" value={String(kpis.highRiskChanges)} icon={ShieldAlert} className="cursor-pointer transition-shadow hover:shadow-md" />
+        </button>
+        <button type="button" className="text-left" onClick={() => setActionFilter("Approval")}>
+          <KPICard title="Approval Actions" value={String(kpis.approvalActions)} icon={CheckCircle2} className="cursor-pointer transition-shadow hover:shadow-md" />
+        </button>
+        <button type="button" className="text-left" onClick={() => setActionFilter("Access")}>
+          <KPICard title="Failed Access Attempts" value={String(kpis.failedAccessAttempts)} icon={XCircle} className="cursor-pointer transition-shadow hover:shadow-md" />
+        </button>
+        <button type="button" className="text-left" onClick={() => setActionFilter("Export")}>
+          <KPICard title="Data Exports" value={String(kpis.dataExports)} icon={Download} className="cursor-pointer transition-shadow hover:shadow-md" />
+        </button>
+        <button type="button" className="text-left" onClick={() => setReviewFilter("Unreviewed")}>
+          <KPICard title="Unreviewed Exceptions" value={String(kpis.unreviewedExceptions)} icon={AlertTriangle} className="cursor-pointer transition-shadow hover:shadow-md" />
+        </button>
       </div>
 
       <Card className="mb-6" padding="md">
