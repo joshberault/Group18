@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { PortalCaseSelector } from "@/components/client-portal/PortalCaseSelector";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 interface PortalFeatureShellProps {
@@ -25,6 +26,7 @@ export function PortalFeatureShell({
         </Link>
       </div>
       <PageHeader title={title} description={description} />
+      <PortalCaseSelector />
       {children}
     </>
   );

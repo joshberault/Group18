@@ -11,15 +11,13 @@ import {
   Users,
 } from "lucide-react";
 import { CaseImportantDatesCalendar } from "@/components/client-portal/CaseImportantDatesCalendar";
+import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { CASE_TYPE_LABELS } from "@/lib/client-portal/case-task-lists";
-import {
-  caseInformation as initialCaseInformation,
-  clientEngagedCases,
-} from "@/lib/mock-data/client-portal";
+import { caseInformation as initialCaseInformation } from "@/lib/mock-data/client-portal";
 import { formatCurrency, cn } from "@/lib/utils/cn";
 
 type CaseContract = {
@@ -30,13 +28,35 @@ type CaseContract = {
 } | null;
 
 export function CaseInformation() {
+  const { selectedCases, isAllCases, matchesCase } = useCaseSelection();
   const contractInputRef = useRef<HTMLInputElement>(null);
   const [contract, setContract] = useState<CaseContract>(
     initialCaseInformation.contract,
   );
   const [contractMessage, setContractMessage] = useState<string | null>(null);
 
-  const matter = initialCaseInformation;
+  const primaryCase = selectedCases[0];
+  const matter = primaryCase
+    ? {
+        caseNumber: isAllCases
+          ? selectedCases.map((item) => item.caseNumber).join(", ")
+          : primaryCase.caseNumber,
+        title: isAllCases
+          ? `${selectedCases.length} active matters`
+          : primaryCase.title,
+        practiceArea: isAllCases
+          ? "Multiple practice areas"
+          : CASE_TYPE_LABELS[primaryCase.caseType],
+        openDate: isAllCases
+          ? selectedCases.map((item) => item.openDate).join(", ")
+          : primaryCase.openDate,
+        status: primaryCase.status,
+      }
+    : null;
+
+  const visibleTickets = initialCaseInformation.associatedTickets.filter(
+    (ticket) => matchesCase(ticket.caseNumber),
+  );
 
   function handleContractAttach(fileList: FileList | null) {
     const file = fileList?.[0];
@@ -52,21 +72,38 @@ export function CaseInformation() {
     if (contractInputRef.current) contractInputRef.current.value = "";
   }
 
+  if (!matter) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Case Information</CardTitle>
+          <CardDescription>
+            No active matters are linked to this client account.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <Card className="border-gold-500/30 bg-gradient-to-r from-navy-900 to-navy-800 text-white">
         <div className="flex flex-col gap-4 p-1 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-sm font-medium text-gold-500">Case number</p>
+            <p className="text-sm font-medium text-gold-500">
+              {isAllCases ? "Matter names" : "Matter name"}
+            </p>
             <p className="mt-1 text-2xl font-semibold tracking-tight">
-              {matter.caseNumber}
+              {isAllCases
+                ? selectedCases.map((item) => item.title).join(", ")
+                : selectedCases[0]?.title}
             </p>
             <p className="mt-2 text-sm text-gray-200">{matter.title}</p>
             <p className="mt-1 text-xs text-gray-400">
               {matter.practiceArea} · Opened {matter.openDate}
             </p>
           </div>
-          <StatusBadge status={matter.status} />
+          {!isAllCases && <StatusBadge status={matter.status} />}
         </div>
       </Card>
 
@@ -76,7 +113,9 @@ export function CaseInformation() {
             <div>
               <CardTitle>Case type(s)</CardTitle>
               <CardDescription>
-                Types of cases this client is currently engaged in.
+                {isAllCases
+                  ? "Types of cases this client is currently engaged in."
+                  : "Case type for the selected matter."}
               </CardDescription>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-navy-900 text-gold-500">
@@ -86,7 +125,7 @@ export function CaseInformation() {
         </CardHeader>
 
         <ul className="space-y-3">
-          {clientEngagedCases.map((engagedCase) => (
+          {selectedCases.map((engagedCase) => (
             <li
               key={engagedCase.id}
               className="rounded-xl border border-gray-200 px-4 py-3"
@@ -98,7 +137,7 @@ export function CaseInformation() {
                   </p>
                   <p className="mt-1 text-sm text-navy-900">{engagedCase.title}</p>
                   <p className="mt-1 text-xs text-muted">
-                    Case {engagedCase.caseNumber} · Opened {engagedCase.openDate}
+                    Opened {engagedCase.openDate}
                   </p>
                 </div>
                 <StatusBadge status={engagedCase.status} />
@@ -212,7 +251,7 @@ export function CaseInformation() {
                 Attorney(s)
               </p>
               <ul className="space-y-3">
-                {matter.attorneys.map((attorney) => (
+                {initialCaseInformation.attorneys.map((attorney) => (
                   <li
                     key={attorney.id}
                     className="rounded-xl border border-gray-200 px-3 py-3"
@@ -232,7 +271,7 @@ export function CaseInformation() {
                 Paralegal(s)
               </p>
               <ul className="space-y-3">
-                {matter.paralegals.map((paralegal) => (
+                {initialCaseInformation.paralegals.map((paralegal) => (
                   <li
                     key={paralegal.id}
                     className="rounded-xl border border-gray-200 px-3 py-3"
@@ -266,11 +305,13 @@ export function CaseInformation() {
           </div>
         </CardHeader>
 
-        {matter.associatedTickets.length === 0 ? (
-          <p className="text-sm text-muted">No associated tickets on file.</p>
+        {visibleTickets.length === 0 ? (
+          <p className="text-sm text-muted">
+            No associated tickets for the selected matter view.
+          </p>
         ) : (
           <ul className="space-y-4">
-            {matter.associatedTickets.map((ticket) => (
+            {visibleTickets.map((ticket) => (
               <li
                 key={ticket.id}
                 className="rounded-xl border border-gray-200 px-4 py-4"

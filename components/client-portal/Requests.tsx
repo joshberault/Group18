@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils/cn";
 
 type RequestOptionId =
   | "appointment"
+  | "billing-appointment"
   | "payment-schedule"
   | "documentation";
 
@@ -66,6 +67,13 @@ const REQUEST_OPTIONS = [
     title: "Request an appointment with an attorney",
     description:
       "Ask a paralegal to schedule a meeting with your attorney.",
+    icon: Calendar,
+  },
+  {
+    id: "billing-appointment" as const,
+    title: "Request an appointment with the Billing Department",
+    description:
+      "Schedule a meeting with the Billing Department about your account.",
     icon: Calendar,
   },
   {
@@ -184,7 +192,12 @@ export function Requests() {
 
   function availableRecipients(): RecipientOption[] {
     if (selectedOption === "appointment") return paralegals;
-    if (selectedOption === "payment-schedule") return [BILLING_RECIPIENT];
+    if (
+      selectedOption === "billing-appointment" ||
+      selectedOption === "payment-schedule"
+    ) {
+      return [BILLING_RECIPIENT];
+    }
     return attorneysAndParalegals;
   }
 
@@ -208,7 +221,10 @@ export function Requests() {
     setDescription("");
     setError(null);
 
-    if (optionId === "payment-schedule") {
+    if (
+      optionId === "payment-schedule" ||
+      optionId === "billing-appointment"
+    ) {
       setRecipients([BILLING_RECIPIENT.value]);
     } else {
       setRecipients([""]);
@@ -669,7 +685,10 @@ export function Requests() {
                       onChange={(event) =>
                         updateRecipient(index, event.target.value)
                       }
-                      disabled={selectedOption === "payment-schedule"}
+                      disabled={
+                        selectedOption === "payment-schedule" ||
+                        selectedOption === "billing-appointment"
+                      }
                     />
                   </div>
                   {allowsMultiple && index > 0 && (

@@ -6,7 +6,8 @@ export const NOTIFICATION_UPDATE_EVENT = "client-notifications-updated";
 
 export type ClientNotificationType =
   | (typeof clientNotifications)[number]["type"]
-  | "dispute_denied";
+  | "dispute_denied"
+  | "invoice_added";
 
 export type ClientNotification = {
   id: string;
@@ -16,6 +17,7 @@ export type ClientNotification = {
   type: ClientNotificationType;
   actionLabel: string;
   actionHref: string;
+  caseNumber?: string;
 };
 
 export function getCompletedNotificationIds() {
@@ -92,9 +94,10 @@ export function addCaseStatusUpdateNotification(input: {
   persistDynamicNotification({
     id: `notif-case-status-${Date.now()}`,
     title: "New case status update",
-    message: `${input.completedBy} marked “${input.taskTitle}” complete on case ${input.caseNumber} (${input.caseTitle}).`,
+    message: `${input.completedBy} marked “${input.taskTitle}” complete on ${input.caseTitle}.`,
     createdAt: new Date().toISOString(),
     type: "case_status",
+    caseNumber: input.caseNumber,
     actionLabel: "Review update",
     actionHref: "/client-portal/case-status",
   });
@@ -118,6 +121,29 @@ export function addDisputeDeniedNotification(input: {
     type: "dispute_denied",
     actionLabel: "View billing",
     actionHref: "/client-portal/pay-balance",
+  });
+}
+
+export function addInvoiceAddedNotification(input: {
+  invoiceNumber: string;
+  amount: number;
+  matterName: string;
+  matterReference: string;
+}) {
+  if (typeof window === "undefined") return;
+
+  persistDynamicNotification({
+    id: `notif-invoice-added-${input.invoiceNumber}`,
+    title: "New invoice added",
+    message: `${input.invoiceNumber} for ${input.matterName} has been added to your account for ${new Intl.NumberFormat(
+      "en-US",
+      { style: "currency", currency: "USD" },
+    ).format(input.amount)}.`,
+    createdAt: new Date().toISOString(),
+    type: "invoice_added",
+    caseNumber: input.matterReference,
+    actionLabel: "View invoice",
+    actionHref: "/client-portal/account-summary",
   });
 }
 

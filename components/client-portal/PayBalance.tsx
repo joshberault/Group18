@@ -10,10 +10,16 @@ import {
   FileImage,
   Landmark,
   MessageSquareWarning,
-  Pencil,
   ShieldCheck,
 } from "lucide-react";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
+import { getMatterNameForCaseNumber } from "@/lib/client-portal/case-selection";
+import {
+  getDynamicInvoiceCharges,
+  INVOICE_CHARGES_UPDATE_EVENT,
+  type DynamicInvoiceCharge,
+} from "@/lib/client-portal/invoice-charge-store";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -44,7 +50,7 @@ type PaymentAction =
   | "recurring"
   | "dispute";
 type PaymentMethod = "check" | "card" | "electronic-check";
-type Step = "form" | "review" | "dispute-reason" | "edit-recurring" | "sent";
+type Step = "form" | "review" | "dispute-reason" | "sent";
 
 interface PaymentFields {
   checkNumber: string;
@@ -102,7 +108,7 @@ const ACTION_OPTIONS = [
   {
     id: "full" as const,
     title: "Pay the full balance",
-    description: formatCurrency(clientAccountSummary.outstandingBalance),
+    description: "Pay the remaining outstanding balance",
   },
   {
     id: "partial" as const,
@@ -177,13 +183,31 @@ function validateCardFields(
     : null;
 }
 
+function chargeMatterName(charge: {
+  caseNumber: string;
+  matterName?: string;
+}) {
+  return charge.matterName ?? getMatterNameForCaseNumber(charge.caseNumber);
+}
+
 export function PayBalance() {
   const { role } = useDemoRole();
+  const { matchesCase } = useCaseSelection();
+  const [dynamicCharges, setDynamicCharges] = useState<DynamicInvoiceCharge[]>(
+    [],
+  );
   const canDenyDisputes =
     role === "billing_specialist" ||
     role === "attorney" ||
     role === "managing_partner" ||
     role === "firm_administrator";
+
+  const visibleCharges = [...dynamicCharges, ...invoiceCharges].filter(
+    (charge) => matchesCase(charge.caseNumber),
+  );
+  const outstandingBalance = visibleCharges
+    .filter((charge) => charge.status === "unpaid")
+    .reduce((sum, charge) => sum + charge.amount, 0);
 
   const [step, setStep] = useState<Step>("form");
   const [action, setAction] = useState<PaymentAction>("full");
@@ -200,13 +224,18 @@ export function PayBalance() {
   const [disputeReason, setDisputeReason] = useState("");
   const [savedRecurring, setSavedRecurring] =
     useState<RecurringPaymentSetup | null>(null);
-  const [editStartDate, setEditStartDate] = useState("");
-  const [editEndDate, setEditEndDate] = useState("");
-  const [editFrequency, setEditFrequency] = useState("");
-  const [editAmount, setEditAmount] = useState("");
   const [pendingDisputes, setPendingDisputes] = useState<DisputeRequest[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const refreshCharges = () =>
+      setDynamicCharges(getDynamicInvoiceCharges());
+    refreshCharges();
+    window.addEventListener(INVOICE_CHARGES_UPDATE_EVENT, refreshCharges);
+    return () =>
+      window.removeEventListener(INVOICE_CHARGES_UPDATE_EVENT, refreshCharges);
+  }, []);
 
   const refreshBillingState = useCallback(() => {
     setSavedRecurring(getRecurringPayment());
@@ -227,13 +256,13 @@ export function PayBalance() {
 
   const isPaymentAction =
     action === "full" || action === "partial" || action === "scheduled";
-  const selectedCharges = invoiceCharges.filter((charge) =>
+  const selectedCharges = visibleCharges.filter((charge) =>
     selectedChargeIds.includes(charge.id),
   );
 
   const paymentAmount =
     action === "full"
-      ? clientAccountSummary.outstandingBalance
+      ? outstandingBalance
       : action === "scheduled"
         ? UPCOMING_PAYMENT.amount
         : action === "recurring"
@@ -263,10 +292,10 @@ export function PayBalance() {
       action === "partial" &&
       (!Number.isFinite(paymentAmount) ||
         paymentAmount <= 0 ||
-        paymentAmount > clientAccountSummary.outstandingBalance)
+        paymentAmount > outstandingBalance)
     ) {
       return `Enter a partial payment between $0.01 and ${formatCurrency(
-        clientAccountSummary.outstandingBalance,
+        outstandingBalance,
       )}.`;
     }
 
@@ -362,44 +391,6 @@ export function PayBalance() {
     });
     setError(null);
     setStep("sent");
-  }
-
-  function openEditRecurring() {
-    if (!savedRecurring) return;
-    setEditStartDate(savedRecurring.startDate);
-    setEditEndDate(savedRecurring.endDate);
-    setEditFrequency(savedRecurring.frequency);
-    setEditAmount(String(savedRecurring.amount));
-    setError(null);
-    setStatusMessage(null);
-    setStep("edit-recurring");
-  }
-
-  function handleSaveRecurringEdits(event: React.FormEvent) {
-    event.preventDefault();
-    if (!editStartDate || !editEndDate || !editFrequency) {
-      setError("Enter the beginning date, end date, and frequency.");
-      return;
-    }
-    if (editEndDate < editStartDate) {
-      setError("The end date must be on or after the beginning date.");
-      return;
-    }
-    if (!Number.isFinite(Number(editAmount)) || Number(editAmount) <= 0) {
-      setError("Enter a valid payment amount in USD.");
-      return;
-    }
-
-    saveRecurringPayment({
-      startDate: editStartDate,
-      endDate: editEndDate,
-      frequency: editFrequency,
-      amount: Number(editAmount),
-    });
-    setStatusMessage("Recurring payment dates and amount were updated.");
-    setError(null);
-    setStep("form");
-    refreshBillingState();
   }
 
   function handleDenyDispute(disputeId: string) {
@@ -664,91 +655,6 @@ export function PayBalance() {
     );
   }
 
-  if (step === "edit-recurring" && savedRecurring) {
-    return (
-      <div className="mx-auto max-w-2xl">
-        <button
-          type="button"
-          onClick={() => setStep("form")}
-          className="mb-4 inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-navy-900 hover:bg-gray-100"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Pay Balance
-        </button>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <CardTitle>Edit recurring payments</CardTitle>
-                <CardDescription>
-                  Update the beginning date, end date, frequency, and payment
-                  amount.
-                </CardDescription>
-              </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-navy-900 text-gold-500">
-                <Pencil className="h-5 w-5" />
-              </div>
-            </div>
-          </CardHeader>
-
-          <form onSubmit={handleSaveRecurringEdits} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Input
-                label="Beginning date"
-                type="date"
-                value={editStartDate}
-                onChange={(event) => {
-                  setEditStartDate(event.target.value);
-                  setError(null);
-                }}
-                required
-              />
-              <Input
-                label="End date"
-                type="date"
-                value={editEndDate}
-                onChange={(event) => {
-                  setEditEndDate(event.target.value);
-                  setError(null);
-                }}
-                required
-              />
-              <Select
-                label="Frequency of the payment"
-                options={FREQUENCY_OPTIONS}
-                value={editFrequency}
-                onChange={(event) => {
-                  setEditFrequency(event.target.value);
-                  setError(null);
-                }}
-                required
-              />
-              <Input
-                label="Amount of the payment (USD)"
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={editAmount}
-                onChange={(event) => {
-                  setEditAmount(event.target.value);
-                  setError(null);
-                }}
-                required
-              />
-            </div>
-
-            {error && <p className="text-sm text-red-600">{error}</p>}
-
-            <div className="flex justify-end">
-              <Button type="submit">Save recurring payment changes</Button>
-            </div>
-          </form>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <form onSubmit={handleFormContinue} className="space-y-6">
       {statusMessage && (
@@ -760,22 +666,12 @@ export function PayBalance() {
       {savedRecurring && (
         <Card>
           <CardHeader>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <CardTitle>Current recurring payment</CardTitle>
-                <CardDescription>
-                  You can edit the dates, frequency, and amount anytime.
-                </CardDescription>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={openEditRecurring}
-              >
-                <Pencil className="h-4 w-4" />
-                Edit dates and amount
-              </Button>
+            <div>
+              <CardTitle>Current recurring payment</CardTitle>
+              <CardDescription>
+                Payment plan details are view-only. Request changes through the
+                Billing Department in Requests.
+              </CardDescription>
             </div>
           </CardHeader>
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -858,8 +754,7 @@ export function PayBalance() {
         <CardHeader>
           <CardTitle>1. Choose what you want to do</CardTitle>
           <CardDescription>
-            Current balance:{" "}
-            {formatCurrency(clientAccountSummary.outstandingBalance)}
+            Current balance: {formatCurrency(outstandingBalance)}
           </CardDescription>
         </CardHeader>
 
@@ -893,7 +788,11 @@ export function PayBalance() {
                   <p className="text-sm font-semibold text-navy-900">
                     {option.title}
                   </p>
-                  <p className="mt-1 text-xs text-muted">{option.description}</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {option.id === "full"
+                      ? formatCurrency(outstandingBalance)
+                      : option.description}
+                  </p>
                 </div>
               </div>
             </label>
@@ -906,7 +805,7 @@ export function PayBalance() {
               label="Partial payment amount (USD)"
               type="number"
               min="0.01"
-              max={clientAccountSummary.outstandingBalance}
+              max={outstandingBalance}
               step="0.01"
               value={partialAmount}
               onChange={(event) => {
@@ -1081,7 +980,7 @@ export function PayBalance() {
           </CardHeader>
 
           <ul className="space-y-3">
-            {invoiceCharges.map((charge) => {
+            {visibleCharges.map((charge) => {
               const selected = selectedChargeIds.includes(charge.id);
               return (
                 <li key={charge.id}>
@@ -1107,7 +1006,8 @@ export function PayBalance() {
                         <StatusBadge status={charge.status} />
                       </div>
                       <p className="mt-1 text-xs text-muted">
-                        Invoice #{charge.invoiceNumber} · Charge date{" "}
+                        Invoice #{charge.invoiceNumber} ·{" "}
+                        {chargeMatterName(charge)} · Charge date{" "}
                         {charge.chargeDate} ·{" "}
                         {charge.status === "paid" ? "Paid" : "Unpaid"}
                       </p>

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
+import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
 import {
   getActiveNotifications,
   getCompletedNotificationIds,
@@ -41,6 +42,7 @@ function notificationIcon(type: ClientNotification["type"]) {
   if (type === "request") return ClipboardList;
   if (type === "case_status") return GitBranch;
   if (type === "dispute_denied") return CircleDollarSign;
+  if (type === "invoice_added") return CircleDollarSign;
   if (type === "invoice_past_due") return CircleDollarSign;
   return CalendarClock;
 }
@@ -49,18 +51,25 @@ function completionLabel(type: ClientNotification["type"]) {
   if (type === "request") return "I completed the request";
   if (type === "case_status") return "I reviewed the update";
   if (type === "dispute_denied") return "I reviewed this notice";
+  if (type === "invoice_added") return "I reviewed this invoice";
   return "I paid this invoice";
 }
 
 export function Notifications() {
+  const { matchesCase } = useCaseSelection();
   const [activeNotifications, setActiveNotifications] = useState<
     ClientNotification[]
   >([]);
   const [completionMessage, setCompletionMessage] = useState<string | null>(null);
 
   const refreshNotifications = useCallback(() => {
-    setActiveNotifications(getActiveNotifications());
-  }, []);
+    setActiveNotifications(
+      getActiveNotifications().filter(
+        (notification) =>
+          !notification.caseNumber || matchesCase(notification.caseNumber),
+      ),
+    );
+  }, [matchesCase]);
 
   useEffect(() => {
     refreshNotifications();
