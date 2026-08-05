@@ -1,13 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Bell, Menu, Search } from "lucide-react";
+import { Menu } from "lucide-react";
 import { getActiveNotificationCount } from "@/lib/client-portal/notifications-store";
 import { USER_ROLE_LABELS, USER_ROLES, type UserRole } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
+import { FirmNotificationsMenu } from "./FirmNotificationsMenu";
+import { GlobalSearch } from "./GlobalSearch";
 import { useDemoRole } from "./DemoRoleProvider";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 
 interface HeaderProps {
@@ -50,14 +51,7 @@ export function Header({ onMenuClick, className }: HeaderProps) {
       </Button>
 
       <div className="hidden max-w-md flex-1 md:block">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <Input
-            placeholder="Search clients, matters, invoices..."
-            className="pl-9"
-            aria-label="Search"
-          />
-        </div>
+        <GlobalSearch />
       </div>
 
       <div className="flex flex-1 items-center justify-end gap-3 md:flex-none">
@@ -72,9 +66,7 @@ export function Header({ onMenuClick, className }: HeaderProps) {
           />
         </div>
 
-        <Button variant="ghost" size="sm" aria-label="Notifications">
-          <Bell className="h-5 w-5 text-muted" />
-        </Button>
+        <FirmNotificationsMenu />
 
         <div className="hidden text-right sm:block">
           <p className="text-sm font-medium text-navy-900">{identity.fullName}</p>

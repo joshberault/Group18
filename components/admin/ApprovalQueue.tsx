@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -36,6 +36,12 @@ import {
   MOCK_VACATIONS,
 } from "@/lib/admin/mock-data";
 import { invoiceApprovedBillableTime } from "@/lib/billing/approved-time-billing";
+import {
+  getMergedApprovals,
+  isDemoSessionApproval,
+  resolveDemoTimeApproval,
+  subscribeTimeWorkflow,
+} from "@/lib/demo/time-workflow-store";
 import type {
   AdminApproval,
   AdminEmployee,
@@ -77,8 +83,17 @@ function typeLabel(type: ApprovalType) {
 
 export function ApprovalQueue() {
   const [approvals, setApprovals] = useState<AdminApproval[]>(() =>
-    MOCK_APPROVALS.map((row) => ({ ...row })),
+    getMergedApprovals().map((row) => ({ ...row })),
   );
+
+  useEffect(() => {
+    return subscribeTimeWorkflow(() => {
+      setApprovals((prev) => {
+        const edited = new Map(prev.map((row) => [row.id, row]));
+        return getMergedApprovals().map((row) => edited.get(row.id) ?? row);
+      });
+    });
+  }, []);
   const [employees, setEmployees] = useState<AdminEmployee[]>(() =>
     MOCK_EMPLOYEES.map((row) => ({ ...row })),
   );
@@ -319,6 +334,15 @@ export function ApprovalQueue() {
     const reviewedAt = `${ADMIN_REFERENCE_DATE}T18:00:00Z`;
     const title = selected.title;
     const reviewerName = actingReviewer.fullName;
+
+    if (isDemoSessionApproval(selected.id) && selected.type === "time_entry") {
+      resolveDemoTimeApproval(
+        selected.id,
+        decision,
+        reviewerName,
+        reviewNotes.trim() || undefined,
+      );
+    }
 
     setApprovals((prev) =>
       prev.map((row) => {

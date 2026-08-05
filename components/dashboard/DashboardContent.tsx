@@ -20,6 +20,7 @@ import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { JobApplicationsPanel } from "@/components/admin/JobApplicationsPanel";
 import { ParalegalDashboard } from "@/components/dashboard/ParalegalDashboard";
 import { AttorneyDashboard } from "@/components/dashboard/AttorneyDashboard";
+import { PendingTimeApprovalsPanel } from "@/components/time/PendingTimeApprovalsPanel";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { KPICard } from "@/components/ui/KPICard";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -81,6 +82,12 @@ export function DashboardContent() {
       {role === "firm_administrator" && (
         <div className="mb-6">
           <JobApplicationsPanel />
+        </div>
+      )}
+
+      {(role === "managing_partner" || role === "firm_administrator") && (
+        <div className="mb-6">
+          <PendingTimeApprovalsPanel adminLink={role === "firm_administrator"} />
         </div>
       )}
 
