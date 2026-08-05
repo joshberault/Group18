@@ -3,22 +3,29 @@ import {
   BarChart3,
   Briefcase,
   Calculator,
-  Clock,
   FileText,
   LayoutDashboard,
-  ListTodo,
   Receipt,
+  UserCog,
   Users,
   UserCircle,
 } from "lucide-react";
+import type { UserRole } from "@/lib/types";
 
 export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
   description?: string;
+  /** When set, item only appears for these demo roles. */
+  roles?: UserRole[];
 }
 
+/**
+ * Sidebar for feature/admin (Person 5).
+ * Admin/Staff Information is demo-gated to Firm Administrator.
+ * Matter tracking lives under Admin → Matters.
+ */
 export const NAV_ITEMS: NavItem[] = [
   {
     label: "Dashboard",
@@ -33,28 +40,18 @@ export const NAV_ITEMS: NavItem[] = [
     description: "Client records and relationships",
   },
   {
-    label: "Matters",
-    href: "/matters",
-    icon: Briefcase,
-    description: "Legal matters and engagements",
+    label: "Admin/Staff Information",
+    href: "/admin",
+    icon: UserCog,
+    description:
+      "Employees, matters, assignments, approvals, workload, and roles",
+    roles: ["firm_administrator"],
   },
   {
     label: "Attorney Hub",
     href: "/attorney/dashboard",
     icon: Briefcase,
-    description: "Assigned matters, time entries, and expenses",
-  },
-  {
-    label: "Time & Expenses",
-    href: "/attorney/time",
-    icon: Clock,
-    description: "Attorney time and billable expenses",
-  },
-  {
-    label: "Tasks & Deadlines",
-    href: "/attorney/tasks",
-    icon: ListTodo,
-    description: "Matter tasks and deadline tracking",
+    description: "Attorney workspace for assigned matters",
   },
   {
     label: "Billing",

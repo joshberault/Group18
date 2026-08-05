@@ -24,7 +24,7 @@ function isValidRole(value: string): value is UserRole {
 }
 
 export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRoleState] = useState<UserRole>("managing_partner");
+  const [role, setRoleState] = useState<UserRole>("firm_administrator");
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
