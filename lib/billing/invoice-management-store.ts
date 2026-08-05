@@ -26,6 +26,15 @@ export const DELETED_INVOICES_STORAGE_KEY = "nv-billing-deleted-invoices-v1";
 /** Same-tab notify so Invoice Management can refresh without a full reload */
 export const INVOICES_UPDATED_EVENT = "nv-invoices-updated";
 
+/**
+ * When true, merge demo INVOICE_SEED into the live catalog.
+ * Default false — live dashboards/AR use generated invoices only.
+ * Set NEXT_PUBLIC_BILLING_DEMO_SEED=1 to re-enable seed for empty demos.
+ */
+export const USE_INVOICE_SEED =
+  typeof process !== "undefined" &&
+  process.env.NEXT_PUBLIC_BILLING_DEMO_SEED === "1";
+
 /** Survives SPA navigations in the same browser tab even if storage is flaky */
 const MEMORY_KEY = "__nvGeneratedInvoices";
 const DELETED_MEMORY_KEY = "__nvDeletedInvoices";
@@ -243,7 +252,8 @@ export function getManagedInvoicesSnapshot(): Invoice[] {
 }
 
 export function getServerInvoicesSnapshot(): Invoice[] {
-  return INVOICE_SEED;
+  // SSR has no localStorage; seed would dual-feed demos into live metrics.
+  return USE_INVOICE_SEED ? INVOICE_SEED : [];
 }
 
 /** Invalidate external-store cache after catalog mutations */
@@ -402,9 +412,10 @@ function persistDeletedInvoiceNumber(invoiceNumber: string) {
 }
 
 /**
- * Seed invoices plus any invoices created via Generate Invoice.
- * Generated invoices appear first (newest first by number then date).
- * Admin-deleted numbers are excluded.
+ * Managed invoice catalog for Invoice Management and dashboards.
+ *
+ * Live mode: generated invoices + deleted tombstones only.
+ * Demo seed only when USE_INVOICE_SEED / NEXT_PUBLIC_BILLING_DEMO_SEED=1.
  */
 export function getAllManagedInvoices(): Invoice[] {
   const deleted = new Set(loadDeletedInvoiceNumbers());
@@ -417,6 +428,11 @@ export function getAllManagedInvoices(): Invoice[] {
       if (byNumber !== 0) return byNumber;
       return b.invoiceDate.localeCompare(a.invoiceDate);
     });
+
+  if (!USE_INVOICE_SEED) {
+    return generated;
+  }
+
   const generatedNumbers = new Set(generated.map((g) => g.invoiceNumber));
   const seed = INVOICE_SEED.filter(
     (s) =>
@@ -504,8 +520,8 @@ export function upsertGeneratedInvoice(invoice: Invoice): PersistResult {
 }
 
 /**
- * Merge a patch into an existing managed invoice (seed or generated)
- * and persist the full updated record so it overrides seed data.
+ * Merge a patch into an existing managed invoice and persist the full
+ * updated record (payments, status, etc.). Calls notify via upsert.
  */
 export function updateManagedInvoice(
   invoiceNumber: string,
@@ -651,7 +667,7 @@ export function buildManagedInvoiceFromGeneration(
 }
 
 /**
- * Next sequential invoice number based on seed + generated store.
+ * Next sequential invoice number from the managed catalog.
  * Continues the NV-YYYY-#### series from the highest known number.
  */
 export function allocateNextInvoiceNumber(year = 2026): string {
@@ -665,4 +681,31 @@ export function allocateNextInvoiceNumber(year = 2026): string {
     }
   }
   return `NV-${year}-${String(max + 1).padStart(4, "0")}`;
+}
+
+/**
+ * Time entry IDs already present on managed invoices (not Cancelled).
+ * Used as the billed flag for CounselFlow time_entries (no DB billed column).
+ */
+export function getInvoicedTimeEntryIds(): Set<string> {
+  const ids = new Set<string>();
+  for (const inv of getAllManagedInvoices()) {
+    if (inv.status === "Cancelled") continue;
+    for (const te of inv.timeEntries ?? []) {
+      if (te.id) ids.add(te.id);
+    }
+  }
+  return ids;
+}
+
+/** Expense line IDs already on managed invoices (not Cancelled). */
+export function getInvoicedExpenseIds(): Set<string> {
+  const ids = new Set<string>();
+  for (const inv of getAllManagedInvoices()) {
+    if (inv.status === "Cancelled") continue;
+    for (const ex of inv.reimbursableExpenses ?? []) {
+      if (ex.id) ids.add(ex.id);
+    }
+  }
+  return ids;
 }

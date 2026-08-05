@@ -7,6 +7,8 @@ export const BILLING_ROUTES = {
   invoices: "/invoices",
   generateInvoice: "/invoices/generate",
   receivables: "/receivables",
+  revenueByAttorney: "/billing/revenue/attorney",
+  revenueByClient: "/billing/revenue/client",
 } as const;
 
 export type BillingRoute = (typeof BILLING_ROUTES)[keyof typeof BILLING_ROUTES];
@@ -35,4 +37,34 @@ export function receivablesHref(
   }
   const s = q.toString();
   return s ? `${BILLING_ROUTES.receivables}?${s}` : BILLING_ROUTES.receivables;
+}
+
+/** Revenue by attorney report (optional attorney name filter). */
+export function revenueByAttorneyHref(
+  params?: Record<string, string | undefined>,
+): string {
+  if (!params) return BILLING_ROUTES.revenueByAttorney;
+  const q = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value != null && value !== "") q.set(key, value);
+  }
+  const s = q.toString();
+  return s
+    ? `${BILLING_ROUTES.revenueByAttorney}?${s}`
+    : BILLING_ROUTES.revenueByAttorney;
+}
+
+/** Revenue by client report (optional client name filter). */
+export function revenueByClientHref(
+  params?: Record<string, string | undefined>,
+): string {
+  if (!params) return BILLING_ROUTES.revenueByClient;
+  const q = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value != null && value !== "") q.set(key, value);
+  }
+  const s = q.toString();
+  return s
+    ? `${BILLING_ROUTES.revenueByClient}?${s}`
+    : BILLING_ROUTES.revenueByClient;
 }

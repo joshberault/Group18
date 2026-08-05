@@ -1,16 +1,15 @@
 ﻿import { createClientSafe } from "@/lib/supabase/client";
-import { INVOICE_SEED } from "@/lib/billing/invoice-seed";
 import type { BillingDashboardData } from "@/lib/billing/types";
 
 /**
  * Placeholder datasets used when Supabase tables are not yet wired.
- * totalInvoices starts from seed invoice catalog length; the dashboard
- * client layer recomputes live metrics for the selected billing period.
+ * totalInvoices stays 0; the dashboard client layer recomputes live metrics
+ * from the managed catalog for the selected billing period.
  */
 const PLACEHOLDER_DATA: BillingDashboardData = {
   source: "placeholder",
   summary: {
-    totalInvoices: INVOICE_SEED.length,
+    totalInvoices: 0,
     outstandingReceivable: 0,
     collectionsThisMonth: 0,
     overdueInvoices: 0,
