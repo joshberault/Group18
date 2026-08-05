@@ -52,6 +52,7 @@ export interface ParalegalAssignmentMatter {
   practiceArea: string;
   attorneyName: string;
   attorneyId: string;
+  paralegalNames: string[];
   status: "open" | "on_hold" | "closed";
   engagementScope: string;
   conflictStatus: ConflictCheckStatus;
@@ -160,6 +161,7 @@ export const PARALEGAL_ASSIGNED_MATTERS: ParalegalAssignmentMatter[] = [
     practiceArea: "Litigation",
     attorneyName: "Avery Counsel",
     attorneyId: "attorney-avery",
+    paralegalNames: ["Parker Legal", "Riley Docket"],
     status: "open",
     engagementScope: "Commercial breach litigation through discovery",
     conflictStatus: "cleared",
@@ -174,6 +176,7 @@ export const PARALEGAL_ASSIGNED_MATTERS: ParalegalAssignmentMatter[] = [
     practiceArea: "Employment",
     attorneyName: "Avery Counsel",
     attorneyId: "attorney-avery",
+    paralegalNames: ["Parker Legal"],
     status: "open",
     engagementScope: "EEOC response and negotiation support",
     conflictStatus: "cleared",
@@ -188,6 +191,7 @@ export const PARALEGAL_ASSIGNED_MATTERS: ParalegalAssignmentMatter[] = [
     practiceArea: "Corporate",
     attorneyName: "Morgan Counsel",
     attorneyId: "attorney-morgan",
+    paralegalNames: ["Parker Legal", "Jordan Brief"],
     status: "on_hold",
     engagementScope: "Due diligence and purchase agreement support",
     conflictStatus: "possible_conflict",
@@ -202,6 +206,7 @@ export const PARALEGAL_ASSIGNED_MATTERS: ParalegalAssignmentMatter[] = [
     practiceArea: "Corporate",
     attorneyName: "Avery Counsel",
     attorneyId: "attorney-avery",
+    paralegalNames: ["Parker Legal"],
     status: "open",
     engagementScope: "Vendor agreement review (not litigation)",
     conflictStatus: "pending",

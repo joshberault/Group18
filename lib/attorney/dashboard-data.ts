@@ -18,7 +18,8 @@ export const DEMO_ATTORNEY = {
   fullName: "Avery Counsel",
   email: "avery.counsel@counselflow.example",
   initials: "AC",
-  title: "Attorney",
+  /** Uses the attorney ladder: Senior Partner, Partner, Senior Associate, Associate, Junior Associate. */
+  title: "Partner",
 } as const;
 
 const ATTORNEY_NAME = DEMO_ATTORNEY.fullName;

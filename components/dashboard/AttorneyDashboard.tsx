@@ -142,7 +142,9 @@ export function AttorneyDashboard() {
         description="Attorney view — Decide on reviews, own deadlines and matters, and keep billable work moving without doing paralegal prep work twice."
       >
         <div className="text-right text-xs text-muted">
-          <p className="font-medium text-navy-900">{DEMO_ATTORNEY.fullName}</p>
+          <p className="font-medium text-navy-900">
+            {DEMO_ATTORNEY.fullName}, {DEMO_ATTORNEY.title}
+          </p>
           <p>Last updated {updatedAt}</p>
         </div>
       </PageHeader>

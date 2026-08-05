@@ -16,10 +16,12 @@ import {
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { Select } from "@/components/ui/Select";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Textarea } from "@/components/ui/Textarea";
 import { caseInformation, clientRequests } from "@/lib/mock-data/client-portal";
+import { addRequestFulfilledNotification } from "@/lib/attorney/notifications-store";
 import { cn } from "@/lib/utils/cn";
 
 type RequestOptionId =
@@ -59,6 +61,8 @@ interface IncomingRequest {
   description: string;
   requestedAt: string;
   documentationRequired: boolean;
+  matterName: string;
+  matterNumber: string;
 }
 
 const REQUEST_OPTIONS = [
@@ -107,6 +111,8 @@ const INCOMING_REQUESTS: IncomingRequest[] = [
       "Please attach the front and back of your current auto insurance card for the traffic-citation case file.",
     requestedAt: "2026-08-05",
     documentationRequired: true,
+    matterName: "State v. Hale — Traffic Citation",
+    matterNumber: "2026-0142",
   },
   {
     id: "incoming-2",
@@ -117,6 +123,8 @@ const INCOMING_REQUESTS: IncomingRequest[] = [
       "Provide your availability for a 30-minute case preparation call next week.",
     requestedAt: "2026-08-04",
     documentationRequired: false,
+    matterName: "Hale Estate Planning Package",
+    matterNumber: "2026-0188",
   },
   {
     id: "incoming-3",
@@ -127,11 +135,14 @@ const INCOMING_REQUESTS: IncomingRequest[] = [
       "Please provide any information needed to update the payment schedule for invoice INV-2841.",
     requestedAt: "2026-08-03",
     documentationRequired: false,
+    matterName: "Hale Estate Planning Package",
+    matterNumber: "2026-0188",
   },
 ];
 
 export function Requests() {
   const fulfillmentInputRef = useRef<HTMLInputElement>(null);
+  const { identity, selectedRole } = useDemoRole();
   const paralegals: RecipientOption[] = caseInformation.paralegals.map(
     (paralegal) => ({
       value: paralegal.id,
@@ -332,6 +343,17 @@ export function Requests() {
       next.add(selectedIncomingRequest.id);
       return next;
     });
+    if (
+      selectedRole === "client" &&
+      selectedIncomingRequest.role === "Attorney"
+    ) {
+      addRequestFulfilledNotification({
+        requestTitle: selectedIncomingRequest.title,
+        fulfilledBy: identity.fullName,
+        matterName: selectedIncomingRequest.matterName,
+        matterNumber: selectedIncomingRequest.matterNumber,
+      });
+    }
     setError(null);
     setStep("fulfilled");
   }

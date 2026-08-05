@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   Circle,
   GitBranch,
+  LockKeyhole,
   LoaderCircle,
   Users,
 } from "lucide-react";
@@ -15,6 +17,11 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Ca
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { CASE_TYPE_LABELS } from "@/lib/client-portal/case-task-lists";
 import type { TaskOwner } from "@/lib/client-portal/case-task-lists";
+import {
+  areAllClientInvoicesPaid,
+  getPortalBillingModel,
+} from "@/lib/client-portal/billing-models";
+import { INVOICE_CHARGES_UPDATE_EVENT } from "@/lib/client-portal/invoice-charge-store";
 import {
   addCaseStatusUpdateNotification,
   CASE_TASK_PROGRESS_EVENT,
@@ -54,7 +61,7 @@ function TaskStatusIcon({
 export function CaseStatus() {
   const { role } = useDemoRole();
   const { selectedCases, isAllCases } = useCaseSelection();
-  const canCheckOffTasks = role === "attorney" || role === "paralegal";
+  const roleCanCheckOffTasks = role === "attorney" || role === "paralegal";
 
   const [selectedCaseId, setSelectedCaseId] = useState(
     selectedCases[0]?.id ?? "",
@@ -63,6 +70,7 @@ export function CaseStatus() {
     Record<string, string[]>
   >({});
   const [checkMessage, setCheckMessage] = useState<string | null>(null);
+  const [allInvoicesPaid, setAllInvoicesPaid] = useState(false);
 
   useEffect(() => {
     if (selectedCases.length === 0) {
@@ -85,9 +93,29 @@ export function CaseStatus() {
       window.removeEventListener(CASE_TASK_PROGRESS_EVENT, refreshProgress);
   }, [refreshProgress]);
 
+  useEffect(() => {
+    const refreshInvoiceStatus = () =>
+      setAllInvoicesPaid(areAllClientInvoicesPaid());
+    refreshInvoiceStatus();
+    window.addEventListener(
+      INVOICE_CHARGES_UPDATE_EVENT,
+      refreshInvoiceStatus,
+    );
+    return () =>
+      window.removeEventListener(
+        INVOICE_CHARGES_UPDATE_EVENT,
+        refreshInvoiceStatus,
+      );
+  }, []);
+
   const selectedCase =
     selectedCases.find((item) => item.id === selectedCaseId) ??
     selectedCases[0];
+  const progressLocked =
+    selectedCase !== undefined &&
+    getPortalBillingModel(selectedCase.caseType) === "retainer" &&
+    !allInvoicesPaid;
+  const canCheckOffTasks = roleCanCheckOffTasks && !progressLocked;
 
   const tasks = useMemo(() => {
     if (!selectedCase) return [];
@@ -95,12 +123,19 @@ export function CaseStatus() {
     const baseTasks = getTasksForEngagedCase(selectedCase);
     const markedComplete = new Set(completedOverrides[selectedCase.id] ?? []);
 
-    return baseTasks.map((task) =>
+    const tasksWithOverrides = baseTasks.map((task) =>
       markedComplete.has(task.id)
         ? { ...task, status: "completed" as const }
         : task,
     );
-  }, [selectedCase, completedOverrides]);
+
+    return progressLocked
+      ? tasksWithOverrides.map((task) => ({
+          ...task,
+          status: "pending" as const,
+        }))
+      : tasksWithOverrides;
+  }, [selectedCase, completedOverrides, progressLocked]);
 
   const completedCount = tasks.filter(
     (task) => task.status === "completed",
@@ -109,7 +144,7 @@ export function CaseStatus() {
     tasks.length === 0 ? 0 : Math.round((completedCount / tasks.length) * 100);
 
   function handleCheckOff(taskId: string, taskTitle: string) {
-    if (!selectedCase || !canCheckOffTasks) return;
+    if (!selectedCase || !canCheckOffTasks || progressLocked) return;
 
     const alreadyComplete = (completedOverrides[selectedCase.id] ?? []).includes(
       taskId,
@@ -154,7 +189,7 @@ export function CaseStatus() {
             <p className="mt-2 max-w-2xl text-sm text-gray-200">
               Major client and legal-team tasks for each matter you are engaged
               in, based on that case type.
-              {canCheckOffTasks
+              {roleCanCheckOffTasks
                 ? " Check off completed tasks to notify the client."
                 : ""}
             </p>
@@ -211,6 +246,27 @@ export function CaseStatus() {
           </p>
         )}
 
+        {progressLocked && (
+          <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-4">
+            <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-amber-800" />
+            <div>
+              <p className="text-sm font-semibold text-amber-950">
+                Task progress is locked pending retainer payment
+              </p>
+              <p className="mt-1 text-sm text-amber-900">
+                This is a retainer-based matter. Progress must remain at 0%
+                until Account Summary shows every invoice as paid.
+              </p>
+              <Link
+                href="/client-portal/account-summary"
+                className="mt-2 inline-flex text-sm font-semibold text-amber-950 underline underline-offset-2"
+              >
+                Review Account Summary
+              </Link>
+            </div>
+          </div>
+        )}
+
         <div className="mb-6">
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="font-medium text-navy-900">
@@ -228,7 +284,9 @@ export function CaseStatus() {
 
         <div className="mb-4 flex items-center gap-2 text-xs text-muted">
           <Users className="h-3.5 w-3.5" />
-          {canCheckOffTasks
+          {progressLocked
+            ? "Task completion is unavailable until all invoices are paid."
+            : canCheckOffTasks
             ? "As attorney/paralegal, check off a task to send the client a case status update notification."
             : "Tasks show who is responsible: client, legal team, or both."}
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileText, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -10,7 +10,13 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
+import { addDocumentDeletionNotification } from "@/lib/attorney/notifications-store";
 import { getMatterNameForCaseNumber } from "@/lib/client-portal/case-selection";
+import {
+  addClientDocumentDeletionRequest,
+  getClientDocumentDeletionRequests,
+  MATTER_WORKSPACE_UPDATE_EVENT,
+} from "@/lib/matters/workspace-store";
 import {
   clientDocuments,
   documentTypeOptions,
@@ -55,24 +61,54 @@ function resolveDocumentTypeLabel(typeValue: string, otherLabel: string) {
   );
 }
 
+function applyDeletionDecisions(
+  documents: UploadedDocument[],
+): UploadedDocument[] {
+  const decisions = getClientDocumentDeletionRequests();
+  return documents.flatMap<UploadedDocument>((document) => {
+    const decision = decisions.find(
+      (item) => item.documentId === document.id,
+    );
+    if (decision?.status === "approved") return [];
+    if (decision?.status === "pending") {
+      return [
+        {
+          ...document,
+          markedForDeletion: true,
+          deletionReason: decision.reason,
+        },
+      ];
+    }
+    return [
+      {
+        ...document,
+        markedForDeletion: false,
+        deletionReason: undefined,
+      },
+    ];
+  });
+}
+
 export function UploadDocuments() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { identity } = useDemoRole();
+  const { identity, selectedRole } = useDemoRole();
   const { matchesCase, selectedCases, isAllCases } = useCaseSelection();
   const [isDragging, setIsDragging] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [documentType, setDocumentType] = useState("");
   const [otherDocumentType, setOtherDocumentType] = useState("");
-  const [documents, setDocuments] = useState<UploadedDocument[]>(
-    clientDocuments.map((document) => ({
-      id: document.id,
-      name: document.name,
-      uploadedAt: document.uploadedAt,
-      uploadedBy: document.uploadedBy,
-      sizeLabel: "—",
-      documentType: document.documentType,
-      caseNumber: document.caseNumber,
-    })),
+  const [documents, setDocuments] = useState<UploadedDocument[]>(() =>
+    applyDeletionDecisions(
+      clientDocuments.map((document) => ({
+        id: document.id,
+        name: document.name,
+        uploadedAt: document.uploadedAt,
+        uploadedBy: document.uploadedBy,
+        sizeLabel: "—",
+        documentType: document.documentType,
+        caseNumber: document.caseNumber,
+      })),
+    ),
   );
   const [message, setMessage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -83,6 +119,21 @@ export function UploadDocuments() {
   const visibleDocuments = documents.filter((document) =>
     matchesCase(document.caseNumber),
   );
+
+  useEffect(() => {
+    const refreshDeletionDecisions = () => {
+      setDocuments((current) => applyDeletionDecisions(current));
+    };
+    window.addEventListener(
+      MATTER_WORKSPACE_UPDATE_EVENT,
+      refreshDeletionDecisions,
+    );
+    return () =>
+      window.removeEventListener(
+        MATTER_WORKSPACE_UPDATE_EVENT,
+        refreshDeletionDecisions,
+      );
+  }, []);
 
   function addFiles(fileList: FileList | null) {
     if (!fileList?.length) return;
@@ -170,17 +221,37 @@ export function UploadDocuments() {
       return;
     }
 
-    setDocuments((current) =>
-      current.map((document) =>
-        document.id === documentPendingDeletion.id
-          ? {
-              ...document,
-              markedForDeletion: true,
-              deletionReason: reason,
-            }
-          : document,
-      ),
+    const relatedCase = selectedCases.find(
+      (item) => item.caseNumber === documentPendingDeletion.caseNumber,
     );
+    addClientDocumentDeletionRequest({
+      id: `client-document-deletion-${documentPendingDeletion.id}-${Date.now()}`,
+      documentId: documentPendingDeletion.id,
+      documentName: documentPendingDeletion.name,
+      documentType: documentPendingDeletion.documentType,
+      uploadedBy: documentPendingDeletion.uploadedBy,
+      uploadedAt: documentPendingDeletion.uploadedAt,
+      sizeLabel: documentPendingDeletion.sizeLabel,
+      matterName:
+        relatedCase?.title ??
+        getMatterNameForCaseNumber(documentPendingDeletion.caseNumber),
+      matterNumber: documentPendingDeletion.caseNumber,
+      requestedBy: identity.fullName,
+      reason,
+      requestedAt: new Date().toISOString(),
+      status: "pending",
+    });
+    if (selectedRole === "client") {
+      addDocumentDeletionNotification({
+        documentName: documentPendingDeletion.name,
+        requestedBy: identity.fullName,
+        matterName:
+          relatedCase?.title ??
+          getMatterNameForCaseNumber(documentPendingDeletion.caseNumber),
+        matterNumber: documentPendingDeletion.caseNumber,
+        reason,
+      });
+    }
     setMessage(
       `${documentPendingDeletion.name} marked for deletion. It remains listed in light red.`,
     );

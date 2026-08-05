@@ -12,11 +12,13 @@ import {
   Trash2,
 } from "lucide-react";
 import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { caseInformation } from "@/lib/mock-data/client-portal";
+import { addAttorneyMessageReceivedNotification } from "@/lib/attorney/notifications-store";
 import { cn } from "@/lib/utils/cn";
 
 type Step = "recipients" | "cases" | "topic" | "compose" | "sent";
@@ -50,16 +52,17 @@ const MESSAGE_STEPS: Array<Exclude<Step, "sent">> = [
 
 export function Messaging() {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const { identity, selectedRole } = useDemoRole();
   const { selectedCases: portalCases, isAllCases } = useCaseSelection();
   const caseTeam: RecipientOption[] = [
     ...caseInformation.attorneys.map((attorney) => ({
       value: attorney.id,
-      label: `${attorney.name} â€” ${attorney.title}`,
+      label: `${attorney.name} — ${attorney.title}`,
       role: "attorney" as const,
     })),
     ...caseInformation.paralegals.map((paralegal) => ({
       value: paralegal.id,
-      label: `${paralegal.name} â€” ${paralegal.title}`,
+      label: `${paralegal.name} — ${paralegal.title}`,
       role: "paralegal" as const,
     })),
   ];
@@ -177,6 +180,19 @@ export function Messaging() {
     if (selectedCaseIds.length === 0) {
       setError("Select at least one related matter before sending.");
       return;
+    }
+    if (
+      selectedRole === "client" &&
+      selectedRecipientOptions.some((recipient) => recipient.role === "attorney")
+    ) {
+      for (const engagedCase of relatedCases) {
+        addAttorneyMessageReceivedNotification({
+          sender: identity.fullName,
+          subject: subject.trim(),
+          matterName: engagedCase.title,
+          matterNumber: engagedCase.caseNumber,
+        });
+      }
     }
     setError(null);
     setStep("sent");

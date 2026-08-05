@@ -253,6 +253,79 @@ export function getTasksForEngagedCase(engagedCase: ClientEngagedCase) {
   });
 }
 
+export interface CaseTeamMember {
+  id: string;
+  name: string;
+  title: string;
+  email: string;
+  role: "attorney" | "paralegal";
+}
+
+/** Legal team assigned to each matter the client is engaged in. */
+export const caseTeamsByCaseNumber: Record<string, CaseTeamMember[]> = {
+  "2026-0142": [
+    {
+      id: "atty-1",
+      name: "A. Counsel",
+      title: "Lead Attorney",
+      email: "a.counsel@counselflow.demo",
+      role: "attorney",
+    },
+    {
+      id: "atty-2",
+      name: "S. Patel",
+      title: "Associate Attorney",
+      email: "s.patel@counselflow.demo",
+      role: "attorney",
+    },
+    {
+      id: "para-1",
+      name: "M. Rivera",
+      title: "Paralegal",
+      email: "m.rivera@counselflow.demo",
+      role: "paralegal",
+    },
+  ],
+  "2026-0188": [
+    {
+      id: "atty-1",
+      name: "A. Counsel",
+      title: "Lead Attorney",
+      email: "a.counsel@counselflow.demo",
+      role: "attorney",
+    },
+    {
+      id: "atty-3",
+      name: "D. Okafor",
+      title: "Estate Planning Attorney",
+      email: "d.okafor@counselflow.demo",
+      role: "attorney",
+    },
+    {
+      id: "para-2",
+      name: "L. Nguyen",
+      title: "Paralegal",
+      email: "l.nguyen@counselflow.demo",
+      role: "paralegal",
+    },
+  ],
+};
+
+/** Unique team members across the supplied matters, attorneys listed first. */
+export function getCaseTeamForCaseNumbers(caseNumbers: string[]) {
+  const members = new Map<string, CaseTeamMember>();
+
+  for (const caseNumber of caseNumbers) {
+    for (const member of caseTeamsByCaseNumber[caseNumber] ?? []) {
+      members.set(member.id, member);
+    }
+  }
+
+  return [...members.values()].sort((a, b) =>
+    a.role === b.role ? 0 : a.role === "attorney" ? -1 : 1,
+  );
+}
+
 export const caseInformation = {
   caseNumber: clientEngagedCases[0].caseNumber,
   title: clientEngagedCases[0].title,
@@ -272,28 +345,10 @@ export const caseInformation = {
     signedAt: string;
     signedBy: string;
   } | null,
-  attorneys: [
-    {
-      id: "atty-1",
-      name: "A. Counsel",
-      title: "Lead Attorney",
-      email: "a.counsel@counselflow.demo",
-    },
-    {
-      id: "atty-2",
-      name: "S. Patel",
-      title: "Associate Attorney",
-      email: "s.patel@counselflow.demo",
-    },
-  ],
-  paralegals: [
-    {
-      id: "para-1",
-      name: "M. Rivera",
-      title: "Paralegal",
-      email: "m.rivera@counselflow.demo",
-    },
-  ],
+  attorneys: (caseTeamsByCaseNumber[clientEngagedCases[0].caseNumber] ?? [])
+    .filter((member) => member.role === "attorney"),
+  paralegals: (caseTeamsByCaseNumber[clientEngagedCases[0].caseNumber] ?? [])
+    .filter((member) => member.role === "paralegal"),
   associatedTickets: [
     {
       id: "ticket-1",
@@ -467,7 +522,6 @@ export const documentTypeOptions = [
   { value: "case-evidence", label: "Case evidence" },
   { value: "business-documents", label: "Business documents" },
   { value: "legal-documents", label: "Legal documents" },
-  { value: "invoices", label: "Invoices" },
   { value: "other", label: "Other" },
 ];
 
