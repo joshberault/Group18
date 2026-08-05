@@ -3,17 +3,24 @@ import {
   BarChart3,
   Briefcase,
   Calculator,
+  Calendar,
   CircleDollarSign,
   Clock,
   FileText,
   LayoutDashboard,
   ListTodo,
   Receipt,
+  StickyNote,
   UserCog,
   Users,
   UserCircle,
 } from "lucide-react";
 import type { UserRole } from "@/lib/types";
+import { canAccessNavItem } from "@/lib/auth/demo-access";
+import {
+  ATTORNEY_HUB_ACCESS_ROLES,
+  usesAttorneyHubAsHome,
+} from "@/lib/auth/role-routes";
 
 export type RouteKey =
   | "dashboard"
@@ -22,6 +29,8 @@ export type RouteKey =
   | "admin"
   | "time"
   | "tasks"
+  | "calendar"
+  | "notes"
   | "billing"
   | "invoices"
   | "receivables"
@@ -107,8 +116,8 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Attorney Hub",
     href: "/attorney/dashboard",
     icon: Briefcase,
-    description: "Assigned matters, time entries, and expenses",
-    roles: ATTORNEY_TEAM,
+    description: "Assigned matters, time entries, and tasks",
+    roles: ATTORNEY_HUB_ACCESS_ROLES,
   },
   {
     routeKey: "time",
@@ -124,6 +133,22 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/attorney/tasks",
     icon: ListTodo,
     description: "Matter tasks and deadline tracking",
+    roles: ATTORNEY_TEAM,
+  },
+  {
+    routeKey: "calendar",
+    label: "Calendar",
+    href: "/attorney/calendar",
+    icon: Calendar,
+    description: "Tasks and filing deadlines calendar",
+    roles: ATTORNEY_TEAM,
+  },
+  {
+    routeKey: "notes",
+    label: "Case Notes",
+    href: "/attorney/notes",
+    icon: StickyNote,
+    description: "Internal attorney case notes",
     roles: ATTORNEY_TEAM,
   },
   {
@@ -179,4 +204,38 @@ export const NAV_ITEMS: NavItem[] = [
 export function getNavRoles(href: string): UserRole[] {
   const item = NAV_ITEMS.find((nav) => nav.href === href);
   return item?.roles ?? [];
+}
+
+/**
+ * Role-aware nav: attorneys get "My Dashboard" instead of firm dashboard;
+ * duplicate Attorney Hub link is hidden for attorney/paralegal.
+ */
+export function getNavItemsForRole(role: UserRole): NavItem[] {
+  return NAV_ITEMS.filter((item) => canAccessNavItem(role, item.roles ?? []))
+    .map((item) => {
+      if (item.href === "/dashboard" && usesAttorneyHubAsHome(role)) {
+        return {
+          ...item,
+          label: "My Dashboard",
+          href: "/attorney/dashboard",
+          description: "Your matters, time, tasks, and deadlines",
+        };
+      }
+      if (
+        item.href === "/attorney/dashboard" &&
+        usesAttorneyHubAsHome(role)
+      ) {
+        return null;
+      }
+      if (item.href === "/dashboard" && role === "client") {
+        return {
+          ...item,
+          label: "My Portal",
+          href: "/client-portal",
+          description: "Your matters and invoices",
+        };
+      }
+      return item;
+    })
+    .filter((item): item is NavItem => item !== null);
 }
