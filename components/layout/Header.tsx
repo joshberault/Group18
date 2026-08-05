@@ -1,7 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Bell, Menu, Search } from "lucide-react";
-import { USER_ROLE_LABELS, USER_ROLES } from "@/lib/types";
+import { getActiveNotificationCount } from "@/lib/client-portal/notifications-store";
+import { USER_ROLE_LABELS, USER_ROLES, type UserRole } from "@/lib/types";
 import { DEMO_USER_NAME } from "@/lib/mock-data/dashboard";
 import { cn } from "@/lib/utils/cn";
 import { useDemoRole } from "./DemoRoleProvider";
@@ -15,12 +17,21 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuClick, className }: HeaderProps) {
+  const router = useRouter();
   const { role, setRole } = useDemoRole();
 
   const roleOptions = USER_ROLES.map((r) => ({
     value: r,
     label: USER_ROLE_LABELS[r],
   }));
+
+  function handleRoleChange(newRole: UserRole) {
+    setRole(newRole);
+
+    if (newRole === "client" && getActiveNotificationCount() > 0) {
+      router.push("/client-portal/upload-documents");
+    }
+  }
 
   return (
     <header
@@ -56,7 +67,7 @@ export function Header({ onMenuClick, className }: HeaderProps) {
             label="Demo role"
             options={roleOptions}
             value={role}
-            onChange={(e) => setRole(e.target.value as typeof role)}
+            onChange={(e) => handleRoleChange(e.target.value as UserRole)}
             className="min-w-[180px]"
             aria-label="Switch demonstration role"
           />
