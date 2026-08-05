@@ -13,6 +13,11 @@ export const DEMO_PROFILE: Profile = {
   role: "attorney",
 };
 
+/** True when demo preview is enabled (default for local CounselFlow demos). */
+export function isDevPreview(): boolean {
+  return process.env.NEXT_PUBLIC_DEV_PREVIEW !== "false";
+}
+
 export const DEMO_MATTERS: Matter[] = [
   {
     id: "matter-1",

@@ -89,7 +89,7 @@ Assign modules to teammates and record branch names here as work begins:
 | Module | Route | Owner | Branch |
 |--------|-------|-------|--------|
 | Dashboard | `/dashboard` | Shared foundation | `main` |
-| Clients | `/clients` | TBD | TBD |
+| Clients | `/clients` | Joseph | `Joseph` |
 | Matters | `/matters` | TBD | TBD |
 | Time & Expenses | `/time` | TBD | TBD |
 | Tasks & Deadlines | `/tasks` | TBD | TBD |
@@ -106,27 +106,21 @@ Access is controlled by the **Demo role** dropdown in the header (no login requi
 ```
 app/
   (app)/          # App shell routes (sidebar layout)
-  page.tsx        # Redirects to role default workspace
+  page.tsx        # Redirects to /dashboard
 components/
-  layout/         # App shell, sidebar, header, role guard
+  layout/         # App shell, sidebar, header, navigation
   auth/           # Demo role guards
-  admin/          # Firm Administrator module
-  accounting/     # Accounting Manager workspace
   ui/             # Reusable design system components
   dashboard/      # Dashboard-specific components
 lib/
-  roles/          # Centralized demo role and permission config
   auth/           # Demo role access helpers
-  navigation/     # Accounting Manager–only sidebar catalog
-  supabase/       # Supabase browser client
+  supabase/       # Supabase browser client (for future auth)
   types/          # Shared TypeScript types
   mock-data/      # Mock dashboard data (replace with Supabase later)
-  navigation.ts   # Sidebar nav for all roles except Accounting Manager
-docs/
-  role-access.md  # How teammates connect modules to the role system
+  navigation.ts   # Single source of truth for sidebar nav + role access
 ```
 
-Navigation items are defined in `lib/navigation.ts`. Role visibility is configured in `lib/roles/role-config.ts`.
+Navigation items are defined in `lib/navigation.ts`. Update that file instead of editing sidebar links in multiple places.
 
 ## Shared Types
 
@@ -136,11 +130,7 @@ Import domain types from `lib/types`:
 
 ## Demo Role Switcher
 
-The header includes a demonstration role switcher (not production auth). Selected role is stored in `localStorage`, filters navigation, protects routes, and updates dashboard content.
-
-See **[docs/role-access.md](docs/role-access.md)** for how to add routes, permissions, and connect your module to the role system.
-
-**Important:** Demo role checks are frontend-only. Supabase Row Level Security is still required for production security.
+The header includes a demonstration role switcher (not production auth). Selected role is stored in `localStorage` and updates the dashboard welcome message and role summary.
 
 ## License
 
