@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
+  CalendarClock,
   Download,
   FileText,
   Landmark,
@@ -26,7 +28,7 @@ import {
 } from "@/lib/mock-data/client-portal";
 import { cn, formatCurrency } from "@/lib/utils/cn";
 
-type SummaryView = "home" | "invoice" | "trust";
+type SummaryView = "home" | "invoice" | "trust" | "payment-plan";
 
 const FREQUENCY_LABELS: Record<string, string> = {
   weekly: "Weekly",
@@ -88,6 +90,13 @@ export function AccountSummary() {
     () => (recurring ? buildPaymentSchedule(recurring) : []),
     [recurring],
   );
+  const upcomingPayments = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return paymentSchedule.filter(
+      (payment) => new Date(`${payment.dueDate}T12:00:00`) >= today,
+    );
+  }, [paymentSchedule]);
 
   const chargeTotal = invoiceCharges.reduce(
     (sum, charge) => sum + charge.amount,
@@ -427,6 +436,100 @@ export function AccountSummary() {
     );
   }
 
+  if (view === "payment-plan") {
+    return (
+      <div className="space-y-6">
+        <button
+          type="button"
+          onClick={() => setView("home")}
+          className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-navy-900 hover:bg-gray-100"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Account Summary
+        </button>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Payment plan</CardTitle>
+            <CardDescription>
+              Review the frequency, dates, and amounts of your upcoming
+              payments.
+            </CardDescription>
+          </CardHeader>
+
+          {!recurring || paymentSchedule.length === 0 ? (
+            <div className="rounded-xl border border-gray-200 bg-surface px-5 py-8 text-center">
+              <CalendarClock className="mx-auto h-8 w-8 text-muted" />
+              <p className="mt-3 font-semibold text-navy-900">
+                No payment plan exists
+              </p>
+              <p className="mx-auto mt-2 max-w-lg text-sm text-muted">
+                You do not currently have a payment plan. Submit a request to
+                the Billing Department to discuss payment schedules and due
+                dates.
+              </p>
+              <Link
+                href="/client-portal/requests?request=payment-schedule"
+                className="mt-5 inline-flex items-center justify-center rounded-lg bg-navy-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-navy-800"
+              >
+                Request a payment schedule change
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div className="mb-5 grid gap-4 sm:grid-cols-3">
+                <SummaryMetric
+                  label="Frequency"
+                  value={
+                    FREQUENCY_LABELS[recurring.frequency] ??
+                    recurring.frequency
+                  }
+                />
+                <SummaryMetric
+                  label="Payment amount"
+                  value={formatCurrency(recurring.amount)}
+                />
+                <SummaryMetric
+                  label="Plan dates"
+                  value={`${recurring.startDate} – ${recurring.endDate}`}
+                />
+              </div>
+
+              {upcomingPayments.length === 0 ? (
+                <p className="rounded-xl bg-surface px-4 py-6 text-center text-sm text-muted">
+                  This payment plan has no remaining upcoming payments.
+                </p>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-gray-200">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-gray-50 text-xs uppercase tracking-wide text-muted">
+                      <tr>
+                        <th className="px-4 py-3">Upcoming due date</th>
+                        <th className="px-4 py-3">Amount due</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {upcomingPayments.map((payment) => (
+                        <tr key={payment.dueDate}>
+                          <td className="px-4 py-3 text-navy-900">
+                            {payment.dueDate}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-navy-900">
+                            {formatCurrency(payment.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <Card className="border-gold-500/30 bg-gradient-to-r from-navy-900 to-navy-800 text-white">
@@ -447,11 +550,11 @@ export function AccountSummary() {
         <CardHeader>
           <CardTitle>Choose a summary</CardTitle>
           <CardDescription>
-            Open invoice balance details or trust balance details.
+            Open invoice, trust, or payment plan details.
           </CardDescription>
         </CardHeader>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <button
             type="button"
             onClick={() => setView("invoice")}
@@ -483,6 +586,22 @@ export function AccountSummary() {
             <p className="mt-1 text-sm text-muted">
               Beginning/current balances, additions, subtractions, and trust
               controls.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setView("payment-plan")}
+            className="flex flex-col items-start rounded-2xl border border-gray-200 p-5 text-left transition-all hover:-translate-y-0.5 hover:border-navy-700/40 hover:shadow-md"
+          >
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-navy-900 text-gold-500">
+              <CalendarClock className="h-6 w-6" />
+            </div>
+            <h3 className="text-base font-semibold text-navy-900">
+              Payment plan
+            </h3>
+            <p className="mt-1 text-sm text-muted">
+              Frequency, dates, and amounts for upcoming payments.
             </p>
           </button>
         </div>
