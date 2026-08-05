@@ -4,8 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
-import { canAccessNavItem } from "@/lib/auth/demo-access";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { getNavItemsForRole } from "@/lib/navigation";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/Button";
 
@@ -24,9 +23,7 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const { role } = useDemoRole();
-  const visibleNavItems = NAV_ITEMS.filter((item) =>
-    canAccessNavItem(role, item.roles),
-  );
+  const visibleNavItems = getNavItemsForRole(role);
 
   return (
     <>
@@ -77,7 +74,9 @@ export function Sidebar({
             {visibleNavItems.map((item) => {
               const isActive =
                 pathname === item.href ||
-                (item.href !== "/dashboard" && pathname.startsWith(item.href));
+                (item.href !== "/dashboard" &&
+                  item.href !== "/attorney/dashboard" &&
+                  pathname.startsWith(item.href));
               const Icon = item.icon;
 
               return (
