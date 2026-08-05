@@ -19,6 +19,7 @@ import {
   type OutstandingReceivableRow,
 } from "@/lib/billing/receivables-utils";
 import type { Invoice, InvoiceStatus } from "@/lib/billing/invoice-types";
+import { BILLING_ROUTES } from "@/lib/billing/routes";
 
 type SortKey =
   | "invoiceNumber"
@@ -277,7 +278,11 @@ export function OutstandingReceivablesSection() {
       <header className="inv-mgmt__header">
         <div>
           <p className="page-back">
-            <Link href="/billing">← Billing Dashboard</Link>
+            <Link href={BILLING_ROUTES.dashboard}>← Billing Dashboard</Link>
+            {" · "}
+            <Link href={BILLING_ROUTES.invoices}>Invoice Management</Link>
+            {" · "}
+            <Link href={BILLING_ROUTES.generateInvoice}>Generate Invoice</Link>
           </p>
           <h2 id="ar-heading">
             {overdueOnly
@@ -309,7 +314,7 @@ export function OutstandingReceivablesSection() {
             onClick={() => {
               setOverdueOnly(false);
               if (typeof window !== "undefined") {
-                window.history.replaceState({}, "", "/receivables");
+                window.history.replaceState({}, "", BILLING_ROUTES.receivables);
               }
             }}
           >
