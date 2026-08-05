@@ -9,6 +9,7 @@ import {
   Users,
 } from "lucide-react";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -20,10 +21,7 @@ import {
   getCaseTaskProgress,
   markCaseTaskComplete,
 } from "@/lib/client-portal/notifications-store";
-import {
-  clientEngagedCases,
-  getTasksForEngagedCase,
-} from "@/lib/mock-data/client-portal";
+import { getTasksForEngagedCase } from "@/lib/mock-data/client-portal";
 import { USER_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
 
@@ -55,15 +53,26 @@ function TaskStatusIcon({
 
 export function CaseStatus() {
   const { role } = useDemoRole();
+  const { selectedCases, isAllCases } = useCaseSelection();
   const canCheckOffTasks = role === "attorney" || role === "paralegal";
 
   const [selectedCaseId, setSelectedCaseId] = useState(
-    clientEngagedCases[0]?.id ?? "",
+    selectedCases[0]?.id ?? "",
   );
   const [completedOverrides, setCompletedOverrides] = useState<
     Record<string, string[]>
   >({});
   const [checkMessage, setCheckMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedCases.length === 0) {
+      setSelectedCaseId("");
+      return;
+    }
+    if (!selectedCases.some((item) => item.id === selectedCaseId)) {
+      setSelectedCaseId(selectedCases[0].id);
+    }
+  }, [selectedCases, selectedCaseId]);
 
   const refreshProgress = useCallback(() => {
     setCompletedOverrides(getCaseTaskProgress());
@@ -77,8 +86,8 @@ export function CaseStatus() {
   }, [refreshProgress]);
 
   const selectedCase =
-    clientEngagedCases.find((item) => item.id === selectedCaseId) ??
-    clientEngagedCases[0];
+    selectedCases.find((item) => item.id === selectedCaseId) ??
+    selectedCases[0];
 
   const tasks = useMemo(() => {
     if (!selectedCase) return [];
@@ -126,7 +135,7 @@ export function CaseStatus() {
         <CardHeader>
           <CardTitle>Case Status</CardTitle>
           <CardDescription>
-            No active cases are linked to this client account.
+            No active matters are linked to this client account.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -156,9 +165,9 @@ export function CaseStatus() {
         </div>
       </Card>
 
-      {clientEngagedCases.length > 1 && (
+      {isAllCases && selectedCases.length > 1 && (
         <div className="flex flex-wrap gap-2">
-          {clientEngagedCases.map((engagedCase) => {
+          {selectedCases.map((engagedCase) => {
             const selected = engagedCase.id === selectedCase.id;
             return (
               <button
@@ -185,7 +194,7 @@ export function CaseStatus() {
             <div>
               <CardTitle>{selectedCase.title}</CardTitle>
               <CardDescription>
-                Case {selectedCase.caseNumber} ·{" "}
+                {selectedCase.title} ·{" "}
                 {CASE_TYPE_LABELS[selectedCase.caseType]} · Opened{" "}
                 {selectedCase.openDate}
               </CardDescription>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { PortalCaseSelector } from "@/components/client-portal/PortalCaseSelector";
 import {
   getActiveNotificationCount,
   NOTIFICATION_UPDATE_EVENT,
@@ -32,6 +33,8 @@ export function ClientPortalContent() {
         title="Client Portal"
         description="Open an app below to manage your account, documents, case details, and messages."
       />
+
+      <PortalCaseSelector />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {PORTAL_FEATURE_APPS.map((app) => {

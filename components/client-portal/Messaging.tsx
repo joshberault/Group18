@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Check,
@@ -11,6 +11,7 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
+import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -18,7 +19,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { caseInformation } from "@/lib/mock-data/client-portal";
 import { cn } from "@/lib/utils/cn";
 
-type Step = "recipients" | "topic" | "compose" | "sent";
+type Step = "recipients" | "cases" | "topic" | "compose" | "sent";
 
 interface RecipientOption {
   value: string;
@@ -40,33 +41,60 @@ const BASE_TOPICS = [
   "Other",
 ];
 
+const MESSAGE_STEPS: Array<Exclude<Step, "sent">> = [
+  "recipients",
+  "cases",
+  "topic",
+  "compose",
+];
+
 export function Messaging() {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const { selectedCases: portalCases, isAllCases } = useCaseSelection();
   const caseTeam: RecipientOption[] = [
     ...caseInformation.attorneys.map((attorney) => ({
       value: attorney.id,
-      label: `${attorney.name} — ${attorney.title}`,
+      label: `${attorney.name} â€” ${attorney.title}`,
       role: "attorney" as const,
     })),
     ...caseInformation.paralegals.map((paralegal) => ({
       value: paralegal.id,
-      label: `${paralegal.name} — ${paralegal.title}`,
+      label: `${paralegal.name} â€” ${paralegal.title}`,
       role: "paralegal" as const,
     })),
   ];
   const allRecipients = [...caseTeam, BILLING_RECIPIENT];
+  const clientCases = portalCases;
 
   const [step, setStep] = useState<Step>("recipients");
   const [recipients, setRecipients] = useState([""]);
+  const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>(
+    isAllCases ? [] : portalCases.map((item) => item.id),
+  );
   const [topic, setTopic] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    setSelectedCaseIds((current) => {
+      const allowed = new Set(portalCases.map((item) => item.id));
+      const next = current.filter((id) => allowed.has(id));
+      if (!isAllCases && next.length === 0) {
+        return portalCases.map((item) => item.id);
+      }
+      return next;
+    });
+  }, [portalCases, isAllCases]);
+
   const selectedRecipientOptions = recipients
     .map((value) => allRecipients.find((option) => option.value === value))
     .filter((option): option is RecipientOption => Boolean(option));
+
+  const relatedCases = clientCases.filter((engagedCase) =>
+    selectedCaseIds.includes(engagedCase.id),
+  );
 
   const hasParalegal = selectedRecipientOptions.some(
     (recipient) => recipient.role === "paralegal",
@@ -103,9 +131,27 @@ export function Messaging() {
     setError(null);
   }
 
+  function toggleCase(caseId: string) {
+    setSelectedCaseIds((current) =>
+      current.includes(caseId)
+        ? current.filter((id) => id !== caseId)
+        : [...current, caseId],
+    );
+    setError(null);
+  }
+
   function continueFromRecipients() {
     if (recipients.some((recipient) => !recipient)) {
       setError("Select a recipient in each field before continuing.");
+      return;
+    }
+    setError(null);
+    setStep("cases");
+  }
+
+  function continueFromCases() {
+    if (selectedCaseIds.length === 0) {
+      setError("Select at least one matter this message relates to.");
       return;
     }
     setError(null);
@@ -128,12 +174,17 @@ export function Messaging() {
       setError("Add a subject and message before sending.");
       return;
     }
+    if (selectedCaseIds.length === 0) {
+      setError("Select at least one related matter before sending.");
+      return;
+    }
     setError(null);
     setStep("sent");
   }
 
   function startAnotherMessage() {
     setRecipients([""]);
+    setSelectedCaseIds([]);
     setTopic("");
     setSubject("");
     setMessage("");
@@ -155,6 +206,11 @@ export function Messaging() {
           Your case team will receive your message and respond through the
           client portal.
         </p>
+        <p className="mx-auto mt-3 max-w-md text-sm text-navy-900">
+          Related matter
+          {relatedCases.length === 1 ? "" : "s"}:{" "}
+          {relatedCases.map((engagedCase) => engagedCase.title).join(", ")}
+        </p>
         <Button className="mt-6" onClick={startAnotherMessage}>
           Create another message
         </Button>
@@ -165,9 +221,8 @@ export function Messaging() {
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-7 flex items-center justify-center gap-2" aria-label="Message progress">
-        {["recipients", "topic", "compose"].map((item, index) => {
-          const steps: Step[] = ["recipients", "topic", "compose"];
-          const currentIndex = steps.indexOf(step);
+        {MESSAGE_STEPS.map((item, index) => {
+          const currentIndex = MESSAGE_STEPS.indexOf(step as Exclude<Step, "sent">);
           return (
             <div key={item} className="flex items-center">
               <span
@@ -180,10 +235,10 @@ export function Messaging() {
               >
                 {index + 1}
               </span>
-              {index < 2 && (
+              {index < MESSAGE_STEPS.length - 1 && (
                 <span
                   className={cn(
-                    "h-0.5 w-12 sm:w-24",
+                    "h-0.5 w-8 sm:w-16",
                     index < currentIndex ? "bg-navy-900" : "bg-gray-200",
                   )}
                 />
@@ -204,8 +259,8 @@ export function Messaging() {
                 To whom should we send the message?
               </h2>
               <p className="mt-2 text-sm text-muted">
-                Choose people assigned to case {caseInformation.caseNumber}, or
-                contact the Billing Department.
+                Choose people assigned to your cases, or contact the Billing
+                Department.
               </p>
             </div>
 
@@ -258,6 +313,64 @@ export function Messaging() {
           </>
         )}
 
+        {step === "cases" && (
+          <>
+            <div className="mb-7 text-center">
+              <h2 className="text-2xl font-semibold text-navy-900">
+                Which matter does this message relate to?
+              </h2>
+              <p className="mt-2 text-sm text-muted">
+                Select one or more of your matters. You can choose multiple
+                matters if the message applies to more than one.
+              </p>
+            </div>
+
+            <fieldset className="space-y-3">
+              <legend className="sr-only">Related matters</legend>
+              {clientCases.map((engagedCase) => {
+                const checked = selectedCaseIds.includes(engagedCase.id);
+
+                return (
+                  <label
+                    key={engagedCase.id}
+                    className={cn(
+                      "flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-4 transition-colors",
+                      checked
+                        ? "border-navy-900 bg-navy-900/5"
+                        : "border-gray-200 hover:border-navy-700/40",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleCase(engagedCase.id)}
+                      className="mt-0.5 h-4 w-4 accent-navy-900"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-navy-900">
+                        {engagedCase.title}
+                      </span>
+                      <span className="mt-1 block text-sm text-muted">
+                        {engagedCase.description}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </fieldset>
+
+            {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+
+            <div className="mt-8 flex justify-between gap-3">
+              <Button variant="ghost" onClick={() => setStep("recipients")}>
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+              <Button onClick={continueFromCases}>Continue</Button>
+            </div>
+          </>
+        )}
+
         {step === "topic" && (
           <>
             <div className="mb-7 text-center">
@@ -302,7 +415,7 @@ export function Messaging() {
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
             <div className="mt-8 flex justify-between gap-3">
-              <Button variant="ghost" onClick={() => setStep("recipients")}>
+              <Button variant="ghost" onClick={() => setStep("cases")}>
                 <ArrowLeft className="h-4 w-4" />
                 Back
               </Button>
@@ -319,6 +432,11 @@ export function Messaging() {
               </h2>
               <p className="mt-2 text-sm text-muted">
                 To: {selectedRecipientOptions.map((recipient) => recipient.label).join(", ")}
+              </p>
+              <p className="mt-1 text-sm text-muted">
+                Related matter
+                {relatedCases.length === 1 ? "" : "s"}:{" "}
+                {relatedCases.map((engagedCase) => engagedCase.title).join(", ")}
               </p>
             </div>
 

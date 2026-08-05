@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
+import { getMatterNameForCaseNumber } from "@/lib/client-portal/case-selection";
 import {
   clientDocuments,
   documentTypeOptions,
@@ -18,8 +21,10 @@ interface UploadedDocument {
   id: string;
   name: string;
   uploadedAt: string;
+  uploadedBy: string;
   sizeLabel: string;
   documentType: string;
+  caseNumber: string;
   markedForDeletion?: boolean;
   deletionReason?: string;
 }
@@ -28,6 +33,18 @@ function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatUploadTimestamp(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours24 = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const suffix = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 || 12;
+
+  return `${year}-${month}-${day} ${hours12}:${minutes} ${suffix}`;
 }
 
 function resolveDocumentTypeLabel(typeValue: string, otherLabel: string) {
@@ -40,6 +57,8 @@ function resolveDocumentTypeLabel(typeValue: string, otherLabel: string) {
 
 export function UploadDocuments() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const { identity } = useDemoRole();
+  const { matchesCase, selectedCases, isAllCases } = useCaseSelection();
   const [isDragging, setIsDragging] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [documentType, setDocumentType] = useState("");
@@ -49,8 +68,10 @@ export function UploadDocuments() {
       id: document.id,
       name: document.name,
       uploadedAt: document.uploadedAt,
+      uploadedBy: document.uploadedBy,
       sizeLabel: "—",
       documentType: document.documentType,
+      caseNumber: document.caseNumber,
     })),
   );
   const [message, setMessage] = useState<string | null>(null);
@@ -59,6 +80,9 @@ export function UploadDocuments() {
     useState<UploadedDocument | null>(null);
   const [deletionReason, setDeletionReason] = useState("");
   const [deletionError, setDeletionError] = useState<string | null>(null);
+  const visibleDocuments = documents.filter((document) =>
+    matchesCase(document.caseNumber),
+  );
 
   function addFiles(fileList: FileList | null) {
     if (!fileList?.length) return;
@@ -97,13 +121,18 @@ export function UploadDocuments() {
     }
 
     const typeLabel = resolveDocumentTypeLabel(documentType, otherDocumentType);
-    const uploadedAt = new Date().toISOString().slice(0, 10);
+    const uploadedAt = formatUploadTimestamp();
+    const uploadedBy = identity.fullName;
+    const uploadCaseNumber =
+      selectedCases[0]?.caseNumber ?? clientDocuments[0]?.caseNumber ?? "N/A";
     const uploaded = pendingFiles.map((file, index) => ({
       id: `doc-${Date.now()}-${index}`,
       name: file.name,
       uploadedAt,
+      uploadedBy,
       sizeLabel: formatFileSize(file.size),
       documentType: typeLabel,
+      caseNumber: uploadCaseNumber,
     }));
 
     setDocuments((current) => [...uploaded, ...current]);
@@ -305,11 +334,15 @@ export function UploadDocuments() {
             </CardDescription>
           </CardHeader>
 
-          {documents.length === 0 ? (
-            <p className="text-sm text-muted">No documents uploaded yet.</p>
+          {visibleDocuments.length === 0 ? (
+            <p className="text-sm text-muted">
+              {isAllCases
+                ? "No documents uploaded yet."
+                : "No documents uploaded for this matter yet."}
+            </p>
           ) : (
             <ul className="space-y-3">
-              {documents.map((document) => (
+              {visibleDocuments.map((document) => (
                 <li
                   key={document.id}
                   className={cn(
@@ -334,10 +367,14 @@ export function UploadDocuments() {
                       {document.name}
                     </p>
                     <p className="mt-1 text-xs text-muted">
-                      {document.documentType} · Uploaded {document.uploadedAt}
+                      {document.documentType} ·{" "}
+                      {getMatterNameForCaseNumber(document.caseNumber)}
                       {document.sizeLabel !== "—"
                         ? ` · ${document.sizeLabel}`
                         : ""}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                      Uploaded by {document.uploadedBy} · {document.uploadedAt}
                     </p>
                     {document.markedForDeletion && document.deletionReason && (
                       <p className="mt-2 text-xs text-red-700">

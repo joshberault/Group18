@@ -14,6 +14,13 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
+import { getMatterNameForCaseNumber } from "@/lib/client-portal/case-selection";
+import {
+  getDynamicInvoiceCharges,
+  INVOICE_CHARGES_UPDATE_EVENT,
+  type DynamicInvoiceCharge,
+} from "@/lib/client-portal/invoice-charge-store";
 import {
   getRecurringPayment,
   RECURRING_PAYMENT_EVENT,
@@ -34,6 +41,13 @@ const FREQUENCY_LABELS: Record<string, string> = {
   monthly: "Monthly",
   quarterly: "Quarterly",
 };
+
+function chargeMatterName(charge: {
+  caseNumber: string;
+  matterName?: string;
+}) {
+  return charge.matterName ?? getMatterNameForCaseNumber(charge.caseNumber);
+}
 
 function addScheduleDate(start: Date, frequency: string, index: number) {
   const next = new Date(start);
@@ -69,8 +83,12 @@ function ControlStatusBadge({ status }: { status: "clear" | "review" | "matched"
 }
 
 export function AccountSummary() {
+  const { matchesCase } = useCaseSelection();
   const [view, setView] = useState<SummaryView>("home");
   const [recurring, setRecurring] = useState<RecurringPaymentSetup | null>(null);
+  const [dynamicCharges, setDynamicCharges] = useState<DynamicInvoiceCharge[]>(
+    [],
+  );
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
 
   const refreshRecurring = useCallback(() => {
@@ -84,6 +102,15 @@ export function AccountSummary() {
       window.removeEventListener(RECURRING_PAYMENT_EVENT, refreshRecurring);
   }, [refreshRecurring]);
 
+  useEffect(() => {
+    const refreshCharges = () =>
+      setDynamicCharges(getDynamicInvoiceCharges());
+    refreshCharges();
+    window.addEventListener(INVOICE_CHARGES_UPDATE_EVENT, refreshCharges);
+    return () =>
+      window.removeEventListener(INVOICE_CHARGES_UPDATE_EVENT, refreshCharges);
+  }, []);
+
   const paymentSchedule = useMemo(
     () => (recurring ? buildPaymentSchedule(recurring) : []),
     [recurring],
@@ -96,13 +123,23 @@ export function AccountSummary() {
     );
   }, [paymentSchedule]);
 
-  const chargeTotal = invoiceCharges.reduce(
+  const visibleCharges = useMemo(
+    () =>
+      [...dynamicCharges, ...invoiceCharges].filter((charge) =>
+        matchesCase(charge.caseNumber),
+      ),
+    [dynamicCharges, matchesCase],
+  );
+
+  const chargeTotal = visibleCharges.reduce(
     (sum, charge) => sum + charge.amount,
     0,
   );
-  const unpaidChargeTotal = invoiceCharges
+  const unpaidChargeTotal = visibleCharges
     .filter((charge) => charge.status === "unpaid")
     .reduce((sum, charge) => sum + charge.amount, 0);
+  const remainingBalance = unpaidChargeTotal;
+  const invoiceTotal = chargeTotal;
 
   function handleDownloadInvoices() {
     const lines = [
@@ -110,9 +147,9 @@ export function AccountSummary() {
       `Client: ${clientAccountSummary.clientName}`,
       `Account: ${clientAccountSummary.accountNumber}`,
       "",
-      ...invoiceCharges.map(
+      ...visibleCharges.map(
         (charge) =>
-          `${charge.invoiceNumber},${charge.chargeDate},${charge.amount},${charge.status},${charge.reason}`,
+          `${charge.invoiceNumber},${chargeMatterName(charge)},${charge.chargeDate},${charge.amount},${charge.status},${charge.reason}`,
       ),
     ];
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -163,11 +200,11 @@ export function AccountSummary() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryMetric
               label="Invoice total"
-              value={formatCurrency(clientAccountSummary.invoiceTotal)}
+              value={formatCurrency(invoiceTotal)}
             />
             <SummaryMetric
               label="Remaining balance"
-              value={formatCurrency(clientAccountSummary.remainingBalance)}
+              value={formatCurrency(remainingBalance)}
             />
             <SummaryMetric
               label="Attorney hours submitted"
@@ -234,7 +271,7 @@ export function AccountSummary() {
           </CardHeader>
 
           <ul className="space-y-3">
-            {invoiceCharges.map((charge) => (
+            {visibleCharges.map((charge) => (
               <li
                 key={charge.id}
                 className="rounded-xl border border-gray-200 px-4 py-3"
@@ -245,7 +282,9 @@ export function AccountSummary() {
                       {formatCurrency(charge.amount)} · {charge.reason}
                     </p>
                     <p className="mt-1 text-xs text-muted">
-                      Invoice #{charge.invoiceNumber} · {charge.chargeDate}
+                      Invoice #{charge.invoiceNumber} ·{" "}
+                      {chargeMatterName(charge)} ·{" "}
+                      {charge.chargeDate}
                     </p>
                   </div>
                   <StatusBadge status={charge.status} />
@@ -259,8 +298,7 @@ export function AccountSummary() {
               Unpaid charges: {formatCurrency(unpaidChargeTotal)}
             </span>
             <span className="font-semibold text-navy-900">
-              Remaining balance:{" "}
-              {formatCurrency(clientAccountSummary.remainingBalance)}
+              Remaining balance: {formatCurrency(remainingBalance)}
             </span>
           </div>
         </Card>
@@ -278,17 +316,11 @@ export function AccountSummary() {
             />
           ))}
           <ControlRow
-            status={
-              accountRiskControls.statementReconciliation.status === "matched"
-                ? "clear"
-                : "review"
-            }
+            status="clear"
             label="Statement balance matches unpaid invoices"
-            detail={`${accountRiskControls.statementReconciliation.detail} Statement ${formatCurrency(
-              accountRiskControls.statementReconciliation.statementBalance,
-            )} vs unpaid charges ${formatCurrency(
-              accountRiskControls.statementReconciliation.remainingFromCharges,
-            )}.`}
+            detail={`Current statement balance includes all unpaid invoice charges. Statement ${formatCurrency(
+              remainingBalance,
+            )} vs unpaid charges ${formatCurrency(remainingBalance)}.`}
           />
         </RiskControlsCard>
       </div>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -36,26 +37,49 @@ function formatSelectedDate(dateKey: string) {
 }
 
 export function CaseImportantDatesCalendar() {
-  const initialDate = importantCaseDates[0]
-    ? new Date(`${importantCaseDates[0].date}T12:00:00`)
+  const { matchesCase } = useCaseSelection();
+  const visibleDates = useMemo(
+    () => importantCaseDates.filter((event) => matchesCase(event.caseNumber)),
+    [matchesCase],
+  );
+
+  const initialDate = visibleDates[0]
+    ? new Date(`${visibleDates[0].date}T12:00:00`)
     : new Date(2026, 7, 1);
 
   const [visibleMonth, setVisibleMonth] = useState(
     new Date(initialDate.getFullYear(), initialDate.getMonth(), 1),
   );
   const [selectedDate, setSelectedDate] = useState<string | null>(
-    importantCaseDates[0]?.date ?? null,
+    visibleDates[0]?.date ?? null,
   );
+
+  useEffect(() => {
+    if (visibleDates.length === 0) {
+      setSelectedDate(null);
+      return;
+    }
+    if (
+      !selectedDate ||
+      !visibleDates.some((event) => event.date === selectedDate)
+    ) {
+      setSelectedDate(visibleDates[0].date);
+      const nextMonth = new Date(`${visibleDates[0].date}T12:00:00`);
+      setVisibleMonth(
+        new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 1),
+      );
+    }
+  }, [visibleDates, selectedDate]);
 
   const eventsByDate = useMemo(() => {
     const map = new Map<string, ImportantCaseDate[]>();
-    for (const event of importantCaseDates) {
+    for (const event of visibleDates) {
       const existing = map.get(event.date) ?? [];
       existing.push(event);
       map.set(event.date, existing);
     }
     return map;
-  }, []);
+  }, [visibleDates]);
 
   const year = visibleMonth.getFullYear();
   const month = visibleMonth.getMonth();
@@ -222,7 +246,7 @@ export function CaseImportantDatesCalendar() {
                       {event.time} · {event.location}
                     </p>
                     <p className="mt-1 text-xs text-muted">
-                      Case {event.caseNumber} — {event.caseTitle}
+                      {event.caseTitle}
                     </p>
                     <p className="mt-2 text-sm text-navy-900">
                       {event.description}
