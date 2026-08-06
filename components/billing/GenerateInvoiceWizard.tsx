@@ -39,6 +39,20 @@ import {
   invoicesHref,
 } from "@/lib/billing/routes";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Badge } from "@/components/ui/Badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/Table";
+import { cn } from "@/lib/utils/cn";
 
 const STEPS = [
   "Select Client",
@@ -90,10 +104,12 @@ function formatDateTime(iso: string): string {
   }).format(d);
 }
 
-function approvalBadgeClass(status: TimeApprovalStatus): string {
-  if (status === "Approved") return "gi-approval gi-approval--approved";
-  if (status === "Pending") return "gi-approval gi-approval--pending";
-  return "gi-approval gi-approval--rejected";
+function approvalBadgeVariant(
+  status: TimeApprovalStatus,
+): "success" | "warning" | "danger" {
+  if (status === "Approved") return "success";
+  if (status === "Pending") return "warning";
+  return "danger";
 }
 
 export function GenerateInvoiceWizard() {
@@ -942,30 +958,50 @@ export function GenerateInvoiceWizard() {
         </p>
       </PageHeader>
 
-      <div className="billing-module">
-      <div className="dashboard gi">
-
-      <ol className="gi__steps" aria-label="Invoice generation steps">
-        {STEPS.map((label, index) => (
-          <li
-            key={label}
-            className={
-              index === step
-                ? "gi__step gi__step--current"
-                : index < step
-                  ? "gi__step gi__step--done"
-                  : "gi__step"
-            }
-          >
-            <span className="gi__step-num">{index + 1}</span>
-            <span>{label}</span>
-          </li>
-        ))}
-      </ol>
+      {/* Step indicator */}
+      <nav aria-label="Invoice generation steps">
+        <ol className="flex flex-wrap gap-2">
+          {STEPS.map((label, index) => {
+            const current = index === step;
+            const done = index < step;
+            return (
+              <li
+                key={label}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm",
+                  current &&
+                    "border-navy-900 bg-navy-900 text-white shadow-sm",
+                  done &&
+                    !current &&
+                    "border-gray-200 bg-white text-navy-900",
+                  !done &&
+                    !current &&
+                    "border-gray-200 bg-gray-50 text-muted",
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-flex h-6 w-6 items-center justify-center rounded-md text-xs font-semibold",
+                    current && "bg-white/15 text-white",
+                    done && !current && "bg-gray-100 text-navy-900",
+                    !done && !current && "bg-white text-muted",
+                  )}
+                >
+                  {index + 1}
+                </span>
+                <span className="hidden sm:inline">{label}</span>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
       {messages.length > 0 ? (
-        <div className="gi__alert" role="alert">
-          <ul>
+        <div
+          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+          role="alert"
+        >
+          <ul className="list-disc space-y-1 pl-5">
             {messages.map((m) => (
               <li key={m}>{m}</li>
             ))}
@@ -974,68 +1010,70 @@ export function GenerateInvoiceWizard() {
       ) : null}
 
       {successNote ? (
-        <div className="gi__success" role="status">
-          <p style={{ margin: 0 }}>{successNote}</p>
+        <div
+          className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900"
+          role="status"
+        >
+          <p>{successNote}</p>
           {managementLinkNumber ? (
-            <p style={{ margin: "0.55rem 0 0" }}>
-              <Link
-                href={invoicesHref({ highlight: managementLinkNumber })}
-                className="dashboard__create-btn"
-                style={{ display: "inline-flex" }}
-              >
-                Open {managementLinkNumber} in Invoice Management
+            <p className="mt-3">
+              <Link href={invoicesHref({ highlight: managementLinkNumber })}>
+                <Button type="button" size="sm">
+                  Open {managementLinkNumber} in Invoice Management
+                </Button>
               </Link>
             </p>
           ) : null}
         </div>
       ) : null}
 
-      <section className="panel gi__card" aria-labelledby="gi-step-title">
-        <header className="panel__header">
-          <h2 id="gi-step-title">
+      <Card aria-label={`Step ${step + 1}: ${STEPS[step]}`}>
+        <CardHeader>
+          <CardTitle>
             Step {step + 1}: {STEPS[step]}
-          </h2>
-          <p>Complete this step, then continue to build the draft invoice.</p>
-        </header>
+          </CardTitle>
+          <CardDescription>
+            Complete this step, then continue to build the draft invoice.
+          </CardDescription>
+        </CardHeader>
 
         {step === 0 ? (
-          <div className="gi__stack">
-            <div className="gi-step1-toolbar">
-              <p className="gi-muted" style={{ margin: 0, flex: 1 }}>
+          <div className="space-y-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted">
                 Clients are loaded from the CounselFlow Clients module. Select a
                 client to continue; matters for that client load on the next
                 step.
               </p>
-              <Link
-                href="/clients"
-                className="dashboard__create-btn"
-                style={{ display: "inline-flex", textDecoration: "none" }}
-              >
-                Open Clients module
+              <Link href="/clients">
+                <Button type="button" variant="secondary" size="sm">
+                  Open Clients module
+                </Button>
               </Link>
             </div>
 
             {catalogMessage ? (
-              <p className="gi-muted" role="status" style={{ margin: 0 }}>
+              <p className="text-sm text-muted" role="status">
                 {clientsLoading ? "Loading firm clients…" : catalogMessage}
               </p>
             ) : null}
 
-            <div className="gi-add-client panel" aria-label="Select existing client">
-              <header className="panel__header">
-                <h3 className="gi-subhead" style={{ margin: 0 }}>
-                  Select existing client
-                </h3>
-                <p>
+            <Card className="border-gray-100 bg-gray-50/50" padding="md">
+              <CardHeader>
+                <CardTitle>Select existing client</CardTitle>
+                <CardDescription>
                   Choose a client from firm CRM records. Name and Client ID fill
                   automatically. Adjust billing contact and amounts for this
                   invoice only.
-                </p>
-              </header>
+                </CardDescription>
+              </CardHeader>
 
               {selectClientErrors.length > 0 ? (
-                <div className="gi__alert" role="alert">
-                  <ul>
+                <div
+                  className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+                  role="alert"
+                >
+                  <ul className="list-disc space-y-1 pl-5">
                     {selectClientErrors.map((err) => (
                       <li key={err}>{err}</li>
                     ))}
@@ -1043,63 +1081,54 @@ export function GenerateInvoiceWizard() {
                 </div>
               ) : null}
 
-              <div className="gi-add-client__grid">
-                <label className="gi__field gi-add-client__wide">
-                  <span>Client (existing)</span>
-                  <select
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Select
+                    label="Client (existing)"
                     value={selectedClientId}
                     onChange={(e) => void loadClientIntoForm(e.target.value)}
                     disabled={clientsLoading || clients.length === 0}
-                  >
-                    <option value="">
-                      {clientsLoading
-                        ? "Loading clients…"
-                        : clients.length === 0
-                          ? "No clients available"
-                          : "Choose a client…"}
-                    </option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.clientId})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="gi__field">
-                  <span>Client Name</span>
-                  <input value={autofillName} readOnly />
-                </label>
-                <label className="gi__field">
-                  <span>Client ID</span>
-                  <input value={autofillClientId} readOnly />
-                </label>
-                <label className="gi__field">
-                  <span>Billing Contact</span>
-                  <input
-                    value={autofillContact}
-                    disabled={!selectedClientId}
-                    onChange={(e) => setAutofillContact(e.target.value)}
-                    placeholder="Contact name"
+                    options={[
+                      {
+                        value: "",
+                        label: clientsLoading
+                          ? "Loading clients…"
+                          : clients.length === 0
+                            ? "No clients available"
+                            : "Choose a client…",
+                      },
+                      ...clients.map((c) => ({
+                        value: c.id,
+                        label: `${c.name} (${c.clientId})`,
+                      })),
+                    ]}
                   />
-                </label>
-                <label className="gi__field">
-                  <span>Billing Method</span>
-                  <select
-                    value={autofillMethod}
-                    disabled={!selectedClientId}
-                    onChange={(e) =>
-                      setAutofillMethod(e.target.value as ClientBillingMethod)
-                    }
-                  >
-                    <option value="Hourly">Hourly</option>
-                    <option value="Fixed Fee">Fixed Fee</option>
-                    <option value="Retainer">Retainer</option>
-                  </select>
-                </label>
-                <label className="gi__field">
-                  <span>Trust / Retainer (from matters)</span>
-                  <input
+                </div>
+                <Input label="Client Name" value={autofillName} readOnly />
+                <Input label="Client ID" value={autofillClientId} readOnly />
+                <Input
+                  label="Billing Contact"
+                  value={autofillContact}
+                  disabled={!selectedClientId}
+                  onChange={(e) => setAutofillContact(e.target.value)}
+                  placeholder="Contact name"
+                />
+                <Select
+                  label="Billing Method"
+                  value={autofillMethod}
+                  disabled={!selectedClientId}
+                  onChange={(e) =>
+                    setAutofillMethod(e.target.value as ClientBillingMethod)
+                  }
+                  options={[
+                    { value: "Hourly", label: "Hourly" },
+                    { value: "Fixed Fee", label: "Fixed Fee" },
+                    { value: "Retainer", label: "Retainer" },
+                  ]}
+                />
+                <div className="space-y-1.5">
+                  <Input
+                    label="Trust / Retainer (from matters)"
                     type="number"
                     min={0}
                     step={50}
@@ -1113,14 +1142,14 @@ export function GenerateInvoiceWizard() {
                     }
                     title="Sum of retainer_balance on this client's matters in CounselFlow"
                   />
-                  <span className="gi-field-hint" style={{ display: "block" }}>
+                  <p className="text-xs text-muted">
                     {retainerSourceNote ||
                       "Read-only total of matter retainer balances for this client."}
-                  </span>
-                </label>
-                <label className="gi__field">
-                  <span>Suggested retainer apply (optional)</span>
-                  <input
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Input
+                    label="Suggested retainer apply (optional)"
                     type="number"
                     min={0}
                     step={50}
@@ -1129,390 +1158,389 @@ export function GenerateInvoiceWizard() {
                     onChange={(e) => setPrepaidAmount(e.target.value)}
                     placeholder="0.00"
                   />
-                  <span className="gi-field-hint" style={{ display: "block" }}>
-                    Optional amount to prefill on the Adjustments step. Application
-                    uses the selected matter&apos;s retainer.
-                  </span>
-                </label>
+                  <p className="text-xs text-muted">
+                    Optional amount to prefill on the Adjustments step.
+                    Application uses the selected matter&apos;s retainer.
+                  </p>
+                </div>
               </div>
 
-              <div className="gi-actions">
-                <button
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <Button
                   type="button"
-                  className="dashboard__create-btn"
                   onClick={() => void confirmExistingClient()}
                   disabled={!selectedClientId || retainerLoading}
                 >
                   Confirm client &amp; amounts
-                </button>
+                </Button>
                 {client ? (
-                  <span className="gi-muted">
-                    Selected: <strong>{client.name}</strong>
+                  <span className="text-sm text-muted">
+                    Selected:{" "}
+                    <span className="font-medium text-navy-900">
+                      {client.name}
+                    </span>
                   </span>
                 ) : null}
               </div>
-            </div>
-
+            </Card>
           </div>
         ) : null}
 
         {step === 1 && client ? (
-          <div className="gi__stack">
-            <div className="gi-step1-toolbar">
-              <p className="gi-muted" style={{ margin: 0, flex: "1 1 auto" }}>
-                Matters for <strong>{client.name}</strong> — from CounselFlow
-                (matters linked to this client). Selecting a matter loads
-                approved unbilled time from Time &amp; Expenses.
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted">
+                Matters for{" "}
+                <span className="font-medium text-navy-900">{client.name}</span>{" "}
+                — from CounselFlow (matters linked to this client). Selecting a
+                matter loads approved unbilled time from Time &amp; Expenses.
               </p>
-              <Link
-                href={"/clients/" + client.id}
-                className="dashboard__create-btn"
-                style={{ display: "inline-flex", textDecoration: "none" }}
-              >
-                Open client record
+              <Link href={"/clients/" + client.id}>
+                <Button type="button" variant="secondary" size="sm">
+                  Open client record
+                </Button>
               </Link>
             </div>
 
             {mattersLoading ? (
-              <p className="gi-muted" role="status">
+              <p className="text-sm text-muted" role="status">
                 Loading matters for this client…
               </p>
             ) : null}
             {mattersMessage && !mattersLoading ? (
-              <p className="gi-muted" role="status">
+              <p className="text-sm text-muted" role="status">
                 {mattersMessage}
               </p>
             ) : null}
             {matterWipLoading ? (
-              <p className="gi-muted" role="status">
+              <p className="text-sm text-muted" role="status">
                 Loading billable time and expenses for the selected matter…
               </p>
             ) : null}
             {matterWipMessage && !matterWipLoading ? (
-              <p className="gi-muted" role="status">
+              <p className="text-sm text-muted" role="status">
                 {matterWipMessage}
               </p>
             ) : null}
 
-            <div className="gi__table-wrap">
-              <table className="gi-table">
-                <thead>
-                  <tr>
-                    <th>Matter Name</th>
-                    <th>Matter Number</th>
-                    <th>Responsible Attorney</th>
-                    <th>Matter Status</th>
-                    <th>Billing Period</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {mattersLoading ? (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="gi-muted"
-                        style={{ padding: "1rem" }}
-                      >
-                        Loading matters…
-                      </td>
-                    </tr>
-                  ) : matters.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="gi-muted"
-                        style={{ padding: "1rem" }}
-                      >
-                        No matters for this client yet. Create a matter linked
-                        to this client in CounselFlow, then return here.
-                      </td>
-                    </tr>
-                  ) : (
-                    matters.map((m) => (
-                      <tr
-                        key={m.id}
-                        className={
-                          matter?.id === m.id ? "gi-row--selected" : undefined
-                        }
-                      >
-                        <td className="gi-strong">{m.matterName}</td>
-                        <td>{m.matterNumber}</td>
-                        <td>{m.responsibleAttorney}</td>
-                        <td>{m.status}</td>
-                        <td>{m.billingPeriod}</td>
-                        <td>
-                          <button
-                            type="button"
-                            className="gi-btn gi-btn--small"
-                            disabled={matterWipLoading}
-                            onClick={() => void selectMatter(m)}
-                          >
-                            {matter?.id === m.id
-                              ? matterWipLoading
-                                ? "Loading…"
-                                : "Selected"
-                              : "Select"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Matter Name</TableHead>
+                  <TableHead>Matter Number</TableHead>
+                  <TableHead>Responsible Attorney</TableHead>
+                  <TableHead>Matter Status</TableHead>
+                  <TableHead>Billing Period</TableHead>
+                  <TableHead>
+                    <span className="sr-only">Action</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {mattersLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-muted">
+                      Loading matters…
+                    </TableCell>
+                  </TableRow>
+                ) : matters.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-muted">
+                      No matters for this client yet. Create a matter linked to
+                      this client in CounselFlow, then return here.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  matters.map((m) => (
+                    <TableRow
+                      key={m.id}
+                      className={
+                        matter?.id === m.id
+                          ? "bg-gold-100/40 hover:bg-gold-100/50"
+                          : undefined
+                      }
+                    >
+                      <TableCell className="font-medium">
+                        {m.matterName}
+                      </TableCell>
+                      <TableCell>{m.matterNumber}</TableCell>
+                      <TableCell>{m.responsibleAttorney}</TableCell>
+                      <TableCell>{m.status}</TableCell>
+                      <TableCell>{m.billingPeriod}</TableCell>
+                      <TableCell>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={
+                            matter?.id === m.id ? "primary" : "secondary"
+                          }
+                          disabled={matterWipLoading}
+                          onClick={() => void selectMatter(m)}
+                        >
+                          {matter?.id === m.id
+                            ? matterWipLoading
+                              ? "Loading…"
+                              : "Selected"
+                            : "Select"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
         ) : null}
 
         {step === 2 && client && matter ? (
-          <div className="gi__stack">
+          <div className="space-y-4">
             {matterWipLoading ? (
-              <p className="gi-muted" role="status">
+              <p className="text-sm text-muted" role="status">
                 Loading Time &amp; Expenses for this matter…
               </p>
             ) : null}
             {matterWipMessage && !matterWipLoading ? (
-              <p className="gi-muted" role="status">
+              <p className="text-sm text-muted" role="status">
                 {matterWipMessage}
               </p>
             ) : null}
-            <dl className="gi-matter-strip" aria-label="Matter information">
-              <div>
-                <dt>Client Name</dt>
-                <dd>{client.name}</dd>
-              </div>
-              <div>
-                <dt>Matter Name</dt>
-                <dd>{matter.matterName}</dd>
-              </div>
-              <div>
-                <dt>Matter Number</dt>
-                <dd>{matter.matterNumber}</dd>
-              </div>
-              <div>
-                <dt>Responsible Attorney</dt>
-                <dd>{matter.responsibleAttorney}</dd>
-              </div>
-              <div>
-                <dt>Billing Method</dt>
-                <dd>{client.billingMethod}</dd>
-              </div>
-              <div>
-                <dt>Billing Period</dt>
-                <dd>{matter.billingPeriod}</dd>
-              </div>
+
+            <dl className="grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                ["Client Name", client.name],
+                ["Matter Name", matter.matterName],
+                ["Matter Number", matter.matterNumber],
+                ["Responsible Attorney", matter.responsibleAttorney],
+                ["Billing Method", client.billingMethod],
+                ["Billing Period", matter.billingPeriod],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted">
+                    {label}
+                  </dt>
+                  <dd className="mt-0.5 text-sm font-medium text-navy-900">
+                    {value}
+                  </dd>
+                </div>
+              ))}
             </dl>
 
-            <div className="gi-time-layout">
-              <div className="gi-time-layout__main">
-                <div className="gi-step1-toolbar">
-                  <p className="gi-muted" style={{ margin: 0, flex: 1 }}>
-                    Approved entries are selected by default. Uncheck any you
-                    do not want on this invoice. Hours and rates come from
-                    recorded time and cannot be edited here. Pending and
-                    Rejected entries are not selectable.
+            <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+              <div className="space-y-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <p className="text-sm text-muted">
+                    Approved entries are selected by default. Uncheck any you do
+                    not want on this invoice. Hours and rates come from recorded
+                    time and cannot be edited here. Pending and Rejected entries
+                    are not selectable.
                   </p>
-                  <div className="gi-actions" style={{ margin: 0 }}>
-                    <button
+                  <div className="flex shrink-0 gap-2">
+                    <Button
                       type="button"
-                      className="gi-btn gi-btn--small"
+                      size="sm"
+                      variant="secondary"
                       onClick={selectAllApprovedTime}
                     >
                       Select All
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="gi-btn gi-btn--small"
+                      size="sm"
+                      variant="secondary"
                       onClick={clearAllSelectedTime}
                     >
                       Clear All
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
                 {unbilledTimeEntries.length === 0 ? (
-                  <p className="gi-muted">
+                  <p className="text-sm text-muted">
                     No unbilled time remains for this matter.
                   </p>
                 ) : (
-                  <div className="gi__table-wrap">
-                    <table className="gi-table">
-                      <thead>
-                        <tr>
-                          <th>Include</th>
-                          <th>Date</th>
-                          <th>Attorney or Staff</th>
-                          <th>Description of Work</th>
-                          <th>Approval Status</th>
-                          <th>Hours</th>
-                          <th>Hourly Rate</th>
-                          <th>Extended Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {unbilledTimeEntries.map((t) => {
-                          const approved = isTimeApproved(t);
-                          const longNarrative =
-                            t.description.length > NARRATIVE_ONE_LINE_CHARS;
-                          const isExpanded = expandedTimeIds.has(t.id);
-                          return (
-                            <tr
-                              key={t.id}
-                              className={
-                                selectedTimeIds.has(t.id)
-                                  ? "gi-row--selected"
-                                  : undefined
-                              }
-                            >
-                              <td>
-                                <input
-                                  type="checkbox"
-                                  checked={
-                                    approved && selectedTimeIds.has(t.id)
-                                  }
-                                  disabled={!approved}
-                                  onChange={() => toggleApprovedTime(t.id)}
-                                  aria-label={
-                                    approved
-                                      ? `Include time by ${t.person}`
-                                      : `Cannot include ${t.approvalStatus.toLowerCase()} entry by ${t.person}`
-                                  }
-                                  title={
-                                    approved
-                                      ? "Include on invoice"
-                                      : "Only Approved entries can be included"
-                                  }
-                                />
-                              </td>
-                              <td>{t.date}</td>
-                              <td>
-                                {t.person}{" "}
-                                <span className="gi-chip">{t.role}</span>
-                              </td>
-                              <td className="gi-desc-cell">
-                                <p
-                                  className={
-                                    longNarrative && !isExpanded
-                                      ? "gi-desc gi-desc--clamp"
-                                      : "gi-desc"
-                                  }
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Include</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Attorney or Staff</TableHead>
+                        <TableHead>Description of Work</TableHead>
+                        <TableHead>Approval Status</TableHead>
+                        <TableHead>Hours</TableHead>
+                        <TableHead>Hourly Rate</TableHead>
+                        <TableHead>Extended Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {unbilledTimeEntries.map((t) => {
+                        const approved = isTimeApproved(t);
+                        const longNarrative =
+                          t.description.length > NARRATIVE_ONE_LINE_CHARS;
+                        const isExpanded = expandedTimeIds.has(t.id);
+                        return (
+                          <TableRow
+                            key={t.id}
+                            className={
+                              selectedTimeIds.has(t.id)
+                                ? "bg-gold-100/30"
+                                : undefined
+                            }
+                          >
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-gray-300 text-navy-900 focus:ring-navy-700"
+                                checked={
+                                  approved && selectedTimeIds.has(t.id)
+                                }
+                                disabled={!approved}
+                                onChange={() => toggleApprovedTime(t.id)}
+                                aria-label={
+                                  approved
+                                    ? `Include time by ${t.person}`
+                                    : `Cannot include ${t.approvalStatus.toLowerCase()} entry by ${t.person}`
+                                }
+                                title={
+                                  approved
+                                    ? "Include on invoice"
+                                    : "Only Approved entries can be included"
+                                }
+                              />
+                            </TableCell>
+                            <TableCell>{t.date}</TableCell>
+                            <TableCell>
+                              <span className="mr-2">{t.person}</span>
+                              <Badge variant="neutral">{t.role}</Badge>
+                            </TableCell>
+                            <TableCell className="max-w-xs">
+                              <p
+                                className={cn(
+                                  "text-sm text-navy-900",
+                                  longNarrative &&
+                                    !isExpanded &&
+                                    "line-clamp-2",
+                                )}
+                              >
+                                {t.description}
+                              </p>
+                              {longNarrative ? (
+                                <button
+                                  type="button"
+                                  className="mt-1 text-xs font-medium text-navy-700 hover:underline"
+                                  onClick={() => toggleTimeExpand(t.id)}
                                 >
-                                  {t.description}
-                                </p>
-                                {longNarrative ? (
-                                  <button
-                                    type="button"
-                                    className="gi-desc__toggle"
-                                    onClick={() => toggleTimeExpand(t.id)}
-                                  >
-                                    {isExpanded
-                                      ? "Show less"
-                                      : "Show full narrative"}
-                                  </button>
-                                ) : null}
-                              </td>
-                              <td>
-                                <span
-                                  className={approvalBadgeClass(
-                                    t.approvalStatus,
-                                  )}
-                                >
-                                  {t.approvalStatus}
-                                </span>
-                              </td>
-                              <td>{t.hours.toFixed(1)}</td>
-                              <td>{money(t.rate)}</td>
-                              <td>
-                                {money(extended(t.hours, t.rate))}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                                  {isExpanded
+                                    ? "Show less"
+                                    : "Show full narrative"}
+                                </button>
+                              ) : null}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={approvalBadgeVariant(t.approvalStatus)}
+                              >
+                                {t.approvalStatus}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{t.hours.toFixed(1)}</TableCell>
+                            <TableCell>{money(t.rate)}</TableCell>
+                            <TableCell>
+                              {money(extended(t.hours, t.rate))}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 )}
 
                 <div
-                  className="gi-time-running"
+                  className="grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-3"
                   aria-live="polite"
                   aria-label="Selected time summary"
                 >
                   <div>
-                    <span className="gi-time-running__label">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted">
                       Selected entries
-                    </span>
-                    <strong>{selectedTime.length}</strong>
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-navy-900">
+                      {selectedTime.length}
+                    </p>
                   </div>
                   <div>
-                    <span className="gi-time-running__label">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted">
                       Total billable hours
-                    </span>
-                    <strong>{selectedTimeHours.toFixed(1)}</strong>
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-navy-900">
+                      {selectedTimeHours.toFixed(1)}
+                    </p>
                   </div>
                   <div>
-                    <span className="gi-time-running__label">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted">
                       Total billable amount
-                    </span>
-                    <strong>{money(timeSubtotal)}</strong>
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-navy-900">
+                      {money(timeSubtotal)}
+                    </p>
                   </div>
                 </div>
 
-                <div className="gi-time-step-actions">
-                  <button
-                    type="button"
-                    className="gi-btn"
-                    onClick={saveDraft}
-                  >
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="secondary" onClick={saveDraft}>
                     Save Draft
-                  </button>
-                  <button
-                    type="button"
-                    className="gi-btn"
-                    onClick={goBack}
-                  >
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={goBack}>
                     Back
-                  </button>
-                  <button
-                    type="button"
-                    className="dashboard__create-btn"
-                    onClick={goNext}
-                  >
+                  </Button>
+                  <Button type="button" onClick={goNext}>
                     Continue
-                  </button>
+                  </Button>
                 </div>
               </div>
 
               <aside
-                className="gi-invoice-summary"
+                className="h-fit rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
                 aria-label="Invoice summary"
               >
-                <h3 className="gi-subhead" style={{ marginTop: 0 }}>
+                <h3 className="text-base font-semibold text-navy-900">
                   Invoice Summary
                 </h3>
-                <p className="gi-muted" style={{ marginTop: 0 }}>
+                <p className="mt-1 text-sm text-muted">
                   Updates live as you include approved time entries.
                 </p>
-                <dl className="gi-invoice-summary__list">
-                  <div>
-                    <dt>Billable Time</dt>
-                    <dd>{money(totals.billableTime)}</dd>
+                <dl className="mt-4 space-y-3 text-sm">
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted">Billable Time</dt>
+                    <dd className="font-medium text-navy-900">
+                      {money(totals.billableTime)}
+                    </dd>
                   </div>
-                  <div>
-                    <dt>Reimbursable Expenses</dt>
-                    <dd>{money(totals.expenses)}</dd>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted">Reimbursable Expenses</dt>
+                    <dd className="font-medium text-navy-900">
+                      {money(totals.expenses)}
+                    </dd>
                   </div>
-                  <div>
-                    <dt>Write-Downs</dt>
-                    <dd>−{money(totals.writeDowns)}</dd>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted">Write-Downs</dt>
+                    <dd className="font-medium text-navy-900">
+                      −{money(totals.writeDowns)}
+                    </dd>
                   </div>
-                  <div>
-                    <dt>Retainer Applied</dt>
-                    <dd>−{money(totals.retainerApplied)}</dd>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted">Retainer Applied</dt>
+                    <dd className="font-medium text-navy-900">
+                      −{money(totals.retainerApplied)}
+                    </dd>
                   </div>
-                  <div className="gi-invoice-summary__total">
-                    <dt>Estimated Invoice Total</dt>
-                    <dd>{money(totals.totalDue)}</dd>
+                  <div className="flex justify-between gap-2 border-t border-gray-200 pt-3">
+                    <dt className="font-semibold text-navy-900">
+                      Estimated Invoice Total
+                    </dt>
+                    <dd className="font-semibold text-navy-900">
+                      {money(totals.totalDue)}
+                    </dd>
                   </div>
                 </dl>
               </aside>
@@ -1521,72 +1549,80 @@ export function GenerateInvoiceWizard() {
         ) : null}
 
         {step === 3 && matter ? (
-          <div className="gi__stack">
-            <p className="gi-muted">
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
               Approved reimbursable expenses for {matter.matterName}
             </p>
             {approvedExpenses.length === 0 ? (
-              <p className="gi-muted">No approved expenses for this matter.</p>
+              <p className="text-sm text-muted">
+                No approved expenses for this matter.
+              </p>
             ) : (
-              <div className="gi__table-wrap">
-                <table className="gi-table">
-                  <thead>
-                    <tr>
-                      <th>Include</th>
-                      <th>Date</th>
-                      <th>Category</th>
-                      <th>Description</th>
-                      <th>Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {approvedExpenses.map((e) => (
-                      <tr key={e.id}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={selectedExpenseIds.has(e.id)}
-                            onChange={() =>
-                              toggleId(
-                                selectedExpenseIds,
-                                setSelectedExpenseIds,
-                                e.id,
-                              )
-                            }
-                            aria-label={`Include expense ${e.category}`}
-                          />
-                        </td>
-                        <td>{e.date}</td>
-                        <td>{e.category}</td>
-                        <td>{e.description}</td>
-                        <td>{money(e.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Include</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {approvedExpenses.map((e) => (
+                    <TableRow key={e.id}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300 text-navy-900 focus:ring-navy-700"
+                          checked={selectedExpenseIds.has(e.id)}
+                          onChange={() =>
+                            toggleId(
+                              selectedExpenseIds,
+                              setSelectedExpenseIds,
+                              e.id,
+                            )
+                          }
+                          aria-label={`Include expense ${e.category}`}
+                        />
+                      </TableCell>
+                      <TableCell>{e.date}</TableCell>
+                      <TableCell>{e.category}</TableCell>
+                      <TableCell>{e.description}</TableCell>
+                      <TableCell>{money(e.amount)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
-            <p className="gi-subtotal">
-              Expense subtotal: <strong>{money(expenseSubtotal)}</strong>
+            <p className="text-sm text-navy-900">
+              Expense subtotal:{" "}
+              <span className="font-semibold">{money(expenseSubtotal)}</span>
             </p>
           </div>
         ) : null}
 
         {step === 4 && client && matter ? (
-          <div className="gi__stack gi__adjust">
-            <p className="gi-muted">
+          <div className="space-y-6">
+            <p className="text-sm text-muted">
               Apply billing adjustments. Invoice number and dates will be
               generated on the Preview step.
             </p>
 
-            <dl className="gi-kv">
+            <dl className="grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-3">
               <div>
-                <dt>Retainer available (this matter)</dt>
-                <dd>{money(maxRetainer)}</dd>
+                <dt className="text-xs font-medium uppercase tracking-wide text-muted">
+                  Retainer available (this matter)
+                </dt>
+                <dd className="mt-1 text-sm font-semibold text-navy-900">
+                  {money(maxRetainer)}
+                </dd>
               </div>
               <div>
-                <dt>Approved write-downs</dt>
-                <dd>
+                <dt className="text-xs font-medium uppercase tracking-wide text-muted">
+                  Approved write-downs
+                </dt>
+                <dd className="mt-1 text-sm font-semibold text-navy-900">
                   {money(
                     matter.writeDowns
                       .filter((w) => w.approved)
@@ -1595,36 +1631,40 @@ export function GenerateInvoiceWizard() {
                 </dd>
               </div>
               <div>
-                <dt>Courtesy discount (if approved)</dt>
-                <dd>{money(matter.courtesyDiscountApproved)}</dd>
+                <dt className="text-xs font-medium uppercase tracking-wide text-muted">
+                  Courtesy discount (if approved)
+                </dt>
+                <dd className="mt-1 text-sm font-semibold text-navy-900">
+                  {money(matter.courtesyDiscountApproved)}
+                </dd>
               </div>
             </dl>
             {retainerSourceNote ? (
-              <p className="gi-muted" style={{ margin: 0 }}>
-                {retainerSourceNote}
-              </p>
+              <p className="text-sm text-muted">{retainerSourceNote}</p>
             ) : null}
 
-            <label className="gi__check">
+            <label className="flex items-center gap-2 text-sm text-navy-900">
               <input
                 type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-navy-900 focus:ring-navy-700"
                 checked={applyWriteDowns}
                 onChange={(e) => setApplyWriteDowns(e.target.checked)}
               />
               Apply approved write-downs
             </label>
-            <label className="gi__check">
+            <label className="flex items-center gap-2 text-sm text-navy-900">
               <input
                 type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-navy-900 focus:ring-navy-700"
                 checked={applyCourtesy}
                 onChange={(e) => setApplyCourtesy(e.target.checked)}
               />
               Apply approved courtesy discounts
             </label>
 
-            <label className="gi__field">
-              <span>Amount of retainer to apply</span>
-              <input
+            <div className="max-w-md space-y-1.5">
+              <Input
+                label="Amount of retainer to apply"
                 type="number"
                 min={0}
                 max={maxRetainer}
@@ -1632,53 +1672,66 @@ export function GenerateInvoiceWizard() {
                 value={retainerToApply}
                 onChange={(e) => setRetainerSafe(Number(e.target.value) || 0)}
               />
-              <span className="gi-hint">
+              <p className="text-xs text-muted">
                 Cannot exceed retainer available ({money(maxRetainer)}) or the
                 invoice total before retainer.
-              </span>
-            </label>
+              </p>
+            </div>
 
-            <div className="gi-retainer-box" aria-label="Apply retainer automatically">
-              <header className="gi-retainer-box__header">
-                <h3 className="gi-subhead" style={{ margin: 0 }}>
-                  Apply retainer to amount due
-                </h3>
-                <p className="gi-muted" style={{ margin: 0 }}>
+            <Card className="border-gray-100 bg-gray-50/50" padding="md">
+              <CardHeader>
+                <CardTitle>Apply retainer to amount due</CardTitle>
+                <CardDescription>
                   Automatically apply trust/retainer against the invoice amount
                   after write-downs and courtesy discounts. Remaining balance is
                   shown after the application.
-                </p>
-              </header>
+                </CardDescription>
+              </CardHeader>
 
-              <dl className="gi-retainer-box__stats">
+              <dl className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <dt>Amount due (before retainer)</dt>
-                  <dd>{money(amountDueBeforeRetainer)}</dd>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted">
+                    Amount due (before retainer)
+                  </dt>
+                  <dd className="mt-1 text-sm font-semibold text-navy-900">
+                    {money(amountDueBeforeRetainer)}
+                  </dd>
                 </div>
                 <div>
-                  <dt>Retainer available</dt>
-                  <dd>{money(maxRetainer)}</dd>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted">
+                    Retainer available
+                  </dt>
+                  <dd className="mt-1 text-sm font-semibold text-navy-900">
+                    {money(maxRetainer)}
+                  </dd>
                 </div>
                 <div>
-                  <dt>Retainer applied</dt>
-                  <dd>{money(retainerToApply)}</dd>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted">
+                    Retainer applied
+                  </dt>
+                  <dd className="mt-1 text-sm font-semibold text-navy-900">
+                    {money(retainerToApply)}
+                  </dd>
                 </div>
                 <div>
-                  <dt>Remaining retainer after applying</dt>
-                  <dd className="gi-retainer-box__remaining">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted">
+                    Remaining retainer after applying
+                  </dt>
+                  <dd className="mt-1 text-sm font-semibold text-navy-900">
                     {money(remainingRetainer)}
                   </dd>
                 </div>
               </dl>
 
               <p
-                className={
+                className={cn(
+                  "mt-4 rounded-lg border px-3 py-2 text-sm",
                   retainerCoversAmountDue
-                    ? "gi-retainer-box__status gi-retainer-box__status--ok"
+                    ? "border-green-200 bg-green-50 text-green-900"
                     : amountDueBeforeRetainer <= 0
-                      ? "gi-retainer-box__status"
-                      : "gi-retainer-box__status gi-retainer-box__status--partial"
-                }
+                      ? "border-gray-200 bg-white text-muted"
+                      : "border-amber-200 bg-amber-50 text-amber-900",
+                )}
               >
                 {amountDueBeforeRetainer <= 0
                   ? "No amount due after other adjustments — retainer is not required."
@@ -1687,84 +1740,91 @@ export function GenerateInvoiceWizard() {
                     : `Retainer is not sufficient for the full amount due. Maximum that can be applied: ${money(maxRetainerApplicable)}.`}
               </p>
 
-              <div className="gi-actions">
-                <button
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
                   type="button"
-                  className="dashboard__create-btn"
                   onClick={applyRetainerToCoverAmountDue}
-                  disabled={
-                    maxRetainer <= 0 || amountDueBeforeRetainer <= 0
-                  }
+                  disabled={maxRetainer <= 0 || amountDueBeforeRetainer <= 0}
                 >
                   {retainerCoversAmountDue
                     ? "Apply retainer to cover amount due"
                     : "Apply available retainer"}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="gi-btn"
+                  variant="secondary"
                   onClick={clearRetainerApplication}
                   disabled={retainerToApply <= 0}
                 >
                   Clear retainer
-                </button>
+                </Button>
               </div>
-            </div>
+            </Card>
 
-            <div className="gi-calc">
-              <p>
-                Billable time <span>{money(totals.billableTime)}</span>
-              </p>
-              <p>
-                + Reimbursable expenses <span>{money(totals.expenses)}</span>
-              </p>
-              <p>
-                − Write-downs <span>{money(totals.writeDowns)}</span>
-              </p>
-              <p>
-                − Courtesy discounts{" "}
-                <span>{money(totals.courtesyDiscount)}</span>
-              </p>
-              <p>
-                − Retainer applied <span>{money(totals.retainerApplied)}</span>
-              </p>
-              <p className="gi-calc__total">
-                = Total invoice amount <span>{money(totals.totalDue)}</span>
-              </p>
+            <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm shadow-sm">
+              <div className="flex justify-between gap-4 py-1">
+                <span className="text-muted">Billable time</span>
+                <span className="font-medium text-navy-900">
+                  {money(totals.billableTime)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4 py-1">
+                <span className="text-muted">+ Reimbursable expenses</span>
+                <span className="font-medium text-navy-900">
+                  {money(totals.expenses)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4 py-1">
+                <span className="text-muted">− Write-downs</span>
+                <span className="font-medium text-navy-900">
+                  {money(totals.writeDowns)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4 py-1">
+                <span className="text-muted">− Courtesy discounts</span>
+                <span className="font-medium text-navy-900">
+                  {money(totals.courtesyDiscount)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4 py-1">
+                <span className="text-muted">− Retainer applied</span>
+                <span className="font-medium text-navy-900">
+                  {money(totals.retainerApplied)}
+                </span>
+              </div>
+              <div className="mt-2 flex justify-between gap-4 border-t border-gray-200 pt-3 text-base">
+                <span className="font-semibold text-navy-900">
+                  = Total invoice amount
+                </span>
+                <span className="font-semibold text-navy-900">
+                  {money(totals.totalDue)}
+                </span>
+              </div>
             </div>
           </div>
         ) : null}
 
         {step === 5 && client && matter ? (
-          <div className="gi__stack">
-            <div className="gi-grid-2">
-              <label className="gi__field">
-                <span>Invoice number (auto)</span>
-                <input
-                  value={invoiceNumber || "Assigned on preview…"}
-                  readOnly
-                />
-              </label>
-              <label className="gi__field">
-                <span>Status</span>
-                <input value={status} readOnly />
-              </label>
-              <label className="gi__field">
-                <span>Invoice date</span>
-                <input
-                  type="date"
-                  value={invoiceDate || todayIso()}
-                  onChange={(e) => setInvoiceDate(e.target.value)}
-                />
-              </label>
-              <label className="gi__field">
-                <span>Due date</span>
-                <input
-                  type="date"
-                  value={dueDate || plusDaysIso(30)}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
-              </label>
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="Invoice number (auto)"
+                value={invoiceNumber || "Assigned on preview…"}
+                readOnly
+              />
+              <Input label="Status" value={status} readOnly />
+              <Input
+                label="Invoice date"
+                type="date"
+                value={invoiceDate || todayIso()}
+                onChange={(e) => setInvoiceDate(e.target.value)}
+              />
+              <Input
+                label="Due date"
+                type="date"
+                value={dueDate || plusDaysIso(30)}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
             </div>
 
             <GenerateInvoicePreview
@@ -1785,112 +1845,117 @@ export function GenerateInvoiceWizard() {
         ) : null}
 
         {step === 6 && client && matter ? (
-          <div className="gi__stack">
-            <p className="gi-muted">
+          <div className="space-y-6">
+            <p className="text-sm text-muted">
               Review actions for invoice{" "}
-              <strong>{invoiceNumber || "(generate on preview)"}</strong>.
-              Finalizing locks included time entries, records AR of{" "}
-              <strong>{money(totals.totalDue)}</strong>, and sets status to{" "}
-              <strong>Sent</strong>.
+              <span className="font-medium text-navy-900">
+                {invoiceNumber || "(generate on preview)"}
+              </span>
+              . Finalizing locks included time entries, records AR of{" "}
+              <span className="font-medium text-navy-900">
+                {money(totals.totalDue)}
+              </span>
+              , and sets status to{" "}
+              <span className="font-medium text-navy-900">Sent</span>.
             </p>
 
-            <div className="gi-actions">
-              <button type="button" className="gi-btn" onClick={saveDraft}>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" onClick={saveDraft}>
                 Save Draft
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="gi-btn"
+                variant="secondary"
                 onClick={simulateDownload}
               >
                 Download PDF
-              </button>
-              <button type="button" className="gi-btn" onClick={simulateEmail}>
+              </Button>
+              <Button type="button" variant="secondary" onClick={simulateEmail}>
                 Email Invoice
-              </button>
-              <button
-                type="button"
-                className="gi-btn gi-btn--ghost"
-                onClick={cancelWizard}
-              >
+              </Button>
+              <Button type="button" variant="ghost" onClick={cancelWizard}>
                 Cancel
-              </button>
+              </Button>
             </div>
 
             {historySorted.length > 0 ? (
-              <div>
-                <h3 className="gi-subhead">Invoice history (this session)</h3>
-                <div className="gi__table-wrap">
-                  <table className="gi-table">
-                    <thead>
-                      <tr>
-                        <th>Invoice #</th>
-                        <th>Date created</th>
-                        <th>Period</th>
-                        <th>Total due</th>
-                        <th>Status</th>
-                        <th>Locked time entries</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {historySorted.map((h) => (
-                        <tr key={h.id}>
-                          <td>{h.invoiceNumber}</td>
-                          <td>{formatDateTime(h.createdAt)}</td>
-                          <td>{h.billingPeriod}</td>
-                          <td>{money(h.totalDue)}</td>
-                          <td>{h.status}</td>
-                          <td>{h.lockedTimeEntryIds.length}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold text-navy-900">
+                  Invoice history (this session)
+                </h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Invoice #</TableHead>
+                      <TableHead>Date created</TableHead>
+                      <TableHead>Period</TableHead>
+                      <TableHead>Total due</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Locked time entries</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {historySorted.map((h) => (
+                      <TableRow key={h.id}>
+                        <TableCell>{h.invoiceNumber}</TableCell>
+                        <TableCell>{formatDateTime(h.createdAt)}</TableCell>
+                        <TableCell>{h.billingPeriod}</TableCell>
+                        <TableCell>{money(h.totalDue)}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              h.status === "Sent" ? "success" : "neutral"
+                            }
+                          >
+                            {h.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{h.lockedTimeEntryIds.length}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             ) : null}
 
-            <div className="gi-finalize">
-              <button
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <Button
                 type="button"
-                className="gi-btn gi-btn--finalize"
+                size="lg"
                 onClick={() => void finalizeInvoice()}
                 disabled={finalizing}
               >
                 {finalizing ? "Finalizing…" : "Finalize Invoice"}
-              </button>
-              <p className="gi-finalize__hint">
+              </Button>
+              <p className="mt-2 text-xs text-muted">
                 Updates matter retainer (if applied), locks billable time, marks
                 the invoice Sent, and adds it to Invoice Management.
               </p>
             </div>
           </div>
         ) : null}
-      </section>
+      </Card>
 
-      <div className="gi__nav">
-        <button
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-4">
+        <Button
           type="button"
-          className="gi-btn"
+          variant="secondary"
           onClick={goBack}
           disabled={step === 0}
         >
           Back
-        </button>
+        </Button>
         {step < STEPS.length - 1 ? (
-          <button
-            type="button"
-            className="dashboard__create-btn"
-            onClick={goNext}
-          >
+          <Button type="button" onClick={goNext}>
             Continue
-          </button>
+          </Button>
         ) : (
-          <Link href={BILLING_ROUTES.dashboard} className="gi-btn gi-btn--ghost">
-            Return to Dashboard
+          <Link href={BILLING_ROUTES.dashboard}>
+            <Button type="button" variant="ghost">
+              Return to Dashboard
+            </Button>
           </Link>
         )}
-      </div>
-    </div>
       </div>
     </div>
   );
