@@ -38,6 +38,7 @@ import {
   addMatterDocument,
   addMatterMessage,
   addMatterRequest,
+  ensureMatterCaseStatus,
   fulfillMatterRequest,
   getClientDocumentDeletionRequests,
   getMatterDocuments,
@@ -53,10 +54,11 @@ import {
   type MatterMessage,
   type MatterRequest,
 } from "@/lib/matters/workspace-store";
+import type { ParalegalAssignmentMatter } from "@/lib/paralegal/demo-data";
 import {
-  PARALEGAL_ASSIGNED_MATTERS,
-  type ParalegalAssignmentMatter,
-} from "@/lib/paralegal/demo-data";
+  fetchSharedFirmMatters,
+  toParalegalAssignmentMatter,
+} from "@/lib/matters/firm-matters-supabase";
 import {
   addParalegalRequestReceivedNotification,
 } from "@/lib/paralegal/notifications-store";
@@ -117,20 +119,50 @@ function formatTimestamp(value: string) {
   }).format(new Date(value));
 }
 
-export function MatterWorkspace() {
+export function MatterWorkspace({
+  assigneeFullName,
+}: {
+  /** When provided, prefer matters assigned to this person (falls back to all). */
+  assigneeFullName?: string;
+} = {}) {
   const { identity } = useDemoRole();
   const [activeFeature, setActiveFeature] = useState<MatterFeature | null>(
     null,
   );
-  const [matterId, setMatterId] = useState(PARALEGAL_ASSIGNED_MATTERS[0].id);
+  const [matters, setMatters] = useState<ParalegalAssignmentMatter[]>([]);
+  const [matterId, setMatterId] = useState<string>("");
+  const [loadingMatters, setLoadingMatters] = useState(true);
+  const [mattersError, setMattersError] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<MatterCaseStatus[]>([]);
   const [documents, setDocuments] = useState<MatterDocument[]>([]);
   const [requests, setRequests] = useState<MatterRequest[]>([]);
   const [messages, setMessages] = useState<MatterMessage[]>([]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setLoadingMatters(true);
+      const result = await fetchSharedFirmMatters({
+        includeWip: false,
+        assigneeFullName: assigneeFullName ?? identity.fullName,
+      });
+      if (cancelled) return;
+      const mapped = result.matters.map(toParalegalAssignmentMatter);
+      setMatters(mapped);
+      setMattersError(result.error);
+      setMatterId((prev) => {
+        if (prev && mapped.some((m) => m.id === prev)) return prev;
+        return mapped[0]?.id ?? "";
+      });
+      setLoadingMatters(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [assigneeFullName, identity.fullName]);
+
   const matter =
-    PARALEGAL_ASSIGNED_MATTERS.find((item) => item.id === matterId) ??
-    PARALEGAL_ASSIGNED_MATTERS[0];
+    matters.find((item) => item.id === matterId) ?? matters[0] ?? null;
 
   const activeFeatureMeta = FEATURES.find(
     (feature) => feature.id === activeFeature,
@@ -149,6 +181,52 @@ export function MatterWorkspace() {
     return () =>
       window.removeEventListener(MATTER_WORKSPACE_UPDATE_EVENT, refresh);
   }, [refresh]);
+
+  useEffect(() => {
+    if (!matter) return;
+    ensureMatterCaseStatus(matter.id, matter.caseType, {
+      phase: "Active",
+      nextDeadline: matter.openDate,
+      summary: matter.engagementScope,
+      completedCount: 0,
+    });
+    refresh();
+  }, [matter, refresh]);
+
+  if (loadingMatters) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Matter workspace</CardTitle>
+          <CardDescription>Loading firm matters from CounselFlow…</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  if (mattersError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Matter workspace</CardTitle>
+          <CardDescription className="text-red-700">{mattersError}</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  if (!matter || matters.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Matter workspace</CardTitle>
+          <CardDescription>
+            No matters found. Add matters in CounselFlow, then return here.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   if (!activeFeature || !activeFeatureMeta) {
     return (
@@ -228,11 +306,11 @@ export function MatterWorkspace() {
             <Select
               id="matter-workspace-selector"
               label="Matter name / Case #"
-              options={PARALEGAL_ASSIGNED_MATTERS.map((item) => ({
+              options={matters.map((item) => ({
                 value: item.id,
                 label: `${item.title} · Case # ${item.matterNumber}`,
               }))}
-              value={matterId}
+              value={matterId || matter.id}
               onChange={(event) => setMatterId(event.target.value)}
               className="border-white/30 bg-white text-navy-900"
             />

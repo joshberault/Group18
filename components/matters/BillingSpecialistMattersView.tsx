@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FileDown, Search } from "lucide-react";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
-import { fetchBillingSpecialistMatterRows } from "@/lib/matters/shared-matters";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { LoadingState } from "@/components/ui/LoadingState";
+import {
+  fetchBillingSpecialistMatterRows,
+  type BillingSpecialistMatterRow,
+} from "@/lib/billing/billing-specialist-matters";
+import { INVOICES_UPDATED_EVENT } from "@/lib/billing/invoice-management-store";
 import { formatCurrency } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -28,20 +30,33 @@ import {
 
 export function BillingSpecialistMattersView() {
   const router = useRouter();
-  const [rows, setRows] = useState<Awaited<ReturnType<typeof fetchBillingSpecialistMatterRows>>["rows"]>([]);
+  const [rows, setRows] = useState<BillingSpecialistMatterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    void (async () => {
-      const result = await fetchBillingSpecialistMatterRows();
-      setRows(result.rows);
-      setError(result.error);
-      setLoading(false);
-    })();
-  }, []);
   const [search, setSearch] = useState("");
   const [prebillFilter, setPrebillFilter] = useState("all");
-  const [selected, setSelected] = useState<(typeof rows)[0] | null>(null);
+  const [selected, setSelected] = useState<BillingSpecialistMatterRow | null>(
+    null,
+  );
+
+  const loadRows = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
+    const result = await fetchBillingSpecialistMatterRows();
+    setRows(result.rows);
+    setError(result.error);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadRows();
+    const onInvoicesUpdated = () => {
+      void loadRows({ silent: true });
+    };
+    window.addEventListener(INVOICES_UPDATED_EVENT, onInvoicesUpdated);
+    return () => {
+      window.removeEventListener(INVOICES_UPDATED_EVENT, onInvoicesUpdated);
+    };
+  }, [loadRows]);
 
   const filtered = useMemo(() => {
     return rows.filter((row) => {
@@ -79,20 +94,6 @@ export function BillingSpecialistMattersView() {
     );
   }
 
-  if (loading) {
-    return <LoadingState message="Loading matters..." />;
-  }
-
-  if (error) {
-    return (
-      <EmptyState
-        title="Matters unavailable"
-        description={error}
-        moduleLabel="Billing Specialist"
-      />
-    );
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -101,7 +102,7 @@ export function BillingSpecialistMattersView() {
       >
         <div className="flex gap-2">
           <Link href="/invoices/generate"><Button>Create Invoice</Button></Link>
-          <Button variant="secondary" onClick={exportCsv}>
+          <Button variant="secondary" onClick={exportCsv} disabled={loading || rows.length === 0}>
             <FileDown className="mr-2 h-4 w-4" />
             Export
           </Button>
@@ -109,9 +110,9 @@ export function BillingSpecialistMattersView() {
       </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <KPICard title="Ready for Prebill" value={String(kpis.ready)} subtitle="Awaiting invoice generation" />
-        <KPICard title="Billing Holds" value={String(kpis.hold)} subtitle="Blocked from billing" />
-        <KPICard title="Total Unbilled" value={formatCurrency(kpis.unbilled)} subtitle="Time + expenses" />
+        <KPICard title="Ready for Prebill" value={loading ? "…" : String(kpis.ready)} subtitle="Awaiting invoice generation" />
+        <KPICard title="Billing Holds" value={loading ? "…" : String(kpis.hold)} subtitle="Blocked from billing" />
+        <KPICard title="Total Unbilled" value={loading ? "…" : formatCurrency(kpis.unbilled)} subtitle="Time + expenses" />
       </div>
 
       <Card>
@@ -136,6 +137,9 @@ export function BillingSpecialistMattersView() {
             ]}
           />
         </div>
+        {error ? (
+          <p className="px-4 pb-4 text-sm text-red-700">{error}</p>
+        ) : null}
         <Table>
           <TableHeader>
             <TableRow>
@@ -149,7 +153,24 @@ export function BillingSpecialistMattersView() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((row) => (
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-muted">
+                  Loading matters from CounselFlow…
+                </TableCell>
+              </TableRow>
+            ) : null}
+            {!loading && !error && filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-muted">
+                  {rows.length === 0
+                    ? "No matters found. Add matters in CounselFlow, then return here."
+                    : "No matters match the current filters."}
+                </TableCell>
+              </TableRow>
+            ) : null}
+            {!loading &&
+              filtered.map((row) => (
               <TableRow key={row.id} className="cursor-pointer hover:bg-gray-50" onClick={() => setSelected(row)}>
                 <TableCell>
                   <p className="font-medium">{row.matterName}</p>
@@ -182,6 +203,12 @@ export function BillingSpecialistMattersView() {
               <div><span className="text-muted">Cycle</span><p className="font-medium">{selected.billingCycle}</p></div>
               <div><span className="text-muted">Rate status</span><p className="font-medium">{selected.rateStatus}</p></div>
               <div><span className="text-muted">Last invoice</span><p className="font-medium">{selected.lastInvoice}</p></div>
+              {selected.hourlyRate != null ? (
+                <div><span className="text-muted">Hourly rate</span><p className="font-medium">{formatCurrency(selected.hourlyRate)}</p></div>
+              ) : null}
+              {selected.retainerBalance != null ? (
+                <div><span className="text-muted">Retainer balance</span><p className="font-medium">{formatCurrency(selected.retainerBalance)}</p></div>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={() => router.push(`/billing?matter=${encodeURIComponent(selected.matterNumber)}`)}>Open Billing</Button>

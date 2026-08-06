@@ -31,6 +31,7 @@ import { BILLING_ROUTES, invoicesHref, receivablesHref } from "@/lib/billing/rou
 import { CONFLICT_STATUS_LABELS } from "@/lib/clients/types";
 import {
   FEE_TYPE_LABELS,
+  FIRM_PORTFOLIO_ATTORNEYS,
   formatFeeSummary,
   isAttorneyOverloaded,
   LIFECYCLE_LABELS,
@@ -41,13 +42,17 @@ import {
 import {
   assignResponsibleAttorney,
   FIRM_PORTFOLIO_UPDATE_EVENT,
-  getFirmPortfolioAttorneys,
-  getFirmPortfolioMatters,
+  getLiveFirmPortfolioMatters,
   markPartnerReviewed,
   resetFirmPortfolioMatters,
+  setFirmPortfolioBase,
   setMatterFeeTerms,
   setMatterLifecycle,
 } from "@/lib/matters/firm-portfolio-store";
+import {
+  fetchSharedFirmMatters,
+  toFirmPortfolioMatter,
+} from "@/lib/matters/firm-matters-supabase";
 import { cn } from "@/lib/utils/cn";
 
 interface MatterFilters {
@@ -93,7 +98,8 @@ function conflictBadgeVariant(
 export function ManagingPartnerMattersView() {
   const searchParams = useSearchParams();
   const [matters, setMatters] = useState<FirmPortfolioMatter[]>([]);
-  const [attorneyOptions, setAttorneyOptions] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<MatterFilters>(defaultFilters);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -106,18 +112,27 @@ export function ManagingPartnerMattersView() {
   });
 
   const refresh = useCallback(() => {
-    void (async () => {
-      const [rows, attorneys] = await Promise.all([
-        getFirmPortfolioMatters(),
-        getFirmPortfolioAttorneys(),
-      ]);
-      setMatters(rows);
-      setAttorneyOptions(attorneys);
-    })();
+    setMatters(getLiveFirmPortfolioMatters());
   }, []);
 
   useEffect(() => {
-    refresh();
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      const result = await fetchSharedFirmMatters({ includeWip: true });
+      if (cancelled) return;
+      const mapped = result.matters.map(toFirmPortfolioMatter);
+      setFirmPortfolioBase(mapped);
+      setError(result.error);
+      setMatters(getLiveFirmPortfolioMatters());
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const onUpdate = () => refresh();
     window.addEventListener(FIRM_PORTFOLIO_UPDATE_EVENT, onUpdate);
     window.addEventListener("storage", onUpdate);
@@ -160,13 +175,13 @@ export function ManagingPartnerMattersView() {
   }, [matters]);
 
   const attorneys = useMemo(() => {
-    const names = new Set<string>(attorneyOptions);
+    const names = new Set<string>([...FIRM_PORTFOLIO_ATTORNEYS]);
     for (const m of matters) {
       if (m.responsibleAttorney) names.add(m.responsibleAttorney);
       if (m.originatingAttorney) names.add(m.originatingAttorney);
     }
     return Array.from(names).sort();
-  }, [matters, attorneyOptions]);
+  }, [matters]);
 
   const kpis = useMemo(() => {
     const open = matters.filter((m) => m.status === "open").length;
@@ -289,25 +304,19 @@ export function ManagingPartnerMattersView() {
 
   const handleLifecycle = (status: MatterLifecycleStatus) => {
     if (!selected) return;
-    void (async () => {
-      const next = await setMatterLifecycle(selected.id, status);
-      setMatters(next);
-      showToast(`Matter marked ${LIFECYCLE_LABELS[status].toLowerCase()}.`);
-    })();
+    setMatters(setMatterLifecycle(selected.id, status));
+    showToast(`Matter marked ${LIFECYCLE_LABELS[status].toLowerCase()}.`);
   };
 
   const handleAssign = (attorney: string) => {
     if (!selected) return;
     const value = attorney === "" ? null : attorney;
-    void (async () => {
-      const next = await assignResponsibleAttorney(selected.id, value);
-      setMatters(next);
-      showToast(
-        value
-          ? `Responsible attorney set to ${value}.`
-          : "Responsible attorney cleared (unassigned).",
-      );
-    })();
+    setMatters(assignResponsibleAttorney(selected.id, value));
+    showToast(
+      value
+        ? `Responsible attorney set to ${value}.`
+        : "Responsible attorney cleared (unassigned).",
+    );
   };
 
   const handleSaveFees = () => {
@@ -319,30 +328,26 @@ export function ManagingPartnerMattersView() {
       ? Number(feeDraft.flatFeeAmount)
       : null;
     const budgetCap = feeDraft.budgetCap ? Number(feeDraft.budgetCap) : null;
-    void (async () => {
-      const next = await setMatterFeeTerms(selected.id, {
+    setMatters(
+      setMatterFeeTerms(selected.id, {
         feeType: feeDraft.feeType,
         hourlyRate: Number.isFinite(hourlyRate) ? hourlyRate : null,
         flatFeeAmount: Number.isFinite(flatFeeAmount) ? flatFeeAmount : null,
         budgetCap: Number.isFinite(budgetCap) ? budgetCap : null,
         billingHold: feeDraft.billingHold,
-      });
-      setMatters(next);
-      showToast("Engagement fee terms updated.");
-    })();
+      }),
+    );
+    showToast("Engagement fee terms updated.");
   };
 
   const handleReview = (reviewed: boolean) => {
     if (!selected) return;
-    void (async () => {
-      const next = await markPartnerReviewed(selected.id, reviewed);
-      setMatters(next);
-      showToast(
-        reviewed
-          ? "Marked as reviewed by Managing Partner."
-          : "Returned to partner review queue.",
-      );
-    })();
+    setMatters(markPartnerReviewed(selected.id, reviewed));
+    showToast(
+      reviewed
+        ? "Marked as reviewed by Managing Partner."
+        : "Returned to partner review queue.",
+    );
   };
 
   return (
@@ -354,17 +359,21 @@ export function ManagingPartnerMattersView() {
         <Button
           variant="secondary"
           onClick={() => {
-            void (async () => {
-              const next = await resetFirmPortfolioMatters();
-              setMatters(next);
-              setFilters(defaultFilters);
-              showToast("Matter register refreshed from Supabase.");
-            })();
+            setMatters(resetFirmPortfolioMatters());
+            setFilters(defaultFilters);
+            showToast("Partner session edits cleared; Supabase base matters restored.");
           }}
         >
-          Refresh data
+          Reset session edits
         </Button>
       </PageHeader>
+
+      {error ? (
+        <p className="mb-4 text-sm text-red-700">{error}</p>
+      ) : null}
+      {loading ? (
+        <p className="mb-4 text-sm text-muted">Loading firm matters from CounselFlow…</p>
+      ) : null}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {kpis.map((kpi) => (
@@ -552,10 +561,20 @@ export function ManagingPartnerMattersView() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredMatters.length === 0 ? (
+            {!loading && filteredMatters.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="py-10 text-center text-muted">
-                  No matters match the current filters.
+                  {error
+                    ? "Matters could not be loaded."
+                    : matters.length === 0
+                      ? "No matters found in CounselFlow."
+                      : "No matters match the current filters."}
+                </TableCell>
+              </TableRow>
+            ) : loading ? (
+              <TableRow>
+                <TableCell colSpan={9} className="py-10 text-center text-muted">
+                  Loading…
                 </TableCell>
               </TableRow>
             ) : (
