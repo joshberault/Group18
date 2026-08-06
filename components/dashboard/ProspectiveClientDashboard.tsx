@@ -375,7 +375,7 @@ export function ProspectiveClientDashboard() {
     return (
       <>
         <PageHeader
-          title="Dashboard"
+          title="Consultation Request Form"
           description="Your consultation request has been received."
         />
         <Card className="mx-auto max-w-2xl border-gold-500/30">
@@ -413,7 +413,7 @@ export function ProspectiveClientDashboard() {
   return (
     <>
       <PageHeader
-        title="Dashboard"
+        title="Consultation Request Form"
         description="Request a consultation with CounselFlow. Complete the intake form below."
       />
 

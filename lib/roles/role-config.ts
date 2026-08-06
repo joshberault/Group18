@@ -215,7 +215,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
     displayName: USER_ROLE_LABELS.prospective_client,
     defaultRoute: "/dashboard",
     allowedRoutes: ["dashboard"],
-    dashboardTitle: "Consultation Request",
+    dashboardTitle: "Consultation Request Form",
     dashboardDescription:
       "Tell us about your legal needs and request a consultation.",
     permissions: [],

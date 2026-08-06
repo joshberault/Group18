@@ -26,7 +26,7 @@ export const ROLE_SUMMARY_TITLES: Record<UserRole, string> = {
   accounting_manager: "Accounting Operations Summary",
   firm_administrator: "Firm Administration Summary",
   client: "Client Portal Preview",
-  prospective_client: "Consultation Request",
+  prospective_client: "Consultation Request Form",
 };
 
 /** Neutral copy — metrics come from live data when available. */
