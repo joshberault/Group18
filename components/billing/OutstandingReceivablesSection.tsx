@@ -132,14 +132,16 @@ export function OutstandingReceivablesSection() {
   const [catalog, setCatalog] = useState<Invoice[]>([]);
 
   useEffect(() => {
-    const refresh = () => setCatalog(getAllManagedInvoices());
-    void refreshInvoiceCatalog().then(refresh);
-    refresh();
-    window.addEventListener(INVOICES_UPDATED_EVENT, refresh);
-    window.addEventListener("focus", refresh);
+    const applyCache = () => setCatalog(getAllManagedInvoices());
+    const reload = () => {
+      void refreshInvoiceCatalog().then(applyCache);
+    };
+    reload();
+    window.addEventListener(INVOICES_UPDATED_EVENT, applyCache);
+    window.addEventListener("focus", reload);
     return () => {
-      window.removeEventListener(INVOICES_UPDATED_EVENT, refresh);
-      window.removeEventListener("focus", refresh);
+      window.removeEventListener(INVOICES_UPDATED_EVENT, applyCache);
+      window.removeEventListener("focus", reload);
     };
   }, []);
 
@@ -235,6 +237,7 @@ export function OutstandingReceivablesSection() {
       reminderCount: nextCount,
       reminderStatus: "Reminder Sent",
     });
+    await refreshInvoiceCatalog();
     setCatalog(getAllManagedInvoices());
     setActionNote(
       updated
@@ -288,6 +291,7 @@ export function OutstandingReceivablesSection() {
         createdAt: recordedAt.toISOString(),
       });
     }
+    await refreshInvoiceCatalog();
     setCatalog(getAllManagedInvoices());
     setActionNote(
       updated

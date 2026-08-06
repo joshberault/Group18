@@ -1,6 +1,6 @@
 /**
- * Invoice Status Summary for the firm dashboard.
- * Counts and amounts from the managed invoice catalog (same as Invoice Management).
+ * Invoice Status Summary for Billing pages.
+ * Counts and amounts from the shared Supabase invoice list (post-refresh cache).
  */
 
 import type { Invoice, InvoiceStatus } from "@/lib/billing/invoice-types";
