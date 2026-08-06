@@ -14,10 +14,18 @@ import {
 import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { Button } from "@/components/ui/Button";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { caseInformation } from "@/lib/mock-data/client-portal";
+import {
+  deletePortalMessageWithLog,
+  getActivePortalMessages,
+  PORTAL_MESSAGES_EVENT,
+  savePortalMessage,
+  type PortalStoredMessage,
+} from "@/lib/client-portal/message-audit-store";
 import { addAttorneyMessageReceivedNotification } from "@/lib/attorney/notifications-store";
 import { addParalegalMessageReceivedNotification } from "@/lib/paralegal/notifications-store";
 import { cn } from "@/lib/utils/cn";
@@ -80,6 +88,20 @@ export function Messaging() {
   const [message, setMessage] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [storedMessages, setStoredMessages] = useState<PortalStoredMessage[]>(
+    [],
+  );
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const refreshMessages = () => setStoredMessages(getActivePortalMessages());
+    refreshMessages();
+    window.addEventListener(PORTAL_MESSAGES_EVENT, refreshMessages);
+    return () =>
+      window.removeEventListener(PORTAL_MESSAGES_EVENT, refreshMessages);
+  }, []);
 
   useEffect(() => {
     setSelectedCaseIds((current) => {
@@ -208,8 +230,36 @@ export function Messaging() {
         });
       }
     }
+
+    savePortalMessage({
+      subject: subject.trim(),
+      body: message.trim(),
+      topic,
+      senderName: identity.fullName,
+      recipientNames: selectedRecipientOptions.map((option) => option.label),
+      matterTitles: relatedCases.map((engagedCase) => engagedCase.title),
+    });
+
     setError(null);
+    setStatusMessage(null);
     setStep("sent");
+  }
+
+  function handleDeleteMessage(messageId: string) {
+    const result = deletePortalMessageWithLog({
+      messageId,
+      deletedByName: identity.fullName,
+      reason: deleteReason,
+    });
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setDeleteTargetId(null);
+    setDeleteReason("");
+    setError(null);
+    setStatusMessage("Message deleted and recorded in the message audit log.");
+    setStoredMessages(getActivePortalMessages());
   }
 
   function startAnotherMessage() {
@@ -249,7 +299,89 @@ export function Messaging() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-3xl space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Message history</CardTitle>
+          <CardDescription>
+            Messages cannot be deleted without recording a reason in the audit
+            log.
+          </CardDescription>
+        </CardHeader>
+        {statusMessage && (
+          <p className="mb-3 text-sm text-navy-900">{statusMessage}</p>
+        )}
+        {storedMessages.length === 0 ? (
+          <p className="text-sm text-muted">No sent messages yet.</p>
+        ) : (
+          <ul className="space-y-3">
+            {storedMessages.map((item) => (
+              <li
+                key={item.id}
+                className="rounded-xl border border-gray-200 px-4 py-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-navy-900">
+                      {item.subject}
+                    </p>
+                    <p className="mt-1 text-sm text-muted">{item.body}</p>
+                    <p className="mt-2 text-xs text-muted">
+                      To {item.recipientNames.join(", ") || "team"} ·{" "}
+                      {item.matterTitles.join(", ") || "General"} ·{" "}
+                      {new Date(item.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setDeleteTargetId(item.id);
+                      setDeleteReason("");
+                      setError(null);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                </div>
+                {deleteTargetId === item.id && (
+                  <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
+                    <Textarea
+                      label="Deletion reason (required)"
+                      rows={2}
+                      value={deleteReason}
+                      onChange={(event) => setDeleteReason(event.target.value)}
+                      placeholder="Why is this message being removed?"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        onClick={() => handleDeleteMessage(item.id)}
+                      >
+                        Confirm delete with log
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          setDeleteTargetId(null);
+                          setDeleteReason("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <div>
       <div className="mb-7 flex items-center justify-center gap-2" aria-label="Message progress">
         {MESSAGE_STEPS.map((item, index) => {
           const currentIndex = MESSAGE_STEPS.indexOf(step as Exclude<Step, "sent">);
@@ -544,6 +676,7 @@ export function Messaging() {
             </div>
           </form>
         )}
+      </div>
       </div>
     </div>
   );
