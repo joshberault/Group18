@@ -10,16 +10,16 @@ import {
   DollarSign,
 } from "lucide-react";
 import {
-  AM_APPROVAL_SUMMARIES,
-  AM_CASH_METRICS,
-  AM_CONTROL_STATUSES,
-  AM_HOT_ITEMS,
-  AM_RECENT_ACTIVITY,
-  AM_WORK_QUEUE,
+  fetchAccountingDashboard,
+  useSupabaseQuery,
+} from "@/lib/accounting";
+import {
   sortHotItems,
   type Urgency,
   type WorkQueueItem,
 } from "@/lib/accounting-manager/dashboard-data";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -61,14 +61,23 @@ function saveCompletedIds(ids: Set<string>) {
 
 export function AccountingManagerDashboard() {
   const router = useRouter();
-  const hotItems = useMemo(() => sortHotItems(AM_HOT_ITEMS), []);
+  const { data: dashboard, loading, error } = useSupabaseQuery(
+    fetchAccountingDashboard,
+    [],
+  );
+  const hotItems = useMemo(
+    () => sortHotItems(dashboard?.hotItems ?? []),
+    [dashboard],
+  );
   const [completedIds, setCompletedIds] = useState<Set<string>>(() => loadCompletedIds());
   const [deferItem, setDeferItem] = useState<WorkQueueItem | null>(null);
   const [deferReason, setDeferReason] = useState("");
   const [deferDate, setDeferDate] = useState("");
   const [toast, setToast] = useState<string | null>(null);
 
-  const activeQueue = AM_WORK_QUEUE.filter((item) => !completedIds.has(item.id));
+  const activeQueue = (dashboard?.workQueue ?? []).filter(
+    (item) => !completedIds.has(item.id),
+  );
 
   function markComplete(id: string) {
     const next = new Set(completedIds);
@@ -91,6 +100,20 @@ export function AccountingManagerDashboard() {
     setDeferDate("");
     setToast(`Deferred "${deferItem.task}" to ${deferDate || "a later date"}.`);
     setTimeout(() => setToast(null), 3000);
+  }
+
+  if (loading) {
+    return <LoadingState message="Loading accounting dashboard..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Dashboard unavailable"
+        description={error}
+        moduleLabel="Accounting Manager"
+      />
+    );
   }
 
   return (
@@ -179,7 +202,7 @@ export function AccountingManagerDashboard() {
             <CardDescription>Click any status to open the detailed module</CardDescription>
           </CardHeader>
           <div className="space-y-2 px-4 pb-4">
-            {AM_CONTROL_STATUSES.map((item) => (
+            {(dashboard?.controlStatuses ?? []).map((item) => (
               <Link
                 key={item.id}
                 href={item.href}
@@ -204,7 +227,7 @@ export function AccountingManagerDashboard() {
             <CardDescription>Counts and values awaiting your review</CardDescription>
           </CardHeader>
           <div className="grid gap-2 px-4 pb-4 sm:grid-cols-2">
-            {AM_APPROVAL_SUMMARIES.map((item) => (
+            {(dashboard?.approvalSummaries ?? []).map((item) => (
               <Link
                 key={item.id}
                 href={item.href}
@@ -223,7 +246,7 @@ export function AccountingManagerDashboard() {
       <section>
         <h2 className="mb-3 text-lg font-semibold text-navy-900">Cash &amp; Exposure</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-          {AM_CASH_METRICS.map((metric) => (
+          {(dashboard?.cashMetrics ?? []).map((metric) => (
             <Link
               key={metric.id}
               href={metric.href}
@@ -244,7 +267,7 @@ export function AccountingManagerDashboard() {
           <CardDescription>Financial-control events across the firm</CardDescription>
         </CardHeader>
         <div className="divide-y">
-          {AM_RECENT_ACTIVITY.map((item) => (
+          {(dashboard?.recentActivity ?? []).map((item) => (
             <Link
               key={item.id}
               href={item.href}

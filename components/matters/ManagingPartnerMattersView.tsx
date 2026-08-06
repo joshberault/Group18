@@ -31,7 +31,6 @@ import { BILLING_ROUTES, invoicesHref, receivablesHref } from "@/lib/billing/rou
 import { CONFLICT_STATUS_LABELS } from "@/lib/clients/types";
 import {
   FEE_TYPE_LABELS,
-  FIRM_PORTFOLIO_ATTORNEYS,
   formatFeeSummary,
   isAttorneyOverloaded,
   LIFECYCLE_LABELS,
@@ -42,6 +41,7 @@ import {
 import {
   assignResponsibleAttorney,
   FIRM_PORTFOLIO_UPDATE_EVENT,
+  getFirmPortfolioAttorneys,
   getFirmPortfolioMatters,
   markPartnerReviewed,
   resetFirmPortfolioMatters,
@@ -93,6 +93,7 @@ function conflictBadgeVariant(
 export function ManagingPartnerMattersView() {
   const searchParams = useSearchParams();
   const [matters, setMatters] = useState<FirmPortfolioMatter[]>([]);
+  const [attorneyOptions, setAttorneyOptions] = useState<string[]>([]);
   const [filters, setFilters] = useState<MatterFilters>(defaultFilters);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -105,7 +106,14 @@ export function ManagingPartnerMattersView() {
   });
 
   const refresh = useCallback(() => {
-    setMatters(getFirmPortfolioMatters());
+    void (async () => {
+      const [rows, attorneys] = await Promise.all([
+        getFirmPortfolioMatters(),
+        getFirmPortfolioAttorneys(),
+      ]);
+      setMatters(rows);
+      setAttorneyOptions(attorneys);
+    })();
   }, []);
 
   useEffect(() => {
@@ -152,13 +160,13 @@ export function ManagingPartnerMattersView() {
   }, [matters]);
 
   const attorneys = useMemo(() => {
-    const names = new Set<string>([...FIRM_PORTFOLIO_ATTORNEYS]);
+    const names = new Set<string>(attorneyOptions);
     for (const m of matters) {
       if (m.responsibleAttorney) names.add(m.responsibleAttorney);
       if (m.originatingAttorney) names.add(m.originatingAttorney);
     }
     return Array.from(names).sort();
-  }, [matters]);
+  }, [matters, attorneyOptions]);
 
   const kpis = useMemo(() => {
     const open = matters.filter((m) => m.status === "open").length;
@@ -281,19 +289,25 @@ export function ManagingPartnerMattersView() {
 
   const handleLifecycle = (status: MatterLifecycleStatus) => {
     if (!selected) return;
-    setMatters(setMatterLifecycle(selected.id, status));
-    showToast(`Matter marked ${LIFECYCLE_LABELS[status].toLowerCase()}.`);
+    void (async () => {
+      const next = await setMatterLifecycle(selected.id, status);
+      setMatters(next);
+      showToast(`Matter marked ${LIFECYCLE_LABELS[status].toLowerCase()}.`);
+    })();
   };
 
   const handleAssign = (attorney: string) => {
     if (!selected) return;
     const value = attorney === "" ? null : attorney;
-    setMatters(assignResponsibleAttorney(selected.id, value));
-    showToast(
-      value
-        ? `Responsible attorney set to ${value}.`
-        : "Responsible attorney cleared (unassigned).",
-    );
+    void (async () => {
+      const next = await assignResponsibleAttorney(selected.id, value);
+      setMatters(next);
+      showToast(
+        value
+          ? `Responsible attorney set to ${value}.`
+          : "Responsible attorney cleared (unassigned).",
+      );
+    })();
   };
 
   const handleSaveFees = () => {
@@ -305,26 +319,30 @@ export function ManagingPartnerMattersView() {
       ? Number(feeDraft.flatFeeAmount)
       : null;
     const budgetCap = feeDraft.budgetCap ? Number(feeDraft.budgetCap) : null;
-    setMatters(
-      setMatterFeeTerms(selected.id, {
+    void (async () => {
+      const next = await setMatterFeeTerms(selected.id, {
         feeType: feeDraft.feeType,
         hourlyRate: Number.isFinite(hourlyRate) ? hourlyRate : null,
         flatFeeAmount: Number.isFinite(flatFeeAmount) ? flatFeeAmount : null,
         budgetCap: Number.isFinite(budgetCap) ? budgetCap : null,
         billingHold: feeDraft.billingHold,
-      }),
-    );
-    showToast("Engagement fee terms updated.");
+      });
+      setMatters(next);
+      showToast("Engagement fee terms updated.");
+    })();
   };
 
   const handleReview = (reviewed: boolean) => {
     if (!selected) return;
-    setMatters(markPartnerReviewed(selected.id, reviewed));
-    showToast(
-      reviewed
-        ? "Marked as reviewed by Managing Partner."
-        : "Returned to partner review queue.",
-    );
+    void (async () => {
+      const next = await markPartnerReviewed(selected.id, reviewed);
+      setMatters(next);
+      showToast(
+        reviewed
+          ? "Marked as reviewed by Managing Partner."
+          : "Returned to partner review queue.",
+      );
+    })();
   };
 
   return (
@@ -336,12 +354,15 @@ export function ManagingPartnerMattersView() {
         <Button
           variant="secondary"
           onClick={() => {
-            setMatters(resetFirmPortfolioMatters());
-            setFilters(defaultFilters);
-            showToast("Demo matter register reset to seed data.");
+            void (async () => {
+              const next = await resetFirmPortfolioMatters();
+              setMatters(next);
+              setFilters(defaultFilters);
+              showToast("Matter register refreshed from Supabase.");
+            })();
           }}
         >
-          Reset demo data
+          Refresh data
         </Button>
       </PageHeader>
 

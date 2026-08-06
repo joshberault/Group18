@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   FileDown,
@@ -29,18 +29,15 @@ import {
 } from "@/components/ui/Table";
 import { Toast } from "@/components/ui/Toast";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
-import {
-  apSummaryKpis,
-  matterCosts,
-  paymentApprovals,
-  reimbursements,
-  vendorBills,
-  vendors,
-  type PaymentApproval,
-  type Reimbursement,
-  type Vendor,
-  type VendorBill,
+import { fetchPayablesWorkspace, useSupabaseQuery } from "@/lib/accounting";
+import type {
+  PaymentApproval,
+  Reimbursement,
+  Vendor,
+  VendorBill,
 } from "@/lib/mock-data/accounting-manager/ap";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { formatCurrency } from "@/lib/utils/cn";
 
 type ApTab =
@@ -66,12 +63,26 @@ function billStatusVariant(status: string) {
 }
 
 export function ExpensesApView() {
+  const { data: workspace, loading, error } = useSupabaseQuery(
+    fetchPayablesWorkspace,
+    [],
+  );
+  const apSummaryKpis = workspace?.kpis ?? [];
+  const vendors = workspace?.vendors ?? [];
+  const matterCosts = workspace?.matterCosts ?? [];
   const [activeTab, setActiveTab] = useState<ApTab>("vendor-bills");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [bills, setBills] = useState(vendorBills);
-  const [approvals, setApprovals] = useState(paymentApprovals);
-  const [reimbursementList, setReimbursementList] = useState(reimbursements);
+  const [bills, setBills] = useState<VendorBill[]>([]);
+  const [approvals, setApprovals] = useState<PaymentApproval[]>([]);
+  const [reimbursementList, setReimbursementList] = useState<Reimbursement[]>([]);
+  useEffect(() => {
+    if (workspace) {
+      setBills(workspace.bills);
+      setApprovals(workspace.approvals);
+      setReimbursementList(workspace.reimbursements);
+    }
+  }, [workspace]);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [selectedBill, setSelectedBill] = useState<VendorBill | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; action: () => void } | null>(null);
@@ -252,6 +263,20 @@ export function ExpensesApView() {
     }
     setToast("Data exported");
   };
+
+  if (loading) {
+    return <LoadingState message="Loading payables..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Payables data unavailable"
+        description={error}
+        moduleLabel="Expenses & AP"
+      />
+    );
+  }
 
   return (
     <>

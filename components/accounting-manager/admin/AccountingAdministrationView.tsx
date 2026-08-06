@@ -1,14 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Pencil, Plus, Save, X } from "lucide-react";
 import {
   accountTypeOptions,
-  amAccountingPeriods,
-  amApprovalRules,
-  amBillingSettings,
-  amChartOfAccounts,
-  amIntegrations,
   amOfficeEntities,
   amPermissionsMatrix,
   normalBalanceOptions,
@@ -19,6 +14,9 @@ import {
   type IntegrationConfig,
   type PeriodStatus,
 } from "@/lib/mock-data/accounting-manager/administration";
+import { fetchAdministrationWorkspace, useSupabaseQuery } from "@/lib/accounting";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { formatCurrency } from "@/lib/utils/cn";
 import { AccountingTabs } from "@/components/accounting-manager/shared/AccountingTabs";
 import { Badge } from "@/components/ui/Badge";
@@ -83,27 +81,42 @@ function cloneIntegrations(data: IntegrationConfig[]) {
 }
 
 export function AccountingAdministrationView() {
+  const { data: workspace, loading, error } = useSupabaseQuery(
+    fetchAdministrationWorkspace,
+    [],
+  );
   const [activeTab, setActiveTab] = useState("periods");
   const [toast, setToast] = useState<string | null>(null);
 
-  const [periods, setPeriods] = useState<AccountingPeriod[]>(() =>
-    clonePeriods(amAccountingPeriods),
-  );
-  const [accounts, setAccounts] = useState<ChartOfAccount[]>(() =>
-    cloneAccounts(amChartOfAccounts),
-  );
-  const [rules, setRules] = useState<ApprovalRule[]>(() =>
-    cloneRules(amApprovalRules),
-  );
-  const [billing, setBilling] = useState<BillingPaymentSettings>(() => ({
-    ...amBillingSettings,
-    acceptedPaymentMethods: [...amBillingSettings.acceptedPaymentMethods],
-    writeOffReasonCodes: [...amBillingSettings.writeOffReasonCodes],
-    creditMemoReasonCodes: [...amBillingSettings.creditMemoReasonCodes],
-  }));
-  const [integrations, setIntegrations] = useState<IntegrationConfig[]>(() =>
-    cloneIntegrations(amIntegrations),
-  );
+  const [periods, setPeriods] = useState<AccountingPeriod[]>([]);
+  const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
+  const [rules, setRules] = useState<ApprovalRule[]>([]);
+  const [billing, setBilling] = useState<BillingPaymentSettings>({
+    defaultPaymentTerms: "Net 30",
+    lateFeeEnabled: true,
+    lateFeePercent: 1.5,
+    lateFeeGraceDays: 10,
+    billingCycleDefault: "Monthly",
+    invoiceNumberFormat: "INV-{YYYY}-{SEQ}",
+    acceptedPaymentMethods: ["Check", "ACH"],
+    writeOffReasonCodes: ["Uncollectible"],
+    creditMemoReasonCodes: ["Overpayment"],
+  });
+  const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
+
+  useEffect(() => {
+    if (!workspace) return;
+    setPeriods(clonePeriods(workspace.periods));
+    setAccounts(cloneAccounts(workspace.chartOfAccounts));
+    setRules(cloneRules(workspace.approvalRules));
+    setBilling({
+      ...workspace.billingSettings,
+      acceptedPaymentMethods: [...workspace.billingSettings.acceptedPaymentMethods],
+      writeOffReasonCodes: [...workspace.billingSettings.writeOffReasonCodes],
+      creditMemoReasonCodes: [...workspace.billingSettings.creditMemoReasonCodes],
+    });
+    setIntegrations(cloneIntegrations(workspace.integrations));
+  }, [workspace]);
 
   const [coaSearch, setCoaSearch] = useState("");
   const [coaTypeFilter, setCoaTypeFilter] = useState("all");
@@ -350,6 +363,20 @@ export function AccountingAdministrationView() {
     { key: "editFinancialSettings", label: "Edit Financial Settings" },
     { key: "exportFinancialRecords", label: "Export Financial Records" },
   ];
+
+  if (loading) {
+    return <LoadingState message="Loading administration settings..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Administration data unavailable"
+        description={error}
+        moduleLabel="Accounting Administration"
+      />
+    );
+  }
 
   return (
     <>

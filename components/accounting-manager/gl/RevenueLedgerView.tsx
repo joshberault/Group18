@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   FileDown,
@@ -27,20 +27,20 @@ import {
   TableRow,
 } from "@/components/ui/Table";
 import { Toast } from "@/components/ui/Toast";
-import { useDemoTimeWorkflow } from "@/hooks/useDemoTimeWorkflow";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import {
-  chartOfAccounts,
-  closeTasks,
-  glLines,
-  glSummaryKpis,
-  journalEntries,
-  revenueRecognitionItems,
-  trialBalance,
-  type CloseTask,
-  type JournalEntry,
-  type JournalEntryLine,
+  fetchRevenueLedgerWorkspace,
+  postJournalEntry,
+  useSupabaseQuery,
+} from "@/lib/accounting";
+import type {
+  CloseTask,
+  JournalEntry,
+  JournalEntryLine,
 } from "@/lib/mock-data/accounting-manager/gl";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { formatCurrency } from "@/lib/utils/cn";
 
 type GlTab =
@@ -68,10 +68,10 @@ interface DraftLine {
   credit: string;
 }
 
-function emptyLine(): DraftLine {
+function emptyLine(defaultCode = "1010"): DraftLine {
   return {
     id: crypto.randomUUID(),
-    accountCode: chartOfAccounts[0].code,
+    accountCode: defaultCode,
     description: "",
     debit: "",
     credit: "",
@@ -86,14 +86,33 @@ function closeTaskVariant(status: string) {
 }
 
 export function RevenueLedgerView() {
+  const { selectedRole } = useDemoRole();
+  const { data: workspace, loading, error, refresh } = useSupabaseQuery(
+    fetchRevenueLedgerWorkspace,
+    [],
+  );
+  const glSummaryKpis = workspace?.kpis ?? [];
+  const revenueRecognitionItems = workspace?.revenueItems ?? [];
+  const glLines = workspace?.glLines ?? [];
+  const trialBalance = workspace?.trialBalance ?? [];
+  const chartOfAccounts = workspace?.chartOfAccounts ?? [];
+  const defaultAccountCode = chartOfAccounts[0]?.code ?? "1010";
   const [activeTab, setActiveTab] = useState<GlTab>("overview");
-  const [entries, setEntries] = useState(journalEntries);
-  const { journalEntries: demoJournalEntries, payrollAccruals } = useDemoTimeWorkflow();
-  const [tasks, setTasks] = useState(closeTasks);
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [tasks, setTasks] = useState<CloseTask[]>([]);
+  useEffect(() => {
+    if (workspace) {
+      setEntries(workspace.journalEntries);
+      setTasks(workspace.closeTasks);
+    }
+  }, [workspace]);
   const [showJeForm, setShowJeForm] = useState(false);
   const [jeDate, setJeDate] = useState("2026-08-05");
   const [jeDescription, setJeDescription] = useState("");
-  const [jeLines, setJeLines] = useState<DraftLine[]>([emptyLine(), emptyLine()]);
+  const [jeLines, setJeLines] = useState<DraftLine[]>(() => [
+    emptyLine(defaultAccountCode),
+    emptyLine(defaultAccountCode),
+  ]);
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; action: () => void } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [accountFilter, setAccountFilter] = useState("all");
@@ -126,24 +145,6 @@ export function RevenueLedgerView() {
     const complete = tasks.filter((t) => t.status === "Complete").length;
     return Math.round((complete / tasks.length) * 100);
   }, [tasks]);
-
-  const mergedJournalEntries = useMemo(() => {
-    const demoMapped: JournalEntry[] = demoJournalEntries.map((entry) => ({
-      id: entry.id,
-      entryNumber: entry.entryNumber,
-      date: entry.date,
-      description: entry.description,
-      status: entry.status,
-      totalDebit: entry.totalDebit,
-      totalCredit: entry.totalCredit,
-      createdBy: entry.createdBy,
-      postedDate: entry.postedDate,
-      lines: entry.lines,
-    }));
-    const demoIds = new Set(demoMapped.map((entry) => entry.id));
-    const localOnly = entries.filter((entry) => !demoIds.has(entry.id));
-    return [...demoMapped, ...localOnly];
-  }, [demoJournalEntries, entries]);
 
   const updateLine = (id: string, field: keyof DraftLine, value: string) => {
     setJeLines((prev) =>
@@ -188,7 +189,7 @@ export function RevenueLedgerView() {
     setEntries((prev) => [newEntry, ...prev]);
     setShowJeForm(false);
     setJeDescription("");
-    setJeLines([emptyLine(), emptyLine()]);
+    setJeLines([emptyLine(defaultAccountCode), emptyLine(defaultAccountCode)]);
     setToast("Journal entry created as draft");
   };
 
@@ -197,15 +198,19 @@ export function RevenueLedgerView() {
       title: "Post Journal Entry",
       message: `Post ${entry.entryNumber} for ${formatCurrency(entry.totalDebit)}? This will update the general ledger.`,
       action: () => {
-        setEntries((prev) =>
-          prev.map((e) =>
-            e.id === entry.id
-              ? { ...e, status: "Posted", postedDate: "2026-08-05" }
-              : e,
-          ),
-        );
-        setToast(`${entry.entryNumber} posted successfully`);
-        setConfirmAction(null);
+        void (async () => {
+          const result = await postJournalEntry({
+            entryId: entry.id,
+            actor: { name: "Alex Morgan", role: selectedRole },
+          });
+          if (result.ok) {
+            setToast(`${entry.entryNumber} posted successfully`);
+            await refresh();
+          } else {
+            setToast(result.error ?? "Failed to post entry");
+          }
+          setConfirmAction(null);
+        })();
       },
     });
   };
@@ -250,6 +255,20 @@ export function RevenueLedgerView() {
     setToast("Trial balance exported");
   };
 
+  if (loading) {
+    return <LoadingState message="Loading general ledger..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Ledger data unavailable"
+        description={error}
+        moduleLabel="Revenue & General Ledger"
+      />
+    );
+  }
+
   return (
     <>
       <PageHeader
@@ -285,15 +304,6 @@ export function RevenueLedgerView() {
           />
         ))}
       </div>
-
-      {payrollAccruals.length > 0 && (
-        <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
-          {payrollAccruals.length} approved time{" "}
-          {payrollAccruals.length === 1 ? "entry has" : "entries have"} posted
-          payroll accruals to <strong>Accrued Wages Payable (2300)</strong>. View
-          them in Journal Entries below.
-        </div>
-      )}
 
       <AccountingTabs
         tabs={TABS}
@@ -336,8 +346,8 @@ export function RevenueLedgerView() {
               </TableHeader>
               <TableBody>
                 {(activeTab === "overview"
-                  ? mergedJournalEntries.slice(0, 4)
-                  : mergedJournalEntries
+                  ? entries.slice(0, 4)
+                  : entries
                 ).map(
                   (entry) => (
                     <TableRow key={entry.id}>

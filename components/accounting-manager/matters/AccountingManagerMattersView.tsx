@@ -12,9 +12,12 @@ import {
 } from "lucide-react";
 import {
   AM_ATTORNEYS,
-  amMatters,
   type AmMatterEntity,
 } from "@/lib/mock-data/accounting-manager/entities";
+import { fetchAccountingMatters, releaseMatterBillingHold, useSupabaseQuery } from "@/lib/accounting";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import { invoicesHref } from "@/lib/billing/routes";
 import { formatCurrency } from "@/lib/utils/cn";
@@ -90,7 +93,12 @@ export function AccountingManagerMattersView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlFilter = searchParams.get("filter");
-  const [matters, setMatters] = useState(amMatters);
+  const { data: mattersData, loading, error, refresh } = useSupabaseQuery(
+    fetchAccountingMatters,
+    [],
+  );
+  const matters = mattersData ?? [];
+  const { selectedRole } = useDemoRole();
   const [filters, setFilters] = useState<MatterFilters>(() => ({
     ...defaultFilters,
     financialStatus:
@@ -281,6 +289,20 @@ export function AccountingManagerMattersView() {
 
   const outstandingAr = (m: AmMatterEntity) =>
     m.billedToDate - m.collectedToDate;
+
+  if (loading) {
+    return <LoadingState message="Loading matter financials..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Matter data unavailable"
+        description={error}
+        moduleLabel="Matters"
+      />
+    );
+  }
 
   return (
     <>
@@ -603,27 +625,27 @@ export function AccountingManagerMattersView() {
                 <Button
                   size="sm"
                   onClick={() => {
-                    setMatters((prev) =>
-                      prev.map((matter) =>
-                        matter.id === selectedMatter.id
-                          ? {
-                              ...matter,
-                              billingHold: false,
-                              financialStatus: "On Track",
-                            }
-                          : matter,
-                      ),
-                    );
-                    setSelectedMatter((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            billingHold: false,
-                            financialStatus: "On Track",
-                          }
-                        : prev,
-                    );
-                    setToast(`Billing hold released for ${selectedMatter.matterName}.`);
+                    void (async () => {
+                      const result = await releaseMatterBillingHold({
+                        matterId: selectedMatter.id,
+                        actor: { name: "Alex Morgan", role: selectedRole },
+                      });
+                      if (result.ok) {
+                        setSelectedMatter((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                billingHold: false,
+                                financialStatus: "On Track",
+                              }
+                            : prev,
+                        );
+                        setToast(`Billing hold released for ${selectedMatter.matterName}.`);
+                        await refresh();
+                      } else {
+                        setToast(result.error ?? "Failed to release billing hold");
+                      }
+                    })();
                   }}
                 >
                   Release Hold

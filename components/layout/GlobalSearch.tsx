@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
-import { searchGlobalRecords, type GlobalSearchResult } from "@/lib/demo/global-search";
+import { searchGlobalRecordsFromSupabase } from "@/lib/demo/global-search-supabase";
+import type { GlobalSearchResult } from "@/lib/demo/global-search";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils/cn";
 
@@ -22,12 +23,19 @@ export function GlobalSearch() {
   const { selectedRole } = useDemoRole();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [results, setResults] = useState<GlobalSearchResult[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const results = useMemo(
-    () => searchGlobalRecords(query, selectedRole),
-    [query, selectedRole],
-  );
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const rows = await searchGlobalRecordsFromSupabase(query, selectedRole);
+      if (!cancelled) setResults(rows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [query, selectedRole]);
 
   useEffect(() => {
     function handleClick(event: MouseEvent) {
@@ -81,16 +89,18 @@ export function GlobalSearch() {
                     )}
                     onClick={() => navigate(result)}
                   >
-                    <span className="mt-0.5 rounded bg-navy-100 px-2 py-0.5 text-xs font-medium text-navy-900">
+                    <span className="mt-0.5 rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-navy-800">
                       {TYPE_LABELS[result.type]}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium text-navy-900">
+                      <span className="block truncate text-sm font-medium text-navy-900">
                         {result.label}
                       </span>
-                      <span className="block truncate text-xs text-muted">
-                        {result.reference}
-                      </span>
+                      {result.reference ? (
+                        <span className="block truncate text-xs text-muted">
+                          {result.reference}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                 </li>

@@ -7,15 +7,10 @@ import {
   Send,
   Upload,
 } from "lucide-react";
-import {
-  billingBottlenecks,
-  billingDeadlines,
-  billingExceptions,
-  billingHealthKpis,
-  billingMonthlyProgress,
-  billingQueueRecords,
-  billingRecentActivity,
-} from "@/lib/mock-data/billing-oversight";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { fetchBillingOversightWorkspace, useSupabaseQuery } from "@/lib/accounting";
+import type { BillingException, BillingDeadline, BillingActivityEvent } from "@/lib/mock-data/billing-oversight";
 import { downloadTextFile } from "@/lib/accounting-manager/download-text";
 import { formatCurrency } from "@/lib/utils/cn";
 import {
@@ -48,6 +43,25 @@ const defaultQueueFilters: BillingQueueFilters = {
 };
 
 export function BillingOversightView() {
+  const { data: workspace, loading, error } = useSupabaseQuery(
+    fetchBillingOversightWorkspace,
+    [],
+  );
+  const billingHealthKpis = workspace?.healthKpis ?? [];
+  const billingMonthlyProgress =
+    workspace?.monthlyProgress ?? {
+      label: "August 2026",
+      completed: 0,
+      total: 0,
+      percent: 0,
+      billedAmount: 0,
+      unbilledWip: 0,
+    };
+  const billingBottlenecks = workspace?.bottlenecks ?? [];
+  const billingQueueRecords = workspace?.queueRecords ?? [];
+  const billingExceptions: BillingException[] = [];
+  const billingDeadlines: BillingDeadline[] = [];
+  const billingRecentActivity: BillingActivityEvent[] = [];
   const queueRef = useRef<HTMLDivElement>(null);
   const [queueFilters, setQueueFilters] =
     useState<BillingQueueFilters>(defaultQueueFilters);
@@ -111,6 +125,20 @@ export function BillingOversightView() {
         setConfirmAction(null);
       },
     });
+  }
+
+  if (loading) {
+    return <LoadingState message="Loading billing oversight..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Billing data unavailable"
+        description={error}
+        moduleLabel="Billing Oversight"
+      />
+    );
   }
 
   return (
@@ -281,6 +309,7 @@ export function BillingOversightView() {
         <BillingQueueSection
           filters={queueFilters}
           onFiltersChange={setQueueFilters}
+          records={billingQueueRecords}
         />
       </div>
 
