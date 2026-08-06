@@ -205,7 +205,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   client: {
     displayName: USER_ROLE_LABELS.client,
-    defaultRoute: "/client-portal",
+    defaultRoute: "/client-portal/account-summary",
     allowedRoutes: ["client_portal"],
     dashboardTitle: "Client Portal",
     dashboardDescription:
@@ -276,6 +276,14 @@ function canAccessStandardRoute(role: UserRole, pathname: string): boolean {
 export function canAccessRoute(role: UserRole, pathname: string): boolean {
   if (isClientPortalRoute(pathname)) {
     return role === "client" || role === "firm_administrator";
+  }
+
+  // Client demo uses portal tabs only — not the firm Dashboard.
+  if (
+    role === "client" &&
+    (pathname === "/dashboard" || pathname.startsWith("/dashboard/"))
+  ) {
+    return false;
   }
 
   if (role === "accounting_manager") {
