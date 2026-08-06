@@ -18,6 +18,7 @@ import {
   arSummaryKpis,
   type CollectionRisk,
 } from "@/lib/mock-data/ar-oversight";
+import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import { formatCurrency } from "@/lib/utils/cn";
 import {
   CollectionsQueueSection,
@@ -31,6 +32,10 @@ import { KPICard } from "@/components/ui/KPICard";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
+import { Toast } from "@/components/ui/Toast";
 import {
   Table,
   TableBody,
@@ -54,17 +59,122 @@ const defaultQueueFilters: CollectionsQueueFilters = {
   kpiFilter: "",
 };
 
-function riskVariant(risk: CollectionRisk) {
-  if (risk === "Green") return "success" as const;
-  if (risk === "Yellow") return "warning" as const;
-  return "danger" as const;
-}
+const paymentExceptionFilters: Record<
+  string,
+  Partial<CollectionsQueueFilters>
+> = {
+  pe1: { exceptionsOnly: true, exceptionType: "unapplied_payments" },
+  pe2: { exceptionsOnly: true, search: "partial" },
+  pe3: { exceptionsOnly: true, search: "failed" },
+  pe4: { exceptionsOnly: true, search: "overpayment" },
+  pe5: { exceptionsOnly: true, exceptionType: "credits_not_applied" },
+  pe6: { exceptionsOnly: true, search: "returned" },
+  pe7: { exceptionsOnly: true, search: "pending deposit" },
+};
+
+type ArModal =
+  | { type: "record_payment" }
+  | { type: "apply_cash" }
+  | null;
 
 export function AccountsReceivableView() {
   const queueRef = useRef<HTMLDivElement>(null);
   const [queueFilters, setQueueFilters] =
     useState<CollectionsQueueFilters>(defaultQueueFilters);
-  const [prototypeAction, setPrototypeAction] = useState<string | null>(null);
+  const [modal, setModal] = useState<ArModal>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [paymentClient, setPaymentClient] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("Check");
+  const [paymentNote, setPaymentNote] = useState("");
+  const [cashClient, setCashClient] = useState("");
+  const [cashAmount, setCashAmount] = useState("");
+  const [cashInvoice, setCashInvoice] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [sessionActivity, setSessionActivity] = useState(arRecentActivity);
+
+  function riskVariant(risk: CollectionRisk) {
+    if (risk === "Green") return "success" as const;
+    if (risk === "Yellow") return "warning" as const;
+    return "danger" as const;
+  }
+
+  function closeModal() {
+    setModal(null);
+    setFormError(null);
+    setPaymentClient("");
+    setPaymentAmount("");
+    setPaymentNote("");
+    setCashClient("");
+    setCashAmount("");
+    setCashInvoice("");
+  }
+
+  function submitRecordPayment() {
+    const amount = Number(paymentAmount);
+    if (!paymentClient.trim()) {
+      setFormError("Client is required.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setFormError("Payment amount must be greater than zero.");
+      return;
+    }
+    setSessionActivity((prev) => [
+      {
+        id: `session-${Date.now()}`,
+        action: "Payment recorded (session)",
+        matter: paymentClient.trim(),
+        description: `${formatCurrency(amount)} via ${paymentMethod}`,
+        user: "Accounting Manager",
+        relativeTime: "Just now",
+      },
+      ...prev,
+    ]);
+    setToast(
+      `Payment of ${formatCurrency(amount)} recorded for ${paymentClient.trim()} (session only).`,
+    );
+    closeModal();
+  }
+
+  function submitApplyCash() {
+    const amount = Number(cashAmount);
+    if (!cashClient.trim() || !cashInvoice.trim()) {
+      setFormError("Client and invoice are required.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setFormError("Amount must be greater than zero.");
+      return;
+    }
+    setSessionActivity((prev) => [
+      {
+        id: `session-${Date.now()}`,
+        action: "Unapplied cash applied (session)",
+        matter: cashClient.trim(),
+        description: `${formatCurrency(amount)} applied to ${cashInvoice.trim()}`,
+        user: "Accounting Manager",
+        relativeTime: "Just now",
+      },
+      ...prev,
+    ]);
+    setToast("Unapplied cash applied in this session only.");
+    closeModal();
+  }
+
+  function exportAgingReport() {
+    exportToCsv(
+      "ar-aging-report.csv",
+      ["Aging Bucket", "Amount", "Invoice Count", "Percent of Total"],
+      arAgingBuckets.map((bucket) => [
+        bucket.label,
+        String(bucket.amount),
+        String(bucket.invoiceCount),
+        `${bucket.percentOfTotal}%`,
+      ]),
+    );
+    setToast("A/R aging report exported.");
+  }
 
   const scrollToQueue = () => {
     queueRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -93,13 +203,13 @@ export function AccountsReceivableView() {
         description="Monitor outstanding invoices, collections, payment activity, aging, and receivable exceptions across the firm."
       >
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setPrototypeAction("Record Payment")}>
+          <Button onClick={() => setModal({ type: "record_payment" })}>
             <DollarSign className="h-4 w-4" />
             Record Payment
           </Button>
           <Button
             variant="secondary"
-            onClick={() => setPrototypeAction("Apply Unapplied Cash")}
+            onClick={() => setModal({ type: "apply_cash" })}
           >
             <CreditCard className="h-4 w-4" />
             Apply Unapplied Cash
@@ -116,10 +226,7 @@ export function AccountsReceivableView() {
             <FileText className="h-4 w-4" />
             Review Write-Offs
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setPrototypeAction("Export Aging Report")}
-          >
+          <Button variant="secondary" onClick={exportAgingReport}>
             <FileDown className="h-4 w-4" />
             Export Aging Report
           </Button>
@@ -374,9 +481,13 @@ export function AccountsReceivableView() {
           </CardHeader>
           <div className="grid gap-3 px-6 pb-6 sm:grid-cols-2">
             {arPaymentExceptions.map((item) => (
-              <div
+              <button
                 key={item.id}
-                className="rounded-lg border border-gray-200 p-4"
+                type="button"
+                onClick={() =>
+                  resetAndApply(paymentExceptionFilters[item.id] ?? { exceptionsOnly: true })
+                }
+                className="rounded-lg border border-gray-200 p-4 text-left transition-shadow hover:shadow-md"
               >
                 <p className="text-sm font-medium text-navy-900">
                   {item.label}
@@ -387,7 +498,7 @@ export function AccountsReceivableView() {
                 <p className="text-xs text-muted">
                   {formatCurrency(item.amount)}
                 </p>
-              </div>
+              </button>
             ))}
           </div>
         </Card>
@@ -401,7 +512,7 @@ export function AccountsReceivableView() {
           <CardTitle>Recent Collection Activity</CardTitle>
         </CardHeader>
         <ul className="space-y-3 px-6 pb-6">
-          {arRecentActivity.map((event) => (
+          {sessionActivity.map((event) => (
             <li
               key={event.id}
               className="border-b border-gray-100 pb-3 last:border-0 last:pb-0"
@@ -423,19 +534,92 @@ export function AccountsReceivableView() {
       </Card>
 
       <Modal
-        isOpen={Boolean(prototypeAction)}
-        onClose={() => setPrototypeAction(null)}
-        title="Prototype action"
-        description={prototypeAction ?? undefined}
+        isOpen={modal?.type === "record_payment"}
+        onClose={closeModal}
+        title="Record Payment"
+        description="Session-only payment entry for demo testing."
       >
-        <p className="text-sm text-muted">
-          This action is not connected to a backend process in the current
-          prototype. No receivable records were changed.
-        </p>
-        <Button className="mt-4" onClick={() => setPrototypeAction(null)}>
-          Close
-        </Button>
+        <div className="space-y-4">
+          <Input
+            label="Client"
+            value={paymentClient}
+            onChange={(e) => setPaymentClient(e.target.value)}
+            required
+          />
+          <Input
+            label="Amount"
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={paymentAmount}
+            onChange={(e) => setPaymentAmount(e.target.value)}
+            required
+          />
+          <Select
+            label="Payment method"
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value)}
+            options={[
+              { value: "Check", label: "Check" },
+              { value: "ACH", label: "ACH" },
+              { value: "Wire", label: "Wire" },
+              { value: "Credit Card", label: "Credit Card" },
+            ]}
+          />
+          <Textarea
+            label="Notes (optional)"
+            value={paymentNote}
+            onChange={(e) => setPaymentNote(e.target.value)}
+          />
+          {formError && <p className="text-sm text-red-600">{formError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button onClick={submitRecordPayment}>Record payment</Button>
+          </div>
+        </div>
       </Modal>
+
+      <Modal
+        isOpen={modal?.type === "apply_cash"}
+        onClose={closeModal}
+        title="Apply Unapplied Cash"
+        description="Apply unapplied cash to an open invoice in this session."
+      >
+        <div className="space-y-4">
+          <Input
+            label="Client"
+            value={cashClient}
+            onChange={(e) => setCashClient(e.target.value)}
+            required
+          />
+          <Input
+            label="Invoice number"
+            value={cashInvoice}
+            onChange={(e) => setCashInvoice(e.target.value)}
+            required
+          />
+          <Input
+            label="Amount to apply"
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={cashAmount}
+            onChange={(e) => setCashAmount(e.target.value)}
+            required
+          />
+          {formError && <p className="text-sm text-red-600">{formError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button onClick={submitApplyCash}>Apply cash</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Toast message={toast} onDismiss={() => setToast(null)} />
     </>
   );
 }

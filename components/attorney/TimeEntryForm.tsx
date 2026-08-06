@@ -2,21 +2,34 @@
 
 import { useState } from "react";
 import { createClientSafe } from "@/lib/supabase/client";
+import {
+  profileIdForRole,
+  submitDemoTimeEntry,
+  submitterNameForRole,
+} from "@/lib/demo/time-workflow-store";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import type { UserRole } from "@/lib/types";
 import type { Matter } from "@/types/database";
 
 type Props = {
   matters: Matter[];
   profileId: string;
+  submitterRole?: UserRole;
   onCreated: () => void;
   previewMode?: boolean;
 };
 
-export function TimeEntryForm({ matters, profileId, onCreated, previewMode = false }: Props) {
+export function TimeEntryForm({
+  matters,
+  profileId,
+  submitterRole = "attorney",
+  onCreated,
+  previewMode = false,
+}: Props) {
   const [matterId, setMatterId] = useState(matters[0]?.id ?? "");
   const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
   const [hours, setHours] = useState("1.0");
@@ -24,17 +37,47 @@ export function TimeEntryForm({ matters, profileId, onCreated, previewMode = fal
   const [isBillable, setIsBillable] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    const parsedHours = Number(hours);
+    if (!Number.isFinite(parsedHours) || parsedHours <= 0) {
+      setError("Hours must be greater than zero.");
+      return;
+    }
+
+    if (!description.trim()) {
+      setError("Description is required.");
+      return;
+    }
 
     if (previewMode) {
-      setError("Demo mode — sign in later to save real entries.");
+      setLoading(true);
+      submitDemoTimeEntry({
+        profileId: profileIdForRole(submitterRole) || profileId,
+        submitterName: submitterNameForRole(submitterRole),
+        submitterRole,
+        matterId,
+        entryDate,
+        hours: parsedHours,
+        description: description.trim(),
+        isBillable,
+      });
+      setLoading(false);
+      setDescription("");
+      setHours("1.0");
+      setSuccess(
+        "Time entry submitted for manager approval. Switch to Managing Partner or Firm Administrator to review.",
+      );
+      onCreated();
       return;
     }
 
     setLoading(true);
-    setError(null);
 
     const supabase = createClientSafe();
     if (!supabase) {
@@ -47,8 +90,8 @@ export function TimeEntryForm({ matters, profileId, onCreated, previewMode = fal
       matter_id: matterId,
       profile_id: profileId,
       entry_date: entryDate,
-      hours: Number(hours),
-      description,
+      hours: parsedHours,
+      description: description.trim(),
       is_billable: isBillable,
       status: "pending",
     });
@@ -62,6 +105,7 @@ export function TimeEntryForm({ matters, profileId, onCreated, previewMode = fal
 
     setDescription("");
     setHours("1.0");
+    setSuccess("Time entry submitted for manager approval.");
     onCreated();
   }
 
@@ -109,6 +153,7 @@ export function TimeEntryForm({ matters, profileId, onCreated, previewMode = fal
           </div>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
+        {success && <p className="text-sm text-green-700">{success}</p>}
         <Button type="submit" disabled={loading || matters.length === 0}>
           {loading ? "Submitting..." : "Submit for Manager Approval"}
         </Button>
