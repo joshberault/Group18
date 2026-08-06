@@ -32,6 +32,7 @@ import {
   applyRetainerToMatter,
   fetchMatterRetainerBalance,
 } from "@/lib/billing/retainer";
+import { pushFinalizedInvoiceToClientPortal } from "@/lib/billing/finalize-invoice-to-portal";
 import { toIsoDate } from "@/lib/billing/billing-period";
 import {
   BILLING_ROUTES,
@@ -874,13 +875,24 @@ export function GenerateInvoiceWizard() {
     setFinalizing(false);
 
     if (saved.ok) {
+      const portalPush = pushFinalizedInvoiceToClientPortal({
+        invoiceNumber: number,
+        invoiceDate: invDate,
+        totalDue: totals.totalDue,
+        client,
+        matter,
+      });
       setManagementLinkNumber(number);
       const retainerNote =
         retainerToApply > 0
           ? ` Applied ${money(retainerToApply)} from matter retainer (remaining ${money(remainingMatterRetainer)}).`
           : "";
       setSuccessNote(
-        `Invoice ${number} finalized as Sent and saved to firm Invoice Management (${saved.count} invoice${saved.count === 1 ? "" : "s"} in catalog).${retainerNote} Use the link below to open it.`,
+        `${
+          portalPush.chargeAdded
+            ? `Invoice ${number} finalized as Sent, saved to firm Invoice Management (${saved.count} invoice${saved.count === 1 ? "" : "s"} in catalog), and charged to the client Account Summary. A client notification was sent.`
+            : `Invoice ${number} finalized as Sent and saved to firm Invoice Management (${saved.count} invoice${saved.count === 1 ? "" : "s"} in catalog). Client Account Summary already had this invoice charge.`
+        }${retainerNote} Use the link below to open it.`,
       );
       setMessages([]);
       if (retainerToApply > 0) {

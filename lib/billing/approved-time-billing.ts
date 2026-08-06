@@ -150,6 +150,7 @@ export async function invoiceApprovedBillableTime(input: {
     employeeTitle: employee.title,
     hours,
     hourlyRate: rate,
+    source: "approved_time",
   };
   addDynamicInvoiceCharge(charge);
   addInvoiceAddedNotification({

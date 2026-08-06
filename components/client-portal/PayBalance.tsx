@@ -20,6 +20,7 @@ import {
   INVOICE_CHARGES_UPDATE_EVENT,
   type DynamicInvoiceCharge,
 } from "@/lib/client-portal/invoice-charge-store";
+import { isPortalClientName } from "@/lib/client-portal/invoice-client-map";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -192,7 +193,7 @@ function chargeMatterName(charge: {
 
 export function PayBalance() {
   const { role } = useDemoRole();
-  const { matchesCase } = useCaseSelection();
+  const { matchesCase, isAllCases } = useCaseSelection();
   const [dynamicCharges, setDynamicCharges] = useState<DynamicInvoiceCharge[]>(
     [],
   );
@@ -203,7 +204,17 @@ export function PayBalance() {
     role === "firm_administrator";
 
   const visibleCharges = [...dynamicCharges, ...invoiceCharges].filter(
-    (charge) => matchesCase(charge.caseNumber),
+    (charge) => {
+      if (matchesCase(charge.caseNumber)) return true;
+      if (
+        "clientName" in charge &&
+        typeof charge.clientName === "string" &&
+        isPortalClientName(charge.clientName)
+      ) {
+        return isAllCases;
+      }
+      return false;
+    },
   );
   const outstandingBalance = visibleCharges
     .filter((charge) => charge.status === "unpaid")

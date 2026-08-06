@@ -5,7 +5,8 @@ export const INVOICE_CHARGES_UPDATE_EVENT =
 
 export type DynamicInvoiceCharge = {
   id: string;
-  approvalId: string;
+  /** Present for approved-time invoices; omitted for billing-finalized invoices. */
+  approvalId?: string;
   invoiceNumber: string;
   caseNumber: string;
   matterName: string;
@@ -13,11 +14,12 @@ export type DynamicInvoiceCharge = {
   amount: number;
   reason: string;
   chargeDate: string;
-  status: "unpaid";
-  employeeName: string;
-  employeeTitle: string;
-  hours: number;
-  hourlyRate: number;
+  status: "unpaid" | "paid";
+  employeeName?: string;
+  employeeTitle?: string;
+  hours?: number;
+  hourlyRate?: number;
+  source?: "approved_time" | "billing_finalize";
 };
 
 export function getDynamicInvoiceCharges(): DynamicInvoiceCharge[] {
@@ -39,9 +41,17 @@ export function addDynamicInvoiceCharge(
   if (typeof window === "undefined") return false;
 
   const existing = getDynamicInvoiceCharges();
-  if (existing.some((item) => item.approvalId === charge.approvalId)) {
-    return false;
-  }
+  const duplicate = existing.some(
+    (item) =>
+      item.id === charge.id ||
+      (charge.approvalId != null &&
+        item.approvalId != null &&
+        item.approvalId === charge.approvalId) ||
+      (charge.source === "billing_finalize" &&
+        item.source === "billing_finalize" &&
+        item.invoiceNumber === charge.invoiceNumber),
+  );
+  if (duplicate) return false;
 
   localStorage.setItem(
     DYNAMIC_INVOICE_CHARGES_KEY,

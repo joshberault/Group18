@@ -134,15 +134,15 @@ export function addInvoiceAddedNotification(input: {
 
   persistDynamicNotification({
     id: `notif-invoice-added-${input.invoiceNumber}`,
-    title: "New invoice added",
-    message: `${input.invoiceNumber} for ${input.matterName} has been added to your account for ${new Intl.NumberFormat(
+    title: "New invoice charged to your account",
+    message: `${input.invoiceNumber} for ${input.matterName} has been charged to your account for ${new Intl.NumberFormat(
       "en-US",
       { style: "currency", currency: "USD" },
-    ).format(input.amount)}.`,
+    ).format(input.amount)}. Review the charge in Account Summary.`,
     createdAt: new Date().toISOString(),
     type: "invoice_added",
     caseNumber: input.matterReference,
-    actionLabel: "View invoice",
+    actionLabel: "View Account Summary",
     actionHref: "/client-portal/account-summary",
   });
 }
