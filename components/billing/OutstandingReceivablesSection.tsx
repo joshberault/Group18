@@ -28,6 +28,7 @@ import {
 import {
   getAllManagedInvoices,
   INVOICES_UPDATED_EVENT,
+  refreshInvoiceCatalog,
   updateManagedInvoice,
 } from "@/lib/billing/invoice-management-store";
 import {
@@ -132,12 +133,11 @@ export function OutstandingReceivablesSection() {
 
   useEffect(() => {
     const refresh = () => setCatalog(getAllManagedInvoices());
+    void refreshInvoiceCatalog().then(refresh);
     refresh();
-    window.addEventListener("storage", refresh);
     window.addEventListener(INVOICES_UPDATED_EVENT, refresh);
     window.addEventListener("focus", refresh);
     return () => {
-      window.removeEventListener("storage", refresh);
       window.removeEventListener(INVOICES_UPDATED_EVENT, refresh);
       window.removeEventListener("focus", refresh);
     };
@@ -228,9 +228,9 @@ export function OutstandingReceivablesSection() {
     return sortDir === "asc" ? " ↑" : " ↓";
   }
 
-  function handleSendReminder(invoice: Invoice) {
+  async function handleSendReminder(invoice: Invoice) {
     const nextCount = (invoice.reminderCount ?? 0) + 1;
-    const updated = updateManagedInvoice(invoice.invoiceNumber, {
+    const updated = await updateManagedInvoice(invoice.invoiceNumber, {
       lastReminderSent: todayIso(),
       reminderCount: nextCount,
       reminderStatus: "Reminder Sent",
@@ -243,7 +243,7 @@ export function OutstandingReceivablesSection() {
     );
   }
 
-  function handleRecordPayment(invoice: Invoice, amount: number) {
+  async function handleRecordPayment(invoice: Invoice, amount: number) {
     const recordedAt = new Date();
     const paymentId = `pay-rem-${recordedAt.getTime()}`;
     const paid = invoice.amountPaid + amount;
@@ -257,7 +257,7 @@ export function OutstandingReceivablesSection() {
         : paid > 0
           ? "Partially Paid"
           : invoice.status;
-    const updated = updateManagedInvoice(invoice.invoiceNumber, {
+    const updated = await updateManagedInvoice(invoice.invoiceNumber, {
       amountPaid: paid,
       remainingBalance: remaining,
       status: newStatus as InvoiceStatus,

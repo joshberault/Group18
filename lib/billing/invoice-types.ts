@@ -66,6 +66,11 @@ export type Invoice = {
   amountPaid: number;
   remainingBalance: number;
   status: InvoiceStatus;
+  /** Firm FKs when invoice is backed by Supabase */
+  clientId?: string;
+  matterId?: string;
+  /** Stable business key (e.g. approved-time-…) distinct from DB uuid */
+  sourceKey?: string | null;
   /** Detail modal fields */
   clientInfo: ClientInfo;
   matterDescription: string;

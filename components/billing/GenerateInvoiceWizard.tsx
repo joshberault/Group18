@@ -14,10 +14,11 @@ import type {
   UnbilledTimeEntry,
 } from "@/lib/billing/generate-invoice-types";
 import {
-  allocateNextInvoiceNumber,
+  allocateNextInvoiceNumberAsync,
   buildManagedInvoiceFromGeneration,
   getInvoicedExpenseIds,
   getInvoicedTimeEntryIds,
+  refreshInvoiceCatalog,
   upsertGeneratedInvoice,
 } from "@/lib/billing/invoice-management-store";
 import {
@@ -181,6 +182,8 @@ export function GenerateInvoiceWizard() {
 
     async function loadClients(opts?: { silent?: boolean }) {
       if (!opts?.silent) setClientsLoading(true);
+      await refreshInvoiceCatalog();
+      if (cancelled) return;
       const catalog = await loadBillingClients();
       if (cancelled) return;
       setClients(catalog.clients);
@@ -657,7 +660,9 @@ export function GenerateInvoiceWizard() {
       if (!invoiceDate) setInvoiceDate(todayIso());
       if (!dueDate) setDueDate(plusDaysIso(30));
       if (!invoiceNumber) {
-        setInvoiceNumber(allocateNextInvoiceNumber());
+        void allocateNextInvoiceNumberAsync().then((num) =>
+          setInvoiceNumber(num),
+        );
       }
     }
     setMessages([]);
@@ -670,7 +675,7 @@ export function GenerateInvoiceWizard() {
     setStep((s) => Math.max(0, s - 1));
   }
 
-  function saveDraft() {
+  async function saveDraft() {
     const errs = validateForPreviewOrLater();
     if (errs.length) {
       setMessages(errs);
@@ -678,7 +683,8 @@ export function GenerateInvoiceWizard() {
     }
     if (!client || !matter) return;
 
-    const number = invoiceNumber || allocateNextInvoiceNumber();
+    const number =
+      invoiceNumber || (await allocateNextInvoiceNumberAsync());
     const invDate = invoiceDate || todayIso();
     const due = dueDate || plusDaysIso(30);
     setInvoiceNumber(number);
@@ -722,7 +728,7 @@ export function GenerateInvoiceWizard() {
       );
     }
 
-    const saved = upsertGeneratedInvoice(
+    const saved = await upsertGeneratedInvoice(
       buildManagedInvoiceFromGeneration({
         id: `draft-${number}`,
         invoiceNumber: number,
@@ -742,13 +748,13 @@ export function GenerateInvoiceWizard() {
     if (saved.ok) {
       setManagementLinkNumber(number);
       setSuccessNote(
-        `Draft ${number} saved to Invoice Management (${saved.count} generated invoice${saved.count === 1 ? "" : "s"} stored). Time entries remain billable until finalized.`,
+        `Draft ${number} saved to Invoice Management (${saved.count} invoice${saved.count === 1 ? "" : "s"} in firm catalog). Time entries remain billable until finalized.`,
       );
       setMessages([]);
     } else {
       setManagementLinkNumber(null);
       setMessages([
-        `Could not save draft ${number} to Invoice Management: ${saved.error || "unknown error"}. Try again or check browser storage settings.`,
+        `Could not save draft ${number} to Invoice Management: ${saved.error || "unknown error"}. Check Supabase configuration and that the client/matter are linked.`,
       ]);
       setSuccessNote(null);
     }
@@ -767,7 +773,8 @@ export function GenerateInvoiceWizard() {
     setMessages([]);
     setSuccessNote(null);
 
-    const number = invoiceNumber || allocateNextInvoiceNumber();
+    const number =
+      invoiceNumber || (await allocateNextInvoiceNumberAsync());
     const invDate = invoiceDate || todayIso();
     const due = dueDate || plusDaysIso(30);
 
@@ -854,7 +861,7 @@ export function GenerateInvoiceWizard() {
       totals,
     });
 
-    const saved = upsertGeneratedInvoice(managed);
+    const saved = await upsertGeneratedInvoice(managed);
 
     setInvoiceHistory((h) => {
       const without = h.filter((row) => row.invoiceNumber !== number);
@@ -873,7 +880,7 @@ export function GenerateInvoiceWizard() {
           ? ` Applied ${money(retainerToApply)} from matter retainer (remaining ${money(remainingMatterRetainer)}).`
           : "";
       setSuccessNote(
-        `Invoice ${number} finalized as Sent and added to Invoice Management (${saved.count} invoice${saved.count === 1 ? "" : "s"} in catalog).${retainerNote} Use the link below to open it.`,
+        `Invoice ${number} finalized as Sent and saved to firm Invoice Management (${saved.count} invoice${saved.count === 1 ? "" : "s"} in catalog).${retainerNote} Use the link below to open it.`,
       );
       setMessages([]);
       if (retainerToApply > 0) {

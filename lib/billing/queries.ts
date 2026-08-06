@@ -2,9 +2,8 @@
 import type { BillingDashboardData } from "@/lib/billing/types";
 
 /**
- * Placeholder datasets used when Supabase tables are not yet wired.
- * totalInvoices stays 0; the dashboard client layer recomputes live metrics
- * from the managed catalog for the selected billing period.
+ * Fallback when Supabase is unavailable. Live UI recomputes most KPIs
+ * from the shared invoice catalog after refresh.
  */
 const PLACEHOLDER_DATA: BillingDashboardData = {
   source: "placeholder",
@@ -18,30 +17,54 @@ const PLACEHOLDER_DATA: BillingDashboardData = {
   revenueByClient: [],
 };
 
-type BillingInvoiceRow = {
+type InvoiceDbRow = {
   id: string;
-  amount: number | null;
+  client_id: string;
+  total_amount: number | string | null;
+  amount_paid: number | string | null;
+  amount_written_down: number | string | null;
+  balance_due: number | string | null;
   status: string | null;
-  attorney_id: string | null;
-  client_id: string | null;
+  invoice_date: string | null;
+  due_date: string | null;
+  notes: string | null;
 };
 
-type BillingPaymentRow = {
+type PaymentDbRow = {
   id: string;
-  amount: number | null;
-  paid_at: string | null;
+  amount: number | string | null;
+  payment_date: string | null;
 };
 
-type BillingNameRow = {
+type ClientRow = {
   id: string;
-  full_name?: string | null;
-  name?: string | null;
+  name: string | null;
 };
+
+function num(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parseAttorneyFromNotes(notes: string | null): string {
+  if (!notes) return "Unassigned";
+  try {
+    const parsed = JSON.parse(notes) as { attorney?: string };
+    return parsed.attorney?.trim() || "Unassigned";
+  } catch {
+    return "Unassigned";
+  }
+}
+
+function startOfMonthIsoDate(): string {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1)
+    .toISOString()
+    .slice(0, 10);
+}
 
 /**
- * Loads billing metrics for the dashboard.
- * Attempts Supabase first; falls back to placeholder data if tables
- * are missing or the client is not configured.
+ * Loads billing metrics from firm invoices + payments (shared Supabase tables).
  */
 export async function fetchBillingDashboard(): Promise<BillingDashboardData> {
   const supabase = createClientSafe();
@@ -51,55 +74,57 @@ export async function fetchBillingDashboard(): Promise<BillingDashboardData> {
   }
 
   try {
-    // Placeholder Supabase queries — wire to real schema when ready.
-    // Expected shape (example):
-    // invoices: id, amount, status ('paid' | 'open' | 'overdue'), issued_at, attorney_id, client_id
-    // payments: id, invoice_id, amount, paid_at
     const [
       invoicesResult,
       paymentsResult,
-      attorneysResult,
       clientsResult,
     ] = await Promise.all([
-      supabase.from("invoices").select("id, amount, status, attorney_id, client_id"),
+      supabase
+        .from("invoices")
+        .select(
+          "id, client_id, total_amount, amount_paid, amount_written_down, balance_due, status, invoice_date, due_date, notes",
+        ),
       supabase
         .from("payments")
-        .select("id, amount, paid_at")
-        .gte("paid_at", startOfMonthIso()),
-      supabase.from("attorneys").select("id, full_name"),
+        .select("id, amount, payment_date")
+        .eq("status", "completed")
+        .gte("payment_date", startOfMonthIsoDate()),
       supabase.from("clients").select("id, name"),
     ]);
 
-    if (
-      invoicesResult.error ||
-      paymentsResult.error ||
-      attorneysResult.error ||
-      clientsResult.error
-    ) {
+    if (invoicesResult.error || paymentsResult.error || clientsResult.error) {
       return PLACEHOLDER_DATA;
     }
 
-    const invoices = (invoicesResult.data ?? []) as BillingInvoiceRow[];
-    const payments = (paymentsResult.data ?? []) as BillingPaymentRow[];
-    const attorneys = (attorneysResult.data ?? []) as BillingNameRow[];
-    const clients = (clientsResult.data ?? []) as BillingNameRow[];
+    const invoices = (invoicesResult.data ?? []) as InvoiceDbRow[];
+    const payments = (paymentsResult.data ?? []) as PaymentDbRow[];
+    const clients = (clientsResult.data ?? []) as ClientRow[];
 
     if (invoices.length === 0) {
-      return PLACEHOLDER_DATA;
+      return { ...PLACEHOLDER_DATA, source: "supabase" };
     }
 
-    const outstanding = invoices
-      .filter((inv) => inv.status === "open" || inv.status === "overdue")
-      .reduce((sum, inv) => sum + Number(inv.amount ?? 0), 0);
-
-    const overdue = invoices.filter((inv) => inv.status === "overdue").length;
-
-    const attorneyNameById = new Map(
-      attorneys.map((a) => [a.id, String(a.full_name ?? "Unassigned")]),
-    );
     const clientNameById = new Map(
       clients.map((c) => [c.id, String(c.name ?? "Unknown client")]),
     );
+
+    const outstanding = invoices.reduce(
+      (sum, inv) => sum + Math.max(0, num(inv.balance_due)),
+      0,
+    );
+
+    const overdue = invoices.filter((inv) => {
+      const status = (inv.status || "").toLowerCase();
+      if (status === "overdue") return true;
+      if (["cancelled", "void", "paid", "draft"].includes(status)) return false;
+      const remaining = num(inv.balance_due);
+      if (remaining <= 0) return false;
+      if (!inv.due_date) return false;
+      const due = new Date(`${inv.due_date}T00:00:00`);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return due.getTime() < today.getTime();
+    }).length;
 
     const revenueByAttorneyMap = new Map<
       string,
@@ -111,16 +136,18 @@ export async function fetchBillingDashboard(): Promise<BillingDashboardData> {
     >();
 
     for (const inv of invoices) {
-      const amount = Number(inv.amount ?? 0);
-      const attorneyId = String(inv.attorney_id ?? "unknown");
+      const net =
+        num(inv.total_amount) - num(inv.amount_written_down);
+      const attorneyName = parseAttorneyFromNotes(inv.notes);
+      const attorneyId = attorneyName.toLowerCase().replace(/\s+/g, "-");
       const clientId = String(inv.client_id ?? "unknown");
 
       const attorneyEntry = revenueByAttorneyMap.get(attorneyId) ?? {
         revenue: 0,
         invoiceCount: 0,
-        name: attorneyNameById.get(attorneyId) ?? "Unassigned",
+        name: attorneyName,
       };
-      attorneyEntry.revenue += amount;
+      attorneyEntry.revenue += net;
       attorneyEntry.invoiceCount += 1;
       revenueByAttorneyMap.set(attorneyId, attorneyEntry);
 
@@ -129,10 +156,8 @@ export async function fetchBillingDashboard(): Promise<BillingDashboardData> {
         openBalance: 0,
         name: clientNameById.get(clientId) ?? "Unknown client",
       };
-      clientEntry.revenue += amount;
-      if (inv.status === "open" || inv.status === "overdue") {
-        clientEntry.openBalance += amount;
-      }
+      clientEntry.revenue += net;
+      clientEntry.openBalance += Math.max(0, num(inv.balance_due));
       revenueByClientMap.set(clientId, clientEntry);
     }
 
@@ -142,7 +167,7 @@ export async function fetchBillingDashboard(): Promise<BillingDashboardData> {
         totalInvoices: invoices.length,
         outstandingReceivable: outstanding,
         collectionsThisMonth: payments.reduce(
-          (sum, p) => sum + Number(p.amount ?? 0),
+          (sum, p) => sum + num(p.amount),
           0,
         ),
         overdueInvoices: overdue,
@@ -167,9 +192,4 @@ export async function fetchBillingDashboard(): Promise<BillingDashboardData> {
   } catch {
     return PLACEHOLDER_DATA;
   }
-}
-
-function startOfMonthIso(): string {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 }

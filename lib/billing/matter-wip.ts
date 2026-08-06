@@ -14,6 +14,7 @@ import type {
 import {
   getInvoicedExpenseIds,
   getInvoicedTimeEntryIds,
+  refreshInvoiceCatalog,
 } from "@/lib/billing/invoice-management-store";
 
 type ProfileJoin = {
@@ -68,6 +69,7 @@ export async function hydrateMatterWithModuleWip(
     };
   }
 
+  await refreshInvoiceCatalog();
   const billedTime = getInvoicedTimeEntryIds();
   const billedExpenses = getInvoicedExpenseIds();
 
@@ -233,6 +235,7 @@ export async function fetchFirmApprovedUnbilledHours(): Promise<number | null> {
   if (!supabase) return null;
 
   try {
+    await refreshInvoiceCatalog();
     const billed = getInvoicedTimeEntryIds();
     const { data, error } = await supabase
       .from("time_entries")

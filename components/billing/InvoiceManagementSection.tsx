@@ -30,6 +30,7 @@ import {
   deleteManagedInvoice,
   getAllManagedInvoices,
   INVOICES_UPDATED_EVENT,
+  refreshInvoiceCatalog,
   updateManagedInvoice,
 } from "@/lib/billing/invoice-management-store";
 import type {
@@ -129,7 +130,7 @@ export function InvoiceManagementSection({ invoices }: Props) {
     return new Date().toISOString().slice(0, 10);
   }
 
-  function handleRecordPayment(invoice: Invoice, amount: number) {
+  async function handleRecordPayment(invoice: Invoice, amount: number) {
     const paid = invoice.amountPaid + amount;
     const remaining = Math.max(
       0,
@@ -141,7 +142,7 @@ export function InvoiceManagementSection({ invoices }: Props) {
         : paid > 0
           ? "Partially Paid"
           : invoice.status;
-    updateManagedInvoice(invoice.invoiceNumber, {
+    await updateManagedInvoice(invoice.invoiceNumber, {
       amountPaid: paid,
       remainingBalance: remaining,
       status: newStatus as InvoiceStatus,
@@ -162,13 +163,13 @@ export function InvoiceManagementSection({ invoices }: Props) {
     );
   }
 
-  function handleConfirmDelete(invoice: Invoice) {
-    const result = deleteManagedInvoice(invoice.invoiceNumber);
+  async function handleConfirmDelete(invoice: Invoice) {
+    const result = await deleteManagedInvoice(invoice.invoiceNumber);
     refreshCatalog();
     setActionNote(
       result.ok
         ? `Invoice ${invoice.invoiceNumber} deleted.`
-        : `Could not fully remove ${invoice.invoiceNumber}.`,
+        : `Could not fully remove ${invoice.invoiceNumber}${result.error ? `: ${result.error}` : ""}.`,
     );
   }
 
@@ -182,6 +183,7 @@ export function InvoiceManagementSection({ invoices }: Props) {
       refreshCatalog();
     };
 
+    void refreshInvoiceCatalog().then(refresh);
     refresh();
 
     try {
@@ -276,12 +278,10 @@ export function InvoiceManagementSection({ invoices }: Props) {
       /* ignore */
     }
 
-    window.addEventListener("storage", refresh);
     window.addEventListener(INVOICES_UPDATED_EVENT, refresh);
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
-      window.removeEventListener("storage", refresh);
       window.removeEventListener(INVOICES_UPDATED_EVENT, refresh);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);

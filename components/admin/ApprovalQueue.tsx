@@ -247,7 +247,7 @@ export function ApprovalQueue() {
     setModalMode(mode);
   }
 
-  function applyDecision(decision: "approved" | "rejected" | "returned") {
+  async function applyDecision(decision: "approved" | "rejected" | "returned") {
     if (!selected || !actingReviewer || processingLock.current) return;
 
     const blocked = assertCanReview(selected);
@@ -301,7 +301,7 @@ export function ApprovalQueue() {
         return;
       }
 
-      const billingResult = invoiceApprovedBillableTime({
+      const billingResult = await invoiceApprovedBillableTime({
         approval: selected,
         employee,
         matter,
