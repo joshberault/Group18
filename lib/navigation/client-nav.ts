@@ -1,4 +1,5 @@
 import {
+  Award,
   Bell,
   Briefcase,
   ClipboardList,
@@ -67,6 +68,13 @@ export const CLIENT_NAV_ITEMS: NavItem[] = [
     href: "/client-portal/notifications",
     icon: Bell,
     description: "Billing, document, and case alerts",
+  },
+  {
+    routeKey: "client_portal",
+    label: "My Badges",
+    href: "/client-portal/my-badges",
+    icon: Award,
+    description: "Badges earned for staying on top of your matter",
   },
 ];
 
