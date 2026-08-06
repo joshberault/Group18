@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   Ban,
@@ -88,8 +88,19 @@ function matterStatusKey(status: AmMatterEntity["matterStatus"]) {
 
 export function AccountingManagerMattersView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlFilter = searchParams.get("filter");
   const [matters, setMatters] = useState(amMatters);
-  const [filters, setFilters] = useState<MatterFilters>(defaultFilters);
+  const [filters, setFilters] = useState<MatterFilters>(() => ({
+    ...defaultFilters,
+    financialStatus:
+      urlFilter === "over-budget"
+        ? "Over Budget"
+        : urlFilter === "low-retainer"
+          ? "Low Retainer"
+          : "all",
+    billingHoldOnly: urlFilter === "billing-hold",
+  }));
   const [sortKey, setSortKey] = useState<SortKey>("unbilledWip");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selectedMatter, setSelectedMatter] = useState<AmMatterEntity | null>(

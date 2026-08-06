@@ -41,32 +41,36 @@ export interface NavItem {
   href: string;
   icon: LucideIcon;
   description?: string;
-  /** Demo roles that can see this nav item (not used for Accounting Manager — see accounting-manager-nav.ts) */
+  /** Demo roles that can see this nav item (not used for Accounting Manager or Client — see dedicated nav files) */
   roles?: UserRole[];
 }
 
-const ALL_ROLES: UserRole[] = [
+const STAFF: UserRole[] = [
   "managing_partner",
   "attorney",
   "paralegal",
   "billing_specialist",
-  "accounting_manager",
   "firm_administrator",
-  "client",
 ];
 
-const STAFF: UserRole[] = ALL_ROLES.filter((r) => r !== "client");
 const ATTORNEY_TEAM: UserRole[] = ["managing_partner", "attorney", "paralegal"];
-const BILLING_TEAM: UserRole[] = [
+
+const BILLING_OPS: UserRole[] = [
   "managing_partner",
   "billing_specialist",
-  "accounting_manager",
+  "firm_administrator",
+];
+
+const FINANCIAL_OVERSIGHT: UserRole[] = [
+  "managing_partner",
+  "billing_specialist",
   "firm_administrator",
 ];
 
 /**
- * Sidebar navigation with demo-role visibility for all roles except Accounting Manager.
+ * Sidebar navigation with demo-role visibility for all roles except Accounting Manager and Client.
  * Accounting Manager uses lib/navigation/accounting-manager-nav.ts.
+ * Client uses lib/navigation/client-nav.ts.
  */
 export const NAV_ITEMS: NavItem[] = [
   {
@@ -75,7 +79,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/dashboard",
     icon: LayoutDashboard,
     description: "Firm overview and key metrics",
-    roles: ALL_ROLES,
+    roles: STAFF,
   },
   {
     routeKey: "clients",
@@ -132,7 +136,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/billing",
     icon: Receipt,
     description: "Billing workflows and rate management",
-    roles: BILLING_TEAM,
+    roles: BILLING_OPS,
   },
   {
     routeKey: "invoices",
@@ -140,7 +144,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/invoices",
     icon: FileText,
     description: "Invoice generation and collections",
-    roles: BILLING_TEAM,
+    roles: [...FINANCIAL_OVERSIGHT, "attorney"],
   },
   {
     routeKey: "receivables",
@@ -148,15 +152,15 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/receivables",
     icon: CircleDollarSign,
     description: "Outstanding AR, payments, and reminders",
-    roles: BILLING_TEAM,
+    roles: FINANCIAL_OVERSIGHT,
   },
   {
     routeKey: "accounting",
     label: "Accounting",
     href: "/accounting",
     icon: Calculator,
-    description: "Accounting controls and trust accounting",
-    roles: [...BILLING_TEAM, "managing_partner"],
+    description: "Accounting summary and trust overview",
+    roles: ["firm_administrator"],
   },
   {
     routeKey: "reports",
@@ -164,7 +168,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/reports",
     icon: BarChart3,
     description: "Profitability and operational reports",
-    roles: BILLING_TEAM,
+    roles: FINANCIAL_OVERSIGHT,
   },
   {
     routeKey: "client_portal",
@@ -172,7 +176,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/client-portal",
     icon: UserCircle,
     description: "Client-facing matter and invoice access",
-    roles: ["client", "managing_partner", "firm_administrator"],
+    roles: ["managing_partner", "firm_administrator"],
   },
 ];
 

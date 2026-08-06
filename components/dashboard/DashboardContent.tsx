@@ -26,6 +26,7 @@ import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { JobApplicationsPanel } from "@/components/admin/JobApplicationsPanel";
 import { ParalegalDashboard } from "@/components/dashboard/ParalegalDashboard";
 import { AttorneyDashboard } from "@/components/dashboard/AttorneyDashboard";
+import { AccountingManagerDashboard } from "@/components/accounting-manager/dashboard/AccountingManagerDashboard";
 import { PendingTimeApprovalsPanel } from "@/components/time/PendingTimeApprovalsPanel";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { KPICard } from "@/components/ui/KPICard";
@@ -88,6 +89,14 @@ const BILLING_SPECIALIST_KPI_HREFS = {
   trustFunds: "/accounting/trust",
   monthlyCollections: "/invoices?status=paid",
   overdueInvoices: invoicesHref({ view: "overdue" }),
+} as const;
+
+const MANAGING_PARTNER_KPI_HREFS = {
+  activeMatters: "/matters",
+  unbilledTime: "/billing",
+  outstandingAR: "/receivables",
+  trustFunds: "/accounting/trust",
+  monthlyCollections: "/reports",
 } as const;
 
 const BILLING_SPECIALIST_QUICK_ACTIONS = [
@@ -375,6 +384,12 @@ export function DashboardContent() {
     return <AttorneyDashboard />;
   }
 
+  if (role === "accounting_manager") {
+    return <AccountingManagerDashboard />;
+  }
+
+  const isManagingPartner = role === "managing_partner";
+
   return (
     <>
       <PageHeader
@@ -429,32 +444,56 @@ export function DashboardContent() {
           value={activeMattersValue}
           subtitle={activeMattersSubtitle}
           icon={Briefcase}
-          href={BILLING_SPECIALIST_KPI_HREFS.activeMatters}
-          interactive={isBillingSpecialist}
+          href={
+            isBillingSpecialist
+              ? BILLING_SPECIALIST_KPI_HREFS.activeMatters
+              : isManagingPartner
+                ? MANAGING_PARTNER_KPI_HREFS.activeMatters
+                : undefined
+          }
+          interactive={isBillingSpecialist || isManagingPartner}
         />
         <DashboardKpiCard
           title="Unbilled Time"
           value={unbilledTimeValue}
           subtitle={unbilledTimeSubtitle}
           icon={Clock}
-          href={BILLING_SPECIALIST_KPI_HREFS.unbilledTime}
-          interactive={isBillingSpecialist}
+          href={
+            isBillingSpecialist
+              ? BILLING_SPECIALIST_KPI_HREFS.unbilledTime
+              : isManagingPartner
+                ? MANAGING_PARTNER_KPI_HREFS.unbilledTime
+                : undefined
+          }
+          interactive={isBillingSpecialist || isManagingPartner}
         />
         <DashboardKpiCard
           title="Outstanding A/R"
           value={outstandingArValue}
           subtitle={outstandingArSubtitle}
           icon={DollarSign}
-          href={BILLING_SPECIALIST_KPI_HREFS.outstandingAR}
-          interactive={isBillingSpecialist}
+          href={
+            isBillingSpecialist
+              ? BILLING_SPECIALIST_KPI_HREFS.outstandingAR
+              : isManagingPartner
+                ? MANAGING_PARTNER_KPI_HREFS.outstandingAR
+                : undefined
+          }
+          interactive={isBillingSpecialist || isManagingPartner}
         />
         <DashboardKpiCard
           title="Trust Funds Held"
           value={trustFundsValue}
           subtitle={trustFundsSubtitle}
           icon={Landmark}
-          href={BILLING_SPECIALIST_KPI_HREFS.trustFunds}
-          interactive={isBillingSpecialist}
+          href={
+            isBillingSpecialist
+              ? BILLING_SPECIALIST_KPI_HREFS.trustFunds
+              : isManagingPartner
+                ? MANAGING_PARTNER_KPI_HREFS.trustFunds
+                : undefined
+          }
+          interactive={isBillingSpecialist || isManagingPartner}
         />
         <DashboardKpiCard
           title="Monthly Collections"
@@ -462,8 +501,14 @@ export function DashboardContent() {
           subtitle={monthlyCollectionsSubtitle}
           trend={isBillingSpecialist ? undefined : "+8.2% vs. last month"}
           icon={TrendingUp}
-          href={BILLING_SPECIALIST_KPI_HREFS.monthlyCollections}
-          interactive={isBillingSpecialist}
+          href={
+            isBillingSpecialist
+              ? BILLING_SPECIALIST_KPI_HREFS.monthlyCollections
+              : isManagingPartner
+                ? MANAGING_PARTNER_KPI_HREFS.monthlyCollections
+                : undefined
+          }
+          interactive={isBillingSpecialist || isManagingPartner}
         />
         {isBillingSpecialist ? (
           <DashboardKpiCard
