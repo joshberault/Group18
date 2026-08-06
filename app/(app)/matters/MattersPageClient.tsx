@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { AccountingManagerMattersView } from "@/components/accounting-manager/matters/AccountingManagerMattersView";
-import { RoleRestrictedModule } from "@/components/layout/RoleRestrictedModule";
-import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { BillingSpecialistMattersView } from "@/components/matters/BillingSpecialistMattersView";
+import { FirmAdministratorMattersView } from "@/components/matters/FirmAdministratorMattersView";
 import { ManagingPartnerMattersView } from "@/components/matters/ManagingPartnerMattersView";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { MatterWorkspace } from "@/components/matters/MatterWorkspace";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -13,7 +14,7 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PARALEGAL_ASSIGNED_MATTERS } from "@/lib/paralegal/demo-data";
 
-export function MattersPageClient() {
+function MattersPageContent() {
   const { selectedRole } = useDemoRole();
 
   if (selectedRole === "accounting_manager") {
@@ -33,6 +34,14 @@ export function MattersPageClient() {
         <ManagingPartnerMattersView />
       </Suspense>
     );
+  }
+
+  if (selectedRole === "billing_specialist") {
+    return <BillingSpecialistMattersView />;
+  }
+
+  if (selectedRole === "firm_administrator") {
+    return <FirmAdministratorMattersView />;
   }
 
   if (selectedRole === "paralegal") {
@@ -131,12 +140,13 @@ export function MattersPageClient() {
     );
   }
 
+  return null;
+}
+
+export function MattersPageClient() {
   return (
-    <RoleRestrictedModule
-      href="/matters"
-      title="Matters"
-      description="Track legal matters, engagement terms, responsible attorneys, and matter lifecycle status."
-      iconName="briefcase"
-    />
+    <Suspense fallback={<p className="p-6 text-sm text-muted">Loading matters…</p>}>
+      <MattersPageContent />
+    </Suspense>
   );
 }
