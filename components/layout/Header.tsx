@@ -204,9 +204,7 @@ export function Header({ onMenuClick, className }: HeaderProps) {
       </div>
 
       <div className="flex flex-1 items-center justify-end gap-3 md:flex-none">
-        <div className="hidden sm:block">
-          <DemoRoleSelect onRoleChange={handleRoleChange} />
-        </div>
+        <DemoRoleSelect onRoleChange={handleRoleChange} />
 
         {usesRoleFeed ? (
           <div className="relative">
