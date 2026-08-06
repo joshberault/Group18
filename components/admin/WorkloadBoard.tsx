@@ -39,7 +39,15 @@ import type {
   WorkloadBoardSortKey,
   WorkloadLeaveDisplay,
 } from "@/lib/admin/types";
+import { USER_ROLE_LABELS } from "@/lib/types";
 import { ProductivityMetrics } from "@/components/admin/ProductivityMetrics";
+
+/** Role filter options for legal staffing on the Workload Board. */
+const WORKLOAD_ROLE_FILTERS = [
+  USER_ROLE_LABELS.attorney,
+  USER_ROLE_LABELS.managing_partner,
+  USER_ROLE_LABELS.paralegal,
+] as const;
 
 function classificationVariant(c: WorkloadBoardClassification) {
   if (c === "over_capacity") return "danger" as const;
@@ -84,18 +92,31 @@ export function WorkloadBoard() {
     [data],
   );
 
-  const roleOptions = useMemo(
-    () =>
-      [...new Set((data?.employees ?? []).map((e) => e.roleLabel))].sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [data?.employees],
-  );
+  const roleOptions = useMemo(() => {
+    const fromData = new Set(
+      (data?.employees ?? [])
+        .filter(
+          (e) =>
+            e.roleKey === "attorney" ||
+            e.roleKey === "managing_partner" ||
+            e.roleKey === "paralegal",
+        )
+        .map((e) => e.roleLabel),
+    );
+    // Always offer Attorney, Managing Partner, and Paralegal in the Role filter.
+    for (const label of WORKLOAD_ROLE_FILTERS) fromData.add(label);
+    return [...fromData].sort((a, b) => a.localeCompare(b));
+  }, [data?.employees]);
 
-  const practiceOptions = useMemo(
-    () => uniquePracticeAreas(data?.employees ?? []),
-    [data?.employees],
-  );
+  const practiceOptions = useMemo(() => {
+    const legalStaff = (data?.employees ?? []).filter(
+      (e) =>
+        e.roleKey === "attorney" ||
+        e.roleKey === "managing_partner" ||
+        e.roleKey === "paralegal",
+    );
+    return uniquePracticeAreas(legalStaff);
+  }, [data?.employees]);
 
   const filtered = useMemo(() => {
     const next = rows.filter((row) => {
@@ -181,10 +202,9 @@ export function WorkloadBoard() {
     <div className="space-y-4">
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
         <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
-        Workload % = open estimated assignment hours ÷ weekly capacity. Actual
-        hours are shown separately and are not mixed into the percentage.
-        Assignment changes on the Assignments page use separate local state and
-        is based on the current Supabase dataset.
+        Workload for attorneys, managing partners, and paralegals. Workload % =
+        open estimated assignment hours ÷ weekly capacity. Actual hours are
+        shown separately and are not mixed into the percentage.
       </div>
 
       <Card padding="md">
