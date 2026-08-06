@@ -64,7 +64,11 @@ export function getAttorneyAlerts(): ParalegalAlert[] {
   );
 }
 
-export function getAttorneyPriorityActions(): ParalegalTask[] {
+export function getAttorneyPriorityActions(filters?: {
+  matter: string;
+  client: string;
+  priority: string;
+}): ParalegalTask[] {
   const rank = (t: ParalegalTask) => {
     const days = daysUntil(t.dueDate);
     if (t.status === "overdue" || days < 0) return 0;
@@ -77,6 +81,13 @@ export function getAttorneyPriorityActions(): ParalegalTask[] {
 
   return [...getAttorneyTasks()]
     .filter((t) => t.status !== "completed")
+    .filter((t) => {
+      if (!filters) return true;
+      if (filters.matter !== "all" && t.matterId !== filters.matter) return false;
+      if (filters.client !== "all" && t.clientId !== filters.client) return false;
+      if (filters.priority !== "all" && t.priority !== filters.priority) return false;
+      return true;
+    })
     .sort((a, b) => rank(a) - rank(b) || a.dueDate.localeCompare(b.dueDate))
     .slice(0, 8);
 }
@@ -133,4 +144,24 @@ export function getUpcomingAttorneyDeadlines(limit = 6) {
   return [...getAttorneyDeadlines()]
     .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
     .slice(0, limit);
+}
+
+export function getAttorneyMatterIdForTitle(title: string) {
+  return getAttorneyMatters().find((matter) => matter.title === title)?.id;
+}
+
+export function getAttorneyReviewById(reviewId: string) {
+  return getAttorneyReviewInbox().find((review) => review.id === reviewId);
+}
+
+export function getAttorneyReviewMatterHref(review: ParalegalReviewItem) {
+  const matterId = getAttorneyMatterIdForTitle(review.matterTitle);
+  if (!matterId) return "/attorney/matters";
+  return `/attorney/matters/${matterId}?review=${review.id}`;
+}
+
+export function getAttorneyReviewRelatedWorkHref(review: ParalegalReviewItem) {
+  const matterId = getAttorneyMatterIdForTitle(review.matterTitle);
+  if (matterId) return `/attorney/tasks?tab=all&matter=${matterId}`;
+  return "/attorney/tasks?tab=all";
 }

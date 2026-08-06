@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAttorneyData } from "@/components/attorney/AttorneyDataProvider";
-import { todayIsoDate, isPastDate } from "@/lib/attorney/dates";
+import { todayIsoDate, isPastDate, isDueSoon } from "@/lib/attorney/dates";
 import { formatDate, statusBadgeClass } from "@/lib/attorney/format";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -14,11 +15,42 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 
 type Tab = "today" | "all" | "deadlines";
+type ListFilter = "overdue" | "deadlines_7" | "waiting_on_attorney" | null;
+
+function parseTab(value: string | null, filter: ListFilter): Tab {
+  if (filter === "deadlines_7") return "deadlines";
+  if (value === "all" || value === "deadlines") return value;
+  if (filter === "overdue" || filter === "waiting_on_attorney") return "all";
+  return "today";
+}
+
+function parseFilter(value: string | null): ListFilter {
+  if (
+    value === "overdue" ||
+    value === "deadlines_7" ||
+    value === "waiting_on_attorney"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+const FILTER_LABELS: Record<NonNullable<ListFilter>, string> = {
+  overdue: "Overdue tasks",
+  deadlines_7: "Deadlines within 7 days",
+  waiting_on_attorney: "Tasks needing your input",
+};
 
 export function TasksPageClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const matterFilter = searchParams.get("matter");
+  const listFilter = parseFilter(searchParams.get("filter"));
   const { tasks, deadlines, matters, profileId, addTask, addDeadline, completeTask } =
     useAttorneyData();
-  const [tab, setTab] = useState<Tab>("today");
+  const [tab, setTab] = useState<Tab>(() =>
+    parseTab(searchParams.get("tab"), listFilter),
+  );
   const today = todayIsoDate();
 
   const myTasks = useMemo(
@@ -26,9 +58,58 @@ export function TasksPageClient() {
     [tasks, profileId],
   );
 
-  const todaysTasks = myTasks.filter(
-    (task) => task.status !== "completed" && task.due_date && task.due_date <= today,
+  const filteredTasks = useMemo(() => {
+    if (!matterFilter) return myTasks;
+    return myTasks.filter((task) => task.matter_id === matterFilter);
+  }, [matterFilter, myTasks]);
+
+  const filteredDeadlines = useMemo(() => {
+    if (!matterFilter) return deadlines;
+    return deadlines.filter((deadline) => deadline.matter_id === matterFilter);
+  }, [deadlines, matterFilter]);
+
+  const matterFilterLabel = matterFilter
+    ? matters.find((matter) => matter.id === matterFilter)?.title
+    : null;
+
+  const activeFilterLabel = listFilter ? FILTER_LABELS[listFilter] : null;
+
+  const filteredByList = useMemo(() => {
+    let taskList = filteredTasks.filter((task) => task.status !== "completed");
+    let deadlineList = [...filteredDeadlines];
+
+    if (listFilter === "overdue") {
+      taskList = taskList.filter((task) => task.due_date && isPastDate(task.due_date));
+    }
+    if (listFilter === "waiting_on_attorney") {
+      taskList = taskList.filter((task) => task.status === "in_progress");
+    }
+    if (listFilter === "deadlines_7") {
+      deadlineList = deadlineList.filter((deadline) => isDueSoon(deadline.due_date, 7));
+    }
+
+    return { taskList, deadlineList };
+  }, [filteredDeadlines, filteredTasks, listFilter]);
+
+  const todaysTasks = filteredByList.taskList.filter(
+    (task) => task.due_date && task.due_date <= today,
   );
+
+  function updateTasksUrl(nextTab: Tab, clearFilters = false) {
+    setTab(nextTab);
+    const params = new URLSearchParams();
+    params.set("tab", nextTab);
+    if (matterFilter) params.set("matter", matterFilter);
+    if (!clearFilters && listFilter) params.set("filter", listFilter);
+    router.replace(`/attorney/tasks?${params.toString()}`);
+  }
+
+  function clearListFilter() {
+    const params = new URLSearchParams();
+    params.set("tab", tab);
+    if (matterFilter) params.set("matter", matterFilter);
+    router.replace(`/attorney/tasks?${params.toString()}`);
+  }
 
   const [taskForm, setTaskForm] = useState({
     matterId: matters[0]?.id ?? "",
@@ -75,6 +156,32 @@ export function TasksPageClient() {
         description="Track daily work, completion status, and filing deadlines."
       />
 
+      {matterFilterLabel && (
+        <Card padding="md" className="border-gold-500/30 bg-gold-50/40">
+          <p className="text-sm text-navy-900">
+            Showing work for <span className="font-semibold">{matterFilterLabel}</span>.
+          </p>
+          <Link href="/attorney/tasks?tab=all" className="mt-2 inline-block text-sm font-medium text-navy-900 hover:underline">
+            Clear matter filter
+          </Link>
+        </Card>
+      )}
+
+      {activeFilterLabel && (
+        <Card padding="md" className="border-gold-500/30 bg-gold-50/40">
+          <p className="text-sm text-navy-900">
+            Showing <span className="font-semibold">{activeFilterLabel}</span>.
+          </p>
+          <button
+            type="button"
+            onClick={clearListFilter}
+            className="mt-2 text-sm font-medium text-navy-900 hover:underline"
+          >
+            Clear filter
+          </button>
+        </Card>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {([
           ["today", "Today's Tasks"],
@@ -85,7 +192,7 @@ export function TasksPageClient() {
             key={key}
             variant={tab === key ? "primary" : "secondary"}
             size="sm"
-            onClick={() => setTab(key)}
+            onClick={() => updateTasksUrl(key, true)}
           >
             {label}
           </Button>
@@ -159,7 +266,10 @@ export function TasksPageClient() {
           </Card>
 
           <div className="space-y-3">
-            {myTasks.map((task) => (
+            {(listFilter && listFilter !== "deadlines_7"
+              ? filteredByList.taskList
+              : filteredTasks
+            ).map((task) => (
               <Card key={task.id} padding="md">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
@@ -214,7 +324,7 @@ export function TasksPageClient() {
           </Card>
 
           <div className="space-y-3">
-            {deadlines.map((deadline) => (
+            {filteredByList.deadlineList.map((deadline) => (
               <Card key={deadline.id} padding="md">
                 <div className="flex items-start justify-between gap-4">
                   <Link

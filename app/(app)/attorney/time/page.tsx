@@ -22,7 +22,7 @@ export default function AttorneyTimePage() {
       profileId={isParalegal ? getParalegalHubProfile().id : DEMO_PROFILE.id}
       initialMatters={isParalegal ? getParalegalHubMatters() : DEMO_MATTERS}
       initialEntries={isParalegal ? getParalegalHubTimeEntries() : DEMO_TIME_ENTRIES}
-      previewMode
+      previewMode={isParalegal}
     />
   );
 }

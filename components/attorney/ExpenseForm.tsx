@@ -9,14 +9,29 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import type { Matter } from "@/types/database";
 
+type DemoExpensePayload = {
+  matter_id: string;
+  profile_id: string;
+  expense_date: string;
+  amount: number;
+  description: string;
+};
+
 type Props = {
   matters: Matter[];
   profileId: string;
   onCreated: () => void;
   previewMode?: boolean;
+  onDemoSubmit?: (payload: DemoExpensePayload) => void;
 };
 
-export function ExpenseForm({ matters, profileId, onCreated, previewMode = false }: Props) {
+export function ExpenseForm({
+  matters,
+  profileId,
+  onCreated,
+  previewMode = false,
+  onDemoSubmit,
+}: Props) {
   const [matterId, setMatterId] = useState(matters[0]?.id ?? "");
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState("");
@@ -28,6 +43,20 @@ export function ExpenseForm({ matters, profileId, onCreated, previewMode = false
     e.preventDefault();
 
     if (previewMode) {
+      if (onDemoSubmit) {
+        onDemoSubmit({
+          matter_id: matterId,
+          profile_id: profileId,
+          expense_date: expenseDate,
+          amount: Number(amount),
+          description: description.trim(),
+        });
+        setAmount("");
+        setDescription("");
+        setError(null);
+        onCreated();
+        return;
+      }
       setError("Demo mode — sign in later to save real entries.");
       return;
     }

@@ -11,6 +11,7 @@ import {
   Menu,
   MessageSquare,
   Send,
+  X,
 } from "lucide-react";
 import {
   ATTORNEY_NOTIFICATION_UPDATE_EVENT,
@@ -260,7 +261,14 @@ export function Header({ onMenuClick, className }: HeaderProps) {
                         review
                       </p>
                     </div>
-                    <Bell className="h-5 w-5 text-navy-900" />
+                    <button
+                      type="button"
+                      onClick={() => setNotificationsOpen(false)}
+                      aria-label="Close notifications"
+                      className="rounded-lg p-1.5 text-muted transition hover:bg-gray-100 hover:text-navy-900"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
                   </div>
 
                   {feedNotifications.length === 0 ? (
