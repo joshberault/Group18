@@ -20,7 +20,11 @@ import {
   findPossibleDuplicates,
 } from "@/lib/clients/queries";
 
-const CREATE_ROLES: UserRole[] = ["managing_partner", "firm_administrator"];
+const CREATE_ROLES: UserRole[] = [
+  "managing_partner",
+  "firm_administrator",
+  "attorney",
+];
 
 export function NewClientView() {
   const { role } = useDemoRole();
@@ -67,7 +71,7 @@ export function NewClientView() {
       {!permissions.canCreate ? (
         <EmptyState
           title="Access denied"
-          description="Only Managing Partners and Firm Administrators can create clients."
+          description="Your demo role cannot create clients. Switch to Attorney, Managing Partner, or Firm Administrator."
           moduleLabel="Restricted"
         />
       ) : (

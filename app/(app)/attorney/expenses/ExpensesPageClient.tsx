@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { ExpenseForm } from "@/components/attorney/ExpenseForm";
 import { ExpenseList } from "@/components/attorney/ExpenseList";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { createClientSafe } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/Button";
 import type { ExpenseSubmission, Matter } from "@/types/database";
 
 type Props = {
@@ -22,17 +23,27 @@ export function ExpensesPageClient({
 }: Props) {
   const [expenses, setExpenses] = useState(initialExpenses);
 
-  async function refreshExpenses() {
-    const supabase = createClientSafe();
-    if (!supabase) return;
-
-    const { data } = await supabase
-      .from("expense_submissions")
-      .select(`*, matter:matters ( title )`)
-      .eq("profile_id", profileId)
-      .order("expense_date", { ascending: false });
-
-    setExpenses((data ?? []) as ExpenseSubmission[]);
+  function handleDemoSubmit(payload: {
+    matter_id: string;
+    profile_id: string;
+    expense_date: string;
+    amount: number;
+    description: string;
+  }) {
+    const matter = initialMatters.find((item) => item.id === payload.matter_id);
+    setExpenses((prev) => [
+      {
+        id: `exp-${Date.now()}`,
+        matter_id: payload.matter_id,
+        profile_id: payload.profile_id,
+        expense_date: payload.expense_date,
+        amount: payload.amount,
+        description: payload.description,
+        status: "pending",
+        matter: { title: matter?.title ?? "Assigned matter" },
+      },
+      ...prev,
+    ]);
   }
 
   return (
@@ -40,13 +51,20 @@ export function ExpensesPageClient({
       <PageHeader
         title="Reimbursable Expenses"
         description="Submit matter expenses for manager approval."
-      />
+      >
+        <Link href="/attorney/time">
+          <Button variant="secondary" size="sm">
+            Back to Time
+          </Button>
+        </Link>
+      </PageHeader>
 
       <ExpenseForm
         matters={initialMatters}
         profileId={profileId}
-        onCreated={refreshExpenses}
+        onCreated={() => undefined}
         previewMode={previewMode}
+        onDemoSubmit={previewMode ? handleDemoSubmit : undefined}
       />
 
       <div>

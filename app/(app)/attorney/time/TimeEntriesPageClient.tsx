@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
 import { TimeEntryForm } from "@/components/attorney/TimeEntryForm";
 import { TimeEntryList } from "@/components/attorney/TimeEntryList";
+import { TimerWidget } from "@/components/attorney/TimerWidget";
+import { useAttorneyData } from "@/components/attorney/AttorneyDataProvider";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Button } from "@/components/ui/Button";
 import { useDemoTimeWorkflow } from "@/hooks/useDemoTimeWorkflow";
 import { profileIdForRole } from "@/lib/demo/time-workflow-store";
-import { createClientSafe } from "@/lib/supabase/client";
 import type { Matter, TimeEntry } from "@/types/database";
 
 type Props = {
@@ -20,54 +22,54 @@ type Props = {
 export function TimeEntriesPageClient({
   profileId,
   initialMatters,
-  initialEntries,
   previewMode = false,
 }: Props) {
   const { selectedRole } = useDemoRole();
-  const activeProfileId = previewMode ? profileIdForRole(selectedRole) : profileId;
-  const { timeEntries, refresh } = useDemoTimeWorkflow(
+  const { timeEntries, profileId: storeProfileId, matters: storeMatters } = useAttorneyData();
+  const activeProfileId = previewMode ? profileIdForRole(selectedRole) : storeProfileId;
+  const { timeEntries: demoEntries, refresh } = useDemoTimeWorkflow(
     previewMode ? activeProfileId : undefined,
   );
-  const [liveEntries, setLiveEntries] = useState(initialEntries);
 
-  const entries = previewMode ? timeEntries : liveEntries;
+  const entries = previewMode
+    ? demoEntries
+    : timeEntries.filter((entry) => entry.profile_id === storeProfileId);
 
-  async function refreshEntries() {
+  const formMatters = previewMode ? initialMatters : storeMatters;
+
+  function refreshEntries() {
     if (previewMode) {
       refresh();
-      return;
     }
-
-    const supabase = createClientSafe();
-    if (!supabase) return;
-
-    const { data } = await supabase
-      .from("time_entries")
-      .select(`*, matter:matters ( title )`)
-      .eq("profile_id", profileId)
-      .order("entry_date", { ascending: false });
-
-    setLiveEntries((data ?? []) as TimeEntry[]);
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Time Entries"
-        description="Log billable and non-billable hours. Entries stay pending until a manager approves them."
-      />
+        title="Time & Expenses"
+        description="Start a timer or log hours manually. Billable and non-billable entries stay pending until a manager approves them."
+      >
+        <Link href="/attorney/expenses">
+          <Button variant="secondary" size="sm">
+            Reimbursable Expenses
+          </Button>
+        </Link>
+      </PageHeader>
+
+      {!previewMode && <TimerWidget />}
 
       <TimeEntryForm
-        matters={initialMatters}
+        matters={formMatters}
         profileId={activeProfileId}
         submitterRole={selectedRole}
         onCreated={refreshEntries}
         previewMode={previewMode}
+        useProviderStore={!previewMode}
       />
 
       <div>
         <h2 className="mb-3 text-lg font-semibold text-navy-900">Your entries</h2>
-        <TimeEntryList entries={entries} />
+        <TimeEntryList entries={entries} editable={!previewMode} />
       </div>
     </div>
   );

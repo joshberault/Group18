@@ -2,6 +2,7 @@ import {
   PARALEGAL_ALERTS,
   PARALEGAL_ASSIGNED_MATTERS,
   PARALEGAL_DEADLINES,
+  PARALEGAL_EXPENSES,
   PARALEGAL_REVIEW_QUEUE,
   PARALEGAL_TASKS,
   PARALEGAL_TIME_ENTRIES,
@@ -64,7 +65,11 @@ export function getAttorneyAlerts(): ParalegalAlert[] {
   );
 }
 
-export function getAttorneyPriorityActions(): ParalegalTask[] {
+export function getAttorneyPriorityActions(filters?: {
+  matter: string;
+  client: string;
+  priority: string;
+}): ParalegalTask[] {
   const rank = (t: ParalegalTask) => {
     const days = daysUntil(t.dueDate);
     if (t.status === "overdue" || days < 0) return 0;
@@ -77,6 +82,13 @@ export function getAttorneyPriorityActions(): ParalegalTask[] {
 
   return [...getAttorneyTasks()]
     .filter((t) => t.status !== "completed")
+    .filter((t) => {
+      if (!filters) return true;
+      if (filters.matter !== "all" && t.matterId !== filters.matter) return false;
+      if (filters.client !== "all" && t.clientId !== filters.client) return false;
+      if (filters.priority !== "all" && t.priority !== filters.priority) return false;
+      return true;
+    })
     .sort((a, b) => rank(a) - rank(b) || a.dueDate.localeCompare(b.dueDate))
     .slice(0, 8);
 }
@@ -133,4 +145,58 @@ export function getUpcomingAttorneyDeadlines(limit = 6) {
   return [...getAttorneyDeadlines()]
     .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
     .slice(0, limit);
+}
+
+export function getAttorneyMatterIdForTitle(title: string) {
+  return getAttorneyMatters().find((matter) => matter.title === title)?.id;
+}
+
+export function getAttorneyReviewById(reviewId: string) {
+  return getAttorneyReviewInbox().find((review) => review.id === reviewId);
+}
+
+export function getAttorneyReviewMatterHref(review: ParalegalReviewItem) {
+  const matterId = getAttorneyMatterIdForTitle(review.matterTitle);
+  if (!matterId) return "/attorney/matters";
+  return `/attorney/matters/${matterId}?review=${review.id}`;
+}
+
+export function getAttorneyReviewRelatedWorkHref(review: ParalegalReviewItem) {
+  const matterId = getAttorneyMatterIdForTitle(review.matterTitle);
+  if (matterId) return `/attorney/tasks?tab=all&matter=${matterId}`;
+  return "/attorney/tasks?tab=all";
+}
+
+/** Time and expense items on the attorney's matters needing attention or review. */
+export function getAttorneyTimeExpenseReminders() {
+  const myMatterIds = new Set(getAttorneyMatters().map((m) => m.id));
+  const today = new Date().toISOString().slice(0, 10);
+
+  const hoursToday = PARALEGAL_TIME_ENTRIES.filter(
+    (e) => myMatterIds.has(e.matterId) && e.entryDate === today && e.hours > 0,
+  ).reduce((sum, e) => sum + e.hours, 0);
+
+  const pendingReview = PARALEGAL_TIME_ENTRIES.filter(
+    (e) => myMatterIds.has(e.matterId) && e.status === "submitted",
+  );
+  const drafts = PARALEGAL_TIME_ENTRIES.filter(
+    (e) => myMatterIds.has(e.matterId) && e.status === "draft" && e.hours > 0,
+  );
+  const rejected = PARALEGAL_TIME_ENTRIES.filter(
+    (e) => myMatterIds.has(e.matterId) && e.status === "rejected",
+  );
+  const expensesNeedingReview = PARALEGAL_EXPENSES.filter(
+    (e) =>
+      myMatterIds.has(e.matterId) &&
+      (e.status === "submitted" || e.receiptMissing),
+  );
+
+  return {
+    hoursToday,
+    pendingReview,
+    drafts,
+    rejected,
+    expensesNeedingReview,
+    billingCutoff: getAttorneyDeadlines().find((d) => d.type === "billing_cutoff"),
+  };
 }
