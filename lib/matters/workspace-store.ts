@@ -98,7 +98,8 @@ function buildStatusFromCaseType(
     completedCount: number;
   },
 ): MatterCaseStatus {
-  const templates = CASE_TYPE_TASK_LISTS[caseType];
+  // Guard against undefined lists during circular module init / HMR.
+  const templates = CASE_TYPE_TASK_LISTS[caseType] ?? [];
   return {
     matterId,
     phase: meta.phase,
@@ -153,8 +154,8 @@ const STATUS_META_BY_MATTER: Record<
   },
 };
 
-const SEED_STATUSES: MatterCaseStatus[] = PARALEGAL_ASSIGNED_MATTERS.map(
-  (matter) => {
+function getSeedStatuses(): MatterCaseStatus[] {
+  return PARALEGAL_ASSIGNED_MATTERS.map((matter) => {
     const meta = STATUS_META_BY_MATTER[matter.id] ?? {
       phase: "Active",
       nextDeadline: matter.openDate,
@@ -162,8 +163,8 @@ const SEED_STATUSES: MatterCaseStatus[] = PARALEGAL_ASSIGNED_MATTERS.map(
       completedCount: 0,
     };
     return buildStatusFromCaseType(matter.id, matter.caseType, meta);
-  },
-);
+  });
+}
 
 const SEED_DOCUMENTS: MatterDocument[] = [
   {
@@ -312,7 +313,7 @@ export function getMatterStatuses(): MatterCaseStatus[] {
     overrides.map((item) => [item.matterId, item]),
   );
 
-  return SEED_STATUSES.map((seed) => {
+  return getSeedStatuses().map((seed) => {
     const override = overrideByMatter.get(seed.matterId);
     if (!override) return seed;
 
