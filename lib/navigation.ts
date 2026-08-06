@@ -233,15 +233,6 @@ export function getNavItemsForRole(role: UserRole): NavItem[] {
       ) {
         return null;
       }
-      if (item.href === "/dashboard" && role === "client") {
-        return {
-          ...item,
-          routeKey: "client_portal" as RouteKey,
-          label: "My Portal",
-          href: "/client-portal",
-          description: "Your matters and invoices",
-        };
-      }
       return item;
     })
     .filter((item): item is NavItem => item !== null);

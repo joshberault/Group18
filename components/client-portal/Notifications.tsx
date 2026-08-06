@@ -44,6 +44,7 @@ function notificationIcon(type: ClientNotification["type"]) {
   if (type === "dispute_denied") return CircleDollarSign;
   if (type === "invoice_added") return CircleDollarSign;
   if (type === "invoice_past_due") return CircleDollarSign;
+  if (type === "badge_earned") return Bell;
   return CalendarClock;
 }
 
@@ -52,6 +53,7 @@ function completionLabel(type: ClientNotification["type"]) {
   if (type === "case_status") return "I reviewed the update";
   if (type === "dispute_denied") return "I reviewed this notice";
   if (type === "invoice_added") return "I reviewed this invoice";
+  if (type === "badge_earned") return "I checked my badges";
   return "I paid this invoice";
 }
 
