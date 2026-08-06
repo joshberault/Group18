@@ -174,7 +174,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/accounting",
     icon: Calculator,
     description: "Accounting controls and trust accounting",
-    roles: BILLING_TEAM,
+    roles: ["managing_partner", "billing_specialist"],
   },
   {
     routeKey: "reports",
