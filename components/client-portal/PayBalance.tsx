@@ -39,6 +39,11 @@ import {
   type RecurringPaymentSetup,
 } from "@/lib/client-portal/payment-store";
 import {
+  allocatePaymentAgainstBalance,
+  createPaymentIdempotencyKey,
+  processPaymentOnce,
+} from "@/lib/client-portal/payment-controls";
+import {
   clientAccountSummary,
   invoiceCharges,
 } from "@/lib/mock-data/client-portal";
@@ -223,6 +228,17 @@ export function PayBalance() {
   const [step, setStep] = useState<Step>("form");
   const [action, setAction] = useState<PaymentAction>("full");
   const [partialAmount, setPartialAmount] = useState("");
+  const [applyExcessAsTrustCredit, setApplyExcessAsTrustCredit] =
+    useState(false);
+  const [paymentAttemptKey, setPaymentAttemptKey] = useState(
+    createPaymentIdempotencyKey,
+  );
+  const [lastPaymentResult, setLastPaymentResult] = useState<{
+    alreadyProcessed: boolean;
+    invoiceApplied: number;
+    trustCredit: number;
+  } | null>(null);
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [fields, setFields] = useState<PaymentFields>(INITIAL_FIELDS);
   const [checkFront, setCheckFront] = useState<File | null>(null);
@@ -299,15 +315,16 @@ export function PayBalance() {
   }
 
   function validatePayment() {
-    if (
-      action === "partial" &&
-      (!Number.isFinite(paymentAmount) ||
-        paymentAmount <= 0 ||
-        paymentAmount > outstandingBalance)
-    ) {
-      return `Enter a partial payment between $0.01 and ${formatCurrency(
-        outstandingBalance,
-      )}.`;
+    if (action === "partial" || action === "full" || action === "scheduled") {
+      const allocation = allocatePaymentAgainstBalance({
+        amount: paymentAmount,
+        balanceDue: outstandingBalance,
+        applyExcessAsTrustCredit:
+          action === "partial" ? applyExcessAsTrustCredit : false,
+      });
+      if (!allocation.ok) {
+        return allocation.error;
+      }
     }
 
     if (paymentMethod === "check") {
@@ -434,15 +451,24 @@ export function PayBalance() {
               ? `Your recurring card payment of ${formatCurrency(
                   Number(recurringAmount),
                 )} was scheduled.`
-              : `Your demo payment of ${formatCurrency(paymentAmount)} by ${paymentMethodLabel(
-                  paymentMethod,
-                )} was submitted for processing.`}
+              : lastPaymentResult?.alreadyProcessed
+                ? "This payment was already processed. No duplicate charge was created."
+                : lastPaymentResult && lastPaymentResult.trustCredit > 0
+                  ? `Applied ${formatCurrency(lastPaymentResult.invoiceApplied)} to the balance; ${formatCurrency(lastPaymentResult.trustCredit)} posted as trust credit.`
+                  : `Your demo payment of ${formatCurrency(
+                      lastPaymentResult?.invoiceApplied ?? paymentAmount,
+                    )} by ${paymentMethodLabel(
+                      paymentMethod,
+                    )} was submitted for processing.`}
         </p>
         <Button
           className="mt-6"
           onClick={() => {
             setStep("form");
             setError(null);
+            setLastPaymentResult(null);
+            setApplyExcessAsTrustCredit(false);
+            setPaymentAttemptKey(createPaymentIdempotencyKey());
           }}
         >
           Back to Pay Balance
@@ -644,6 +670,7 @@ export function PayBalance() {
 
           <div className="mt-6 flex justify-end">
             <Button
+              disabled={paymentSubmitting}
               onClick={() => {
                 if (action === "recurring") {
                   saveRecurringPayment({
@@ -653,12 +680,38 @@ export function PayBalance() {
                     amount: Number(recurringAmount),
                   });
                   refreshBillingState();
+                  setStep("sent");
+                  return;
                 }
+
+                if (paymentSubmitting) return;
+                setPaymentSubmitting(true);
+
+                const result = processPaymentOnce({
+                  idempotencyKey: paymentAttemptKey,
+                  amount: paymentAmount,
+                  balanceDue: outstandingBalance,
+                  applyExcessAsTrustCredit:
+                    action === "partial" ? applyExcessAsTrustCredit : false,
+                });
+
+                setPaymentSubmitting(false);
+
+                if (!result.ok) {
+                  setError(result.error);
+                  return;
+                }
+
+                setLastPaymentResult({
+                  alreadyProcessed: result.alreadyProcessed,
+                  invoiceApplied: result.invoiceApplied,
+                  trustCredit: result.trustCredit,
+                });
                 setStep("sent");
               }}
             >
               <ShieldCheck className="h-4 w-4" />
-              Confirm and send payment
+              {paymentSubmitting ? "Processing…" : "Confirm and send payment"}
             </Button>
           </div>
         </Card>
@@ -811,12 +864,11 @@ export function PayBalance() {
         </div>
 
         {action === "partial" && (
-          <div className="mt-4 max-w-sm">
+          <div className="mt-4 max-w-sm space-y-3">
             <Input
               label="Partial payment amount (USD)"
               type="number"
               min="0.01"
-              max={outstandingBalance}
               step="0.01"
               value={partialAmount}
               onChange={(event) => {
@@ -826,6 +878,25 @@ export function PayBalance() {
               placeholder="0.00"
               required
             />
+            <label className="flex items-start gap-3 text-sm text-navy-900">
+              <input
+                type="checkbox"
+                className="mt-1 accent-navy-900"
+                checked={applyExcessAsTrustCredit}
+                onChange={(event) => {
+                  setApplyExcessAsTrustCredit(event.target.checked);
+                  setError(null);
+                }}
+              />
+              <span>
+                Apply excess as trust credit
+                <span className="mt-0.5 block text-xs text-muted">
+                  Required when the amount exceeds the current balance of{" "}
+                  {formatCurrency(outstandingBalance)}. Excess is held as a
+                  trust credit.
+                </span>
+              </span>
+            </label>
           </div>
         )}
       </Card>
