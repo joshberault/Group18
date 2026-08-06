@@ -12,6 +12,7 @@ import { addAttorneyConsultationRequestNotification } from "@/lib/attorney/notif
 import {
   addConsultationRequestRecord,
   buildConsultationTimeSlots,
+  CONSULTATION_LEGAL_SERVICE_LABELS,
   CONSULTATION_LEGAL_SERVICE_OPTIONS,
   formatConsultationDetails,
   formatUsPhoneDisplay,
@@ -24,7 +25,6 @@ import {
   type ConsultationContactMethod,
   type ConsultationLegalServiceId,
 } from "@/lib/demo/consultation-requests-store";
-import { CASE_TYPE_LABELS } from "@/lib/client-portal/case-task-lists";
 import { addMatterRequest } from "@/lib/matters/workspace-store";
 import { addParalegalConsultationRequestNotification } from "@/lib/paralegal/notifications-store";
 import { Button } from "@/components/ui/Button";
@@ -364,9 +364,7 @@ export function ProspectiveClientDashboard() {
     const details = formatConsultationDetails(payload);
     const fullName = `${payload.firstName} ${payload.lastName}`;
     const caseTypeSummary = payload.legalServices
-      .map((id) =>
-        id === "other" ? "Other" : CASE_TYPE_LABELS[id],
-      )
+      .map((id) => CONSULTATION_LEGAL_SERVICE_LABELS[id])
       .join(", ");
     const submittedAt = Date.now();
 
