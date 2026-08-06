@@ -319,7 +319,9 @@ export function Header({ onMenuClick, className }: HeaderProps) {
           <p className="text-sm font-medium text-navy-900">
             {identity.fullName}
           </p>
-          <p className="text-xs text-muted">{roleDisplayLabel}</p>
+          <p className="text-xs text-muted" suppressHydrationWarning>
+            {roleDisplayLabel}
+          </p>
         </div>
 
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-900 text-sm font-semibold text-gold-500">

@@ -4,7 +4,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useState,
   useSyncExternalStore,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -41,9 +43,19 @@ function getStoredRole(): UserRole {
   return DEFAULT_DEMO_ROLE;
 }
 
+const DEMO_PREFERENCES_CHANGED_EVENT = "counselflow-demo-preferences-changed";
+
 function subscribeToDemoPreferences(callback: () => void) {
   window.addEventListener("storage", callback);
-  return () => window.removeEventListener("storage", callback);
+  window.addEventListener(DEMO_PREFERENCES_CHANGED_EVENT, callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(DEMO_PREFERENCES_CHANGED_EVENT, callback);
+  };
+}
+
+function notifyDemoPreferencesChanged() {
+  window.dispatchEvent(new Event(DEMO_PREFERENCES_CHANGED_EVENT));
 }
 
 interface DemoRoleContextValue {
@@ -55,6 +67,8 @@ interface DemoRoleContextValue {
   selectAttorneySpecialty: (specialty: AttorneyDemoSpecialty) => void;
   /** Header-friendly role line (includes specialty when attorney). */
   roleDisplayLabel: string;
+  /** False during SSR/first paint — avoids localStorage hydration mismatches. */
+  isClientReady: boolean;
   /** @deprecated Use selectedRole — kept for main-branch components */
   role: UserRole;
   /** @deprecated Use setSelectedRole */
@@ -72,6 +86,12 @@ const DemoRoleContext = createContext<DemoRoleContextValue | null>(null);
 
 export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const [isClientReady, setIsClientReady] = useState(false);
+
+  useEffect(() => {
+    setIsClientReady(true);
+  }, []);
+
   const selectedRole = useSyncExternalStore(
     subscribeToDemoPreferences,
     getStoredRole,
@@ -104,7 +124,7 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
   const setSelectedRole = useCallback(
     (newRole: UserRole) => {
       localStorage.setItem(DEMO_ROLE_STORAGE_KEY, newRole);
-      window.dispatchEvent(new Event("storage"));
+      notifyDemoPreferencesChanged();
       navigateIfNeeded(newRole);
     },
     [navigateIfNeeded],
@@ -114,7 +134,7 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
     (specialty: AttorneyDemoSpecialty) => {
       localStorage.setItem(DEMO_ATTORNEY_SPECIALTY_STORAGE_KEY, specialty);
       localStorage.setItem(DEMO_ROLE_STORAGE_KEY, "attorney");
-      window.dispatchEvent(new Event("storage"));
+      notifyDemoPreferencesChanged();
       navigateIfNeeded("attorney");
     },
     [navigateIfNeeded],
@@ -147,6 +167,12 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
     return USER_ROLE_LABELS[selectedRole];
   }, [attorneySpecialty, selectedRole]);
 
+  const stableRole = isClientReady ? selectedRole : DEFAULT_DEMO_ROLE;
+  const stableIdentity = DEMO_IDENTITIES[stableRole];
+  const stableRoleDisplayLabel = isClientReady
+    ? roleDisplayLabel
+    : USER_ROLE_LABELS[DEFAULT_DEMO_ROLE];
+
   const value = useMemo<DemoRoleContextValue>(
     () => ({
       selectedRole,
@@ -154,14 +180,15 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
       attorneySpecialty,
       attorneyPracticeAreaName,
       selectAttorneySpecialty,
-      roleDisplayLabel,
+      roleDisplayLabel: stableRoleDisplayLabel,
+      isClientReady,
       role: selectedRole,
       setRole: setSelectedRole,
       permissions,
       hasPermission,
       navigationItems,
       defaultRoute: roleDefinition.defaultRoute,
-      identity: DEMO_IDENTITIES[selectedRole],
+      identity: stableIdentity,
       dashboardTitle: roleDefinition.dashboardTitle,
       dashboardDescription: roleDefinition.dashboardDescription,
     }),
@@ -171,11 +198,13 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
       attorneySpecialty,
       attorneyPracticeAreaName,
       selectAttorneySpecialty,
-      roleDisplayLabel,
+      stableRoleDisplayLabel,
+      isClientReady,
       permissions,
       hasPermission,
       navigationItems,
       roleDefinition,
+      stableIdentity,
     ],
   );
 

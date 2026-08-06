@@ -8,6 +8,7 @@ import {
   type AttorneyDemoSpecialty,
 } from "@/lib/attorney/specialties";
 import { USER_ROLE_LABELS, USER_ROLES, type UserRole } from "@/lib/types";
+import { DEFAULT_DEMO_ROLE } from "@/lib/roles/role-config";
 import { cn } from "@/lib/utils/cn";
 import { useDemoRole } from "./DemoRoleProvider";
 
@@ -32,7 +33,8 @@ export function DemoRoleSelect({
   onRoleChange,
   className,
 }: DemoRoleSelectProps) {
-  const { selectedRole, attorneySpecialty, selectAttorneySpecialty } = useDemoRole();
+  const { selectedRole, attorneySpecialty, selectAttorneySpecialty, isClientReady } =
+    useDemoRole();
   const [open, setOpen] = useState(false);
   const [attorneySubmenuOpen, setAttorneySubmenuOpen] = useState(false);
   const [flyoutTop, setFlyoutTop] = useState(0);
@@ -119,7 +121,11 @@ export function DemoRoleSelect({
         onClick={() => setOpen((current) => !current)}
         className="flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 text-left text-sm text-navy-900 focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/20"
       >
-        <span className="truncate">{roleTriggerLabel(selectedRole, attorneySpecialty)}</span>
+        <span className="truncate" suppressHydrationWarning>
+          {isClientReady
+            ? roleTriggerLabel(selectedRole, attorneySpecialty)
+            : USER_ROLE_LABELS[DEFAULT_DEMO_ROLE]}
+        </span>
         <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted transition", open && "rotate-180")} />
       </button>
 
