@@ -7,7 +7,6 @@ import {
   useEffect,
   useMemo,
   useState,
-  useSyncExternalStore,
 } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -32,30 +31,11 @@ import {
 } from "@/lib/roles/role-config";
 import { USER_ROLE_LABELS, type UserRole } from "@/lib/types";
 
-function getStoredRole(): UserRole {
-  if (typeof window === "undefined") {
-    return DEFAULT_DEMO_ROLE;
-  }
+function readStoredRole(): UserRole {
+  if (typeof window === "undefined") return DEFAULT_DEMO_ROLE;
   const stored = localStorage.getItem(DEMO_ROLE_STORAGE_KEY);
-  if (stored && isValidDemoRole(stored)) {
-    return stored;
-  }
+  if (stored && isValidDemoRole(stored)) return stored;
   return DEFAULT_DEMO_ROLE;
-}
-
-const DEMO_PREFERENCES_CHANGED_EVENT = "counselflow-demo-preferences-changed";
-
-function subscribeToDemoPreferences(callback: () => void) {
-  window.addEventListener("storage", callback);
-  window.addEventListener(DEMO_PREFERENCES_CHANGED_EVENT, callback);
-  return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener(DEMO_PREFERENCES_CHANGED_EVENT, callback);
-  };
-}
-
-function notifyDemoPreferencesChanged() {
-  window.dispatchEvent(new Event(DEMO_PREFERENCES_CHANGED_EVENT));
 }
 
 interface DemoRoleContextValue {
@@ -86,23 +66,28 @@ const DemoRoleContext = createContext<DemoRoleContextValue | null>(null);
 
 export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  // Always start from DEFAULT so SSR and the first client paint match.
+  const [selectedRole, setSelectedRoleState] = useState<UserRole>(DEFAULT_DEMO_ROLE);
+  const [attorneySpecialtyStored, setAttorneySpecialtyStored] =
+    useState<AttorneyDemoSpecialty>(DEFAULT_ATTORNEY_DEMO_SPECIALTY);
   const [isClientReady, setIsClientReady] = useState(false);
 
   useEffect(() => {
+    setSelectedRoleState(readStoredRole());
+    setAttorneySpecialtyStored(getStoredAttorneySpecialty());
     setIsClientReady(true);
+
+    const onChange = () => {
+      setSelectedRoleState(readStoredRole());
+      setAttorneySpecialtyStored(getStoredAttorneySpecialty());
+    };
+    window.addEventListener("storage", onChange);
+    window.addEventListener("counselflow-demo-preferences-changed", onChange);
+    return () => {
+      window.removeEventListener("storage", onChange);
+      window.removeEventListener("counselflow-demo-preferences-changed", onChange);
+    };
   }, []);
-
-  const selectedRole = useSyncExternalStore(
-    subscribeToDemoPreferences,
-    getStoredRole,
-    () => DEFAULT_DEMO_ROLE,
-  );
-
-  const attorneySpecialtyStored = useSyncExternalStore(
-    subscribeToDemoPreferences,
-    getStoredAttorneySpecialty,
-    () => DEFAULT_ATTORNEY_DEMO_SPECIALTY,
-  );
 
   const attorneySpecialty =
     selectedRole === "attorney" ? attorneySpecialtyStored : null;
@@ -124,7 +109,8 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
   const setSelectedRole = useCallback(
     (newRole: UserRole) => {
       localStorage.setItem(DEMO_ROLE_STORAGE_KEY, newRole);
-      notifyDemoPreferencesChanged();
+      setSelectedRoleState(newRole);
+      window.dispatchEvent(new Event("counselflow-demo-preferences-changed"));
       navigateIfNeeded(newRole);
     },
     [navigateIfNeeded],
@@ -134,7 +120,9 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
     (specialty: AttorneyDemoSpecialty) => {
       localStorage.setItem(DEMO_ATTORNEY_SPECIALTY_STORAGE_KEY, specialty);
       localStorage.setItem(DEMO_ROLE_STORAGE_KEY, "attorney");
-      notifyDemoPreferencesChanged();
+      setAttorneySpecialtyStored(specialty);
+      setSelectedRoleState("attorney");
+      window.dispatchEvent(new Event("counselflow-demo-preferences-changed"));
       navigateIfNeeded("attorney");
     },
     [navigateIfNeeded],
@@ -150,14 +138,18 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
     [permissions],
   );
 
+  // Keep SSR + first client paint on the default role nav to avoid hydration
+  // mismatches when localStorage has a different demo role.
+  const navigationRole = isClientReady ? selectedRole : DEFAULT_DEMO_ROLE;
+
   const navigationItems = useMemo(
-    () => getNavigationForRole(selectedRole),
-    [selectedRole],
+    () => getNavigationForRole(navigationRole),
+    [navigationRole],
   );
 
   const roleDefinition = useMemo(
-    () => getRoleDefinition(selectedRole),
-    [selectedRole],
+    () => getRoleDefinition(navigationRole),
+    [navigationRole],
   );
 
   const roleDisplayLabel = useMemo(() => {
@@ -167,12 +159,6 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
     return USER_ROLE_LABELS[selectedRole];
   }, [attorneySpecialty, selectedRole]);
 
-  const stableRole = isClientReady ? selectedRole : DEFAULT_DEMO_ROLE;
-  const stableIdentity = DEMO_IDENTITIES[stableRole];
-  const stableRoleDisplayLabel = isClientReady
-    ? roleDisplayLabel
-    : USER_ROLE_LABELS[DEFAULT_DEMO_ROLE];
-
   const value = useMemo<DemoRoleContextValue>(
     () => ({
       selectedRole,
@@ -180,7 +166,9 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
       attorneySpecialty,
       attorneyPracticeAreaName,
       selectAttorneySpecialty,
-      roleDisplayLabel: stableRoleDisplayLabel,
+      roleDisplayLabel: isClientReady
+        ? roleDisplayLabel
+        : USER_ROLE_LABELS[DEFAULT_DEMO_ROLE],
       isClientReady,
       role: selectedRole,
       setRole: setSelectedRole,
@@ -188,7 +176,7 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
       hasPermission,
       navigationItems,
       defaultRoute: roleDefinition.defaultRoute,
-      identity: stableIdentity,
+      identity: DEMO_IDENTITIES[navigationRole],
       dashboardTitle: roleDefinition.dashboardTitle,
       dashboardDescription: roleDefinition.dashboardDescription,
     }),
@@ -198,13 +186,13 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
       attorneySpecialty,
       attorneyPracticeAreaName,
       selectAttorneySpecialty,
-      stableRoleDisplayLabel,
+      roleDisplayLabel,
       isClientReady,
       permissions,
       hasPermission,
       navigationItems,
       roleDefinition,
-      stableIdentity,
+      navigationRole,
     ],
   );
 

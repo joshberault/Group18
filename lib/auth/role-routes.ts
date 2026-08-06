@@ -35,7 +35,7 @@ export function getDefaultHomePath(role: UserRole): string {
     case "billing_specialist":
       return "/billing";
     case "firm_administrator":
-      return "/dashboard";
+      return "/admin";
     case "managing_partner":
     default:
       return "/dashboard";

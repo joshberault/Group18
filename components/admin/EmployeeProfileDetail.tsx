@@ -362,7 +362,7 @@ export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps
             Pending Approval Requests
           </h2>
           <Link
-            href="/admin/approvals"
+            href="/dashboard/approvals"
             className="text-sm font-medium text-navy-900 underline-offset-2 hover:text-gold-500 hover:underline"
           >
             Open approval queue
@@ -380,7 +380,7 @@ export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps
               {pendingApprovals.map((approval) => (
                 <li key={approval.id}>
                   <Link
-                    href="/admin/approvals"
+                    href="/dashboard/approvals"
                     className="flex flex-col justify-between gap-2 rounded-lg border border-gray-100 px-4 py-3 text-sm hover:border-gold-500 sm:flex-row sm:items-center"
                   >
                     <span>

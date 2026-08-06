@@ -121,8 +121,9 @@ export function EmployeeProfiles() {
     <div className="space-y-4">
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
         <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
-        Employee Profiles reflects the current staff roster and operational data
-        from Supabase.
+        Employee Profiles are loaded from the Supabase{" "}
+        <code className="rounded bg-white/70 px-1">profiles</code> table for
+        every internal role.
       </div>
 
       <Card padding="md">

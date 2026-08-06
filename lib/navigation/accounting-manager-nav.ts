@@ -12,11 +12,11 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import type { NavItem } from "@/lib/navigation";
+import type { NavItem } from "@/lib/navigation/types";
 
 /**
  * Sidebar navigation used ONLY when the demo role is Accounting Manager.
- * Other roles use NAV_ITEMS from lib/navigation.ts — do not merge these arrays.
+ * Other roles use NAV_ITEMS from lib/navigation — do not merge these arrays.
  */
 export const ACCOUNTING_MANAGER_NAV_ITEMS: NavItem[] = [
   {

@@ -23,6 +23,8 @@ import {
   calculateWorkloadPercentage,
   evaluateAssignmentConflicts,
   findDuplicateActiveAssignment,
+  getAttorneysAvailableForAssignment,
+  isAssignableLegalStaff,
   getVacationStatusLabel,
   uniquePracticeAreas,
 } from "@/lib/admin/calculations";
@@ -75,10 +77,12 @@ const ROLE_OPTIONS = [
   "Lead Counsel",
   "Deal Counsel",
   "Supervising Partner",
+  "Managing Partner",
   "Partner",
   "IP Counsel",
   "Associate",
   "Of Counsel",
+  "Paralegal",
 ];
 
 function emptyForm(
@@ -180,6 +184,16 @@ export function AssignmentsPanel() {
     () => uniquePracticeAreas(data?.employees ?? []),
     [data?.employees],
   );
+
+  /** Assignees: attorneys, managing partners, and paralegals. */
+  const assignableEmployees = useMemo(() => {
+    const staff = (data?.employees ?? []).filter(isAssignableLegalStaff);
+    const preferred = getAttorneysAvailableForAssignment(staff);
+    const preferredIds = new Set(preferred.map((e) => e.id));
+    return [...preferred, ...staff.filter((e) => !preferredIds.has(e.id))].sort(
+      (a, b) => a.fullName.localeCompare(b.fullName),
+    );
+  }, [data?.employees]);
 
   const selected = useMemo(
     () => assignments.find((a) => a.id === selectedId) ?? null,
@@ -401,6 +415,10 @@ export function AssignmentsPanel() {
     const employee = data?.employees.find((e) => e.id === form.employeeId);
     if (employee && employee.status === "inactive") {
       next.employeeId = "Inactive employees cannot be assigned.";
+    }
+    if (employee && !isAssignableLegalStaff(employee)) {
+      next.employeeId =
+        "Only attorneys, managing partners, and paralegals can be assigned to matters.";
     }
 
     if (mode === "cancel" && !form.cancelReason.trim()) {
@@ -698,9 +716,9 @@ export function AssignmentsPanel() {
     <div className="space-y-4">
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
         <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
-        Assignments use current Supabase employees and matters. Estimated hours
-        (planned) are distinct from actual hours (worked). Changes update local
-        page state only.
+        Assign attorneys, managing partners, and paralegals to matters from the
+        Supabase roster. Estimated hours (planned) are distinct from actual
+        hours (worked). Changes update local page state only.
       </div>
 
       {successMessage && (
@@ -1054,12 +1072,37 @@ export function AssignmentsPanel() {
               label="Assigned employee"
               value={form.employeeId}
               error={errors.employeeId}
-              onChange={(e) => updateField("employeeId", e.target.value)}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                const nextEmployee = assignableEmployees.find(
+                  (emp) => emp.id === nextId,
+                );
+                const defaultRole =
+                  nextEmployee?.roleKey === "paralegal"
+                    ? "Paralegal"
+                    : nextEmployee?.roleKey === "managing_partner"
+                      ? "Managing Partner"
+                      : null;
+                const shouldSuggestRole =
+                  !!defaultRole &&
+                  (form.roleOnMatter === "Lead Counsel" ||
+                    !form.roleOnMatter.trim());
+                setForm((prev) => ({
+                  ...prev,
+                  employeeId: nextId,
+                  roleOnMatter: shouldSuggestRole
+                    ? defaultRole
+                    : prev.roleOnMatter,
+                }));
+              }}
               options={[
-                { value: "", label: "Select employee" },
-                ...data.employees.map((e) => ({
+                {
+                  value: "",
+                  label: "Select attorney, managing partner, or paralegal",
+                },
+                ...assignableEmployees.map((e) => ({
                   value: e.id,
-                  label: `${e.fullName} (${e.status})`,
+                  label: `${e.fullName} · ${e.roleLabel} (${e.status})`,
                 })),
               ]}
             />

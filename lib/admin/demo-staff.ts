@@ -29,7 +29,7 @@ export function parseDemoStaffRole(employeeId: string): UserRole | null {
     : null;
 }
 
-type RoleStaffMeta = {
+export type RoleStaffMeta = {
   department: string;
   practiceArea: string;
   title: string;
@@ -45,7 +45,7 @@ type RoleStaffMeta = {
   employeeNumber: string;
 };
 
-const ROLE_STAFF_META: Record<UserRole, RoleStaffMeta> = {
+export const ROLE_STAFF_META: Record<UserRole, RoleStaffMeta> = {
   managing_partner: {
     department: "Executive",
     practiceArea: "Firm Leadership",
@@ -304,4 +304,9 @@ export function getDemoStaffEmployeeById(
   employeeId: string,
 ): AdminEmployee | undefined {
   return DEMO_STAFF_EMPLOYEES.find((employee) => employee.id === employeeId);
+}
+
+/** Staffing metadata used to enrich live Supabase profiles for Admin boards. */
+export function getRoleStaffMeta(role: UserRole) {
+  return ROLE_STAFF_META[role];
 }

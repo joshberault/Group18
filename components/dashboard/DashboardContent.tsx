@@ -467,9 +467,9 @@ export function DashboardContent() {
         </div>
       )}
 
-      {(role === "managing_partner" || role === "firm_administrator") && (
+      {role === "managing_partner" && (
         <div className="mb-6">
-          <PendingTimeApprovalsPanel adminLink={role === "firm_administrator"} />
+          <PendingTimeApprovalsPanel adminLink />
         </div>
       )}
 

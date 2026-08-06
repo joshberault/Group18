@@ -1,21 +1,24 @@
-import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   Briefcase,
   Calculator,
   Calendar,
+  CheckSquare,
   CircleDollarSign,
   Clock,
   FileText,
+  Gauge,
   LayoutDashboard,
   ListTodo,
   Receipt,
+  Shield,
   ShieldAlert,
   StickyNote,
   TrendingUp,
   UserCog,
   Users,
   UserCircle,
+  type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/lib/types";
 import { canAccessNavItem } from "@/lib/auth/demo-access";
@@ -23,41 +26,9 @@ import {
   ATTORNEY_HUB_ACCESS_ROLES,
   usesAttorneyHubAsHome,
 } from "@/lib/auth/role-routes";
+import type { NavItem, RouteKey } from "@/lib/navigation/types";
 
-export type RouteKey =
-  | "dashboard"
-  | "analytics"
-  | "clients"
-  | "matters"
-  | "admin"
-  | "administration"
-  | "attorney_hub"
-  | "time"
-  | "tasks"
-  | "calendar"
-  | "notes"
-  | "billing"
-  | "invoices"
-  | "receivables"
-  | "accounting"
-  | "reports"
-  | "risk_center"
-  | "client_portal"
-  | "trust_accounting"
-  | "revenue_ledger"
-  | "banking"
-  | "accounts_payable"
-  | "audit_log";
-
-export interface NavItem {
-  routeKey: RouteKey;
-  label: string;
-  href: string;
-  icon: LucideIcon;
-  description?: string;
-  /** Demo roles that can see this nav item (standard sidebar only) */
-  roles?: UserRole[];
-}
+export type { NavItem, RouteKey } from "@/lib/navigation/types";
 
 const ALL_ROLES: UserRole[] = [
   "managing_partner",
@@ -103,6 +74,14 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["managing_partner"],
   },
   {
+    routeKey: "approvals",
+    label: "Approval Queue",
+    href: "/dashboard/approvals",
+    icon: CheckSquare,
+    description: "Pending time, expense, vacation, and staffing approvals",
+    roles: ["managing_partner"],
+  },
+  {
     routeKey: "clients",
     label: "Clients",
     href: "/clients",
@@ -123,8 +102,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Admin/Staff Information",
     href: "/admin",
     icon: UserCog,
-    description:
-      "Employees, matters, assignments, approvals, workload, and roles",
+    description: "Employees, matters, assignments, workload, and roles",
     roles: ["firm_administrator"],
   },
   {
@@ -141,6 +119,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/attorney/time",
     icon: Clock,
     description: "Attorney time and billable expenses",
+    // Managing Partner excluded — hardened on main.
     roles: ["attorney", "paralegal", "billing_specialist"],
   },
   {
@@ -221,6 +200,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/client-portal",
     icon: UserCircle,
     description: "Client-facing matter and invoice access",
+    // Managing Partner excluded — hardened on main.
     roles: ["client", "firm_administrator"],
   },
 ];
@@ -230,10 +210,61 @@ export function getNavRoles(href: string): UserRole[] {
   return item?.roles ?? [];
 }
 
+/** Section links nested under Manager Dashboard in the Firm Admin sidebar. */
+function getFirmAdminSectionChildren(): NavItem[] {
+  const sections: Array<{
+    label: string;
+    href: string;
+    icon: LucideIcon;
+    description: string;
+  }> = [
+    {
+      label: "Attorney Management",
+      href: "/admin/attorneys",
+      icon: Briefcase,
+      description: "Attorney profiles and practice focus",
+    },
+    {
+      label: "Employee Profiles",
+      href: "/admin/employees",
+      icon: Users,
+      description: "Internal employee directory",
+    },
+    {
+      label: "Assignments",
+      href: "/admin/assignments",
+      icon: Briefcase,
+      description: "Matter and case staffing assignments",
+    },
+    {
+      label: "Workload Board",
+      href: "/admin/workload",
+      icon: Gauge,
+      description: "Capacity and internal workload",
+    },
+    {
+      label: "Role Permissions",
+      href: "/admin/roles",
+      icon: Shield,
+      description: "Admin role capability matrix",
+    },
+  ];
+
+  return sections.map((item) => ({
+    routeKey: "administration" as RouteKey,
+    label: item.label,
+    href: item.href,
+    icon: item.icon,
+    description: item.description,
+    roles: ["firm_administrator" as UserRole],
+  }));
+}
+
 /**
  * Role-aware nav: attorneys get "My Dashboard" instead of firm dashboard;
- * duplicate Attorney Hub link is hidden for attorney/paralegal.
+ * firm administrators get "Manager Dashboard" (/admin) with nested section links;
  * Billing Specialist: Dashboard → Billing Dashboard at /billing; hide separate Billing.
+ * Managing Partner: never show Time & Expenses or Client Portal.
  */
 export function getNavItemsForRole(role: UserRole): NavItem[] {
   return NAV_ITEMS.filter((item) => canAccessNavItem(role, item.roles ?? []))
@@ -257,6 +288,21 @@ export function getNavItemsForRole(role: UserRole): NavItem[] {
         };
       }
       if (item.href === "/attorney/dashboard" && usesAttorneyHubAsHome(role)) {
+        return null;
+      }
+      if (item.href === "/dashboard" && role === "firm_administrator") {
+        return {
+          ...item,
+          routeKey: "administration" as RouteKey,
+          label: "Manager Dashboard",
+          href: "/admin",
+          icon: UserCog,
+          description:
+            "Staffing overview with section links for day-to-day admin work",
+          children: getFirmAdminSectionChildren(),
+        };
+      }
+      if (item.href === "/admin" && role === "firm_administrator") {
         return null;
       }
       if (item.href === "/dashboard" && role === "client") {
