@@ -90,6 +90,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
     permissions: [
       "view_assigned_matters",
       "view_own_matters",
+      "manage_clients",
       "enter_time",
       "manage_tasks",
       "create_invoices",

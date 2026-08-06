@@ -62,7 +62,7 @@ export function getClientPermissions(role: UserRole): ClientPermissions {
         // Set enforceAssignmentFilter=true and pass assignedClientIds to enable.
         canViewAllClients: true,
         enforceAssignmentFilter: false,
-        canCreate: false,
+        canCreate: true,
         canEditContact: true,
         canEditStatus: false,
         canEditConflict: false,
