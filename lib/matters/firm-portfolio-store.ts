@@ -1,8 +1,7 @@
-import {
-  buildFirmPortfolioSeed,
-  type EngagementFeeType,
-  type FirmPortfolioMatter,
-  type MatterLifecycleStatus,
+import type {
+  EngagementFeeType,
+  FirmPortfolioMatter,
+  MatterLifecycleStatus,
 } from "@/lib/matters/firm-portfolio";
 
 export const FIRM_PORTFOLIO_STORAGE_KEY =
@@ -60,7 +59,7 @@ export function applyFirmPortfolioPatches(
 }
 
 export function getFirmPortfolioMatters(): FirmPortfolioMatter[] {
-  return applyFirmPortfolioPatches(buildFirmPortfolioSeed());
+  return applyFirmPortfolioPatches(getFirmPortfolioBaseOrSeed());
 }
 
 /** Live base portfolio for Managing Partner /matters (set by the view from Supabase). */
@@ -72,8 +71,9 @@ export function setFirmPortfolioBase(
   liveBasePortfolio = base;
 }
 
+/** Empty until setFirmPortfolioBase loads Supabase rows (no mock seed on main). */
 export function getFirmPortfolioBaseOrSeed(): FirmPortfolioMatter[] {
-  return liveBasePortfolio ?? buildFirmPortfolioSeed();
+  return liveBasePortfolio ?? [];
 }
 
 export function getLiveFirmPortfolioMatters(): FirmPortfolioMatter[] {
