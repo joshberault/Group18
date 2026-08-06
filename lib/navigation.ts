@@ -221,7 +221,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/client-portal",
     icon: UserCircle,
     description: "Client-facing matter and invoice access",
-    roles: ["client", "managing_partner", "firm_administrator"],
+    roles: ["client", "firm_administrator"],
   },
 ];
 
