@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronLeft } from "lucide-react";
 import {
   ATTORNEY_DEMO_SPECIALTIES,
   getAttorneySpecialtyOption,
@@ -15,6 +15,8 @@ interface DemoRoleSelectProps {
   onRoleChange: (role: UserRole) => void;
   className?: string;
 }
+
+const SUBMENU_CLOSE_DELAY_MS = 160;
 
 function roleTriggerLabel(
   selectedRole: UserRole,
@@ -33,7 +35,41 @@ export function DemoRoleSelect({
   const { selectedRole, attorneySpecialty, selectAttorneySpecialty } = useDemoRole();
   const [open, setOpen] = useState(false);
   const [attorneySubmenuOpen, setAttorneySubmenuOpen] = useState(false);
+  const [flyoutTop, setFlyoutTop] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const attorneyRowRef = useRef<HTMLLIElement>(null);
+  const submenuCloseTimerRef = useRef<number | null>(null);
+
+  const syncFlyoutPosition = useCallback(() => {
+    const row = attorneyRowRef.current;
+    const panel = panelRef.current;
+    if (!row || !panel) return;
+    const rowRect = row.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    setFlyoutTop(rowRect.top - panelRect.top);
+  }, []);
+
+  const clearSubmenuCloseTimer = useCallback(() => {
+    if (submenuCloseTimerRef.current !== null) {
+      window.clearTimeout(submenuCloseTimerRef.current);
+      submenuCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const openAttorneySubmenu = useCallback(() => {
+    clearSubmenuCloseTimer();
+    syncFlyoutPosition();
+    setAttorneySubmenuOpen(true);
+  }, [clearSubmenuCloseTimer, syncFlyoutPosition]);
+
+  const scheduleCloseAttorneySubmenu = useCallback(() => {
+    clearSubmenuCloseTimer();
+    submenuCloseTimerRef.current = window.setTimeout(() => {
+      setAttorneySubmenuOpen(false);
+      submenuCloseTimerRef.current = null;
+    }, SUBMENU_CLOSE_DELAY_MS);
+  }, [clearSubmenuCloseTimer]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -45,6 +81,20 @@ export function DemoRoleSelect({
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, []);
+
+  useEffect(() => {
+    if (!open) {
+      setAttorneySubmenuOpen(false);
+      return;
+    }
+    syncFlyoutPosition();
+    window.addEventListener("resize", syncFlyoutPosition);
+    return () => window.removeEventListener("resize", syncFlyoutPosition);
+  }, [open, syncFlyoutPosition]);
+
+  useEffect(() => {
+    return () => clearSubmenuCloseTimer();
+  }, [clearSubmenuCloseTimer]);
 
   function selectRole(role: UserRole) {
     onRoleChange(role);
@@ -74,91 +124,112 @@ export function DemoRoleSelect({
       </button>
 
       {open && (
-        <ul
-          role="listbox"
-          aria-label="Demonstration roles"
-          className="absolute right-0 z-50 mt-1 max-h-[min(24rem,calc(100vh-8rem))] w-full min-w-[260px] overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+        <div
+          ref={panelRef}
+          className="absolute right-0 z-50 mt-1 w-full min-w-[260px] overflow-visible rounded-lg border border-gray-200 bg-white shadow-lg"
         >
-          {USER_ROLES.map((role) => {
-            if (role === "attorney") {
+          <ul
+            role="listbox"
+            aria-label="Demonstration roles"
+            className="max-h-[min(24rem,calc(100vh-8rem))] overflow-y-auto py-1"
+          >
+            {USER_ROLES.map((role) => {
+              if (role === "attorney") {
+                return (
+                  <li
+                    key={role}
+                    ref={attorneyRowRef}
+                    onMouseEnter={openAttorneySubmenu}
+                    onMouseLeave={scheduleCloseAttorneySubmenu}
+                  >
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={selectedRole === "attorney"}
+                      aria-expanded={attorneySubmenuOpen}
+                      className={cn(
+                        "flex w-full items-center justify-between px-3 py-2 text-left text-sm text-navy-900 hover:bg-gray-50",
+                        (selectedRole === "attorney" || attorneySubmenuOpen) &&
+                          "bg-navy-50 font-medium",
+                      )}
+                      onClick={() => {
+                        openAttorneySubmenu();
+                        if (attorneySpecialty) {
+                          selectAttorneySpecialty(attorneySpecialty);
+                        } else {
+                          selectAttorneySpecialty("litigation");
+                        }
+                      }}
+                    >
+                      <span>{USER_ROLE_LABELS.attorney}</span>
+                      <ChevronLeft
+                        className={cn(
+                          "h-4 w-4 text-muted transition",
+                          attorneySubmenuOpen && "text-navy-700",
+                        )}
+                      />
+                    </button>
+                  </li>
+                );
+              }
+
               return (
-                <li
-                  key={role}
-                  className="relative"
-                  onMouseEnter={() => setAttorneySubmenuOpen(true)}
-                  onMouseLeave={() => setAttorneySubmenuOpen(false)}
-                >
+                <li key={role}>
                   <button
                     type="button"
                     role="option"
-                    aria-selected={selectedRole === "attorney"}
+                    aria-selected={selectedRole === role}
                     className={cn(
-                      "flex w-full items-center justify-between px-3 py-2 text-left text-sm text-navy-900 hover:bg-gray-50",
-                      selectedRole === "attorney" && "bg-navy-50 font-medium",
+                      "w-full px-3 py-2 text-left text-sm text-navy-900 hover:bg-gray-50",
+                      selectedRole === role && "bg-navy-50 font-medium",
                     )}
-                    onClick={() => {
-                      if (attorneySpecialty) {
-                        selectAttorneySpecialty(attorneySpecialty);
-                      } else {
-                        selectAttorneySpecialty("litigation");
-                      }
-                    }}
+                    onClick={() => selectRole(role)}
                   >
-                    <span>{USER_ROLE_LABELS.attorney}</span>
-                    <ChevronRight className="h-4 w-4 text-muted" />
+                    {USER_ROLE_LABELS[role]}
                   </button>
-
-                  {attorneySubmenuOpen && (
-                    <ul
-                      role="listbox"
-                      aria-label="Attorney specialties"
-                      className="absolute left-full top-0 z-50 ml-1 w-[min(17rem,calc(100vw-2rem))] rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
-                    >
-                      {ATTORNEY_DEMO_SPECIALTIES.map((option) => (
-                        <li key={option.id}>
-                          <button
-                            type="button"
-                            role="option"
-                            aria-selected={
-                              selectedRole === "attorney" &&
-                              attorneySpecialty === option.id
-                            }
-                            className={cn(
-                              "w-full px-3 py-2 text-left text-sm text-navy-900 hover:bg-gray-50",
-                              selectedRole === "attorney" &&
-                                attorneySpecialty === option.id &&
-                                "bg-navy-50 font-medium",
-                            )}
-                            onClick={() => selectSpecialty(option.id)}
-                          >
-                            {option.label}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
                 </li>
               );
-            }
+            })}
+          </ul>
 
-            return (
-              <li key={role}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={selectedRole === role}
-                  className={cn(
-                    "w-full px-3 py-2 text-left text-sm text-navy-900 hover:bg-gray-50",
-                    selectedRole === role && "bg-navy-50 font-medium",
-                  )}
-                  onClick={() => selectRole(role)}
-                >
-                  {USER_ROLE_LABELS[role]}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+          {attorneySubmenuOpen && (
+            <div
+              className="absolute z-[60] flex items-stretch"
+              style={{ top: flyoutTop, right: "100%" }}
+              onMouseEnter={openAttorneySubmenu}
+              onMouseLeave={scheduleCloseAttorneySubmenu}
+            >
+              <div className="w-2 shrink-0 self-stretch" aria-hidden />
+              <ul
+                role="listbox"
+                aria-label="Attorney specialties"
+                className="w-[min(17.5rem,calc(100vw-2rem))] rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+              >
+                {ATTORNEY_DEMO_SPECIALTIES.map((option) => (
+                  <li key={option.id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={
+                        selectedRole === "attorney" &&
+                        attorneySpecialty === option.id
+                      }
+                      className={cn(
+                        "w-full px-3 py-2.5 text-left text-sm text-navy-900 hover:bg-gray-50",
+                        selectedRole === "attorney" &&
+                          attorneySpecialty === option.id &&
+                          "bg-navy-50 font-medium",
+                      )}
+                      onClick={() => selectSpecialty(option.id)}
+                    >
+                      {option.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
