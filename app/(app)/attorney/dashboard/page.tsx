@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { Briefcase, Clock, ListTodo } from "lucide-react";
 import { AttorneyCalendar } from "@/components/attorney/AttorneyCalendar";
@@ -7,6 +8,7 @@ import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { ParalegalAttorneyHub } from "@/components/paralegal/ParalegalAttorneyHub";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { KPICard } from "@/components/ui/KPICard";
+import { LoadingState } from "@/components/ui/LoadingState";
 import {
   DEMO_ATTORNEY_TITLE,
   DEMO_MATTERS,
@@ -18,7 +20,11 @@ import {
 export default function AttorneyDashboardPage() {
   const { role } = useDemoRole();
   if (role === "paralegal") {
-    return <ParalegalAttorneyHub />;
+    return (
+      <Suspense fallback={<LoadingState message="Opening Attorney Hub…" />}>
+        <ParalegalAttorneyHub />
+      </Suspense>
+    );
   }
 
   const matterCount = DEMO_MATTERS.length;

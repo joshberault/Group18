@@ -34,6 +34,7 @@ import {
   PARALEGAL_ASSIGNED_MATTERS,
   type ParalegalTask,
 } from "@/lib/paralegal/demo-data";
+import { useParalegalWorkflow } from "@/hooks/useParalegalWorkflow";
 import {
   DEADLINE_TYPE_LABELS,
   dueLabel,
@@ -52,6 +53,7 @@ type FilterState = {
   matter: string;
   client: string;
   priority: string;
+  dueRange: string;
 };
 
 const DEFAULT_FILTERS: FilterState = {
@@ -59,6 +61,7 @@ const DEFAULT_FILTERS: FilterState = {
   matter: "all",
   client: "all",
   priority: "all",
+  dueRange: "all",
 };
 
 function matchesFilters(task: ParalegalTask, filters: FilterState) {
@@ -66,6 +69,13 @@ function matchesFilters(task: ParalegalTask, filters: FilterState) {
   if (filters.matter !== "all" && task.matterId !== filters.matter) return false;
   if (filters.client !== "all" && task.clientId !== filters.client) return false;
   if (filters.priority !== "all" && task.priority !== filters.priority) return false;
+  if (filters.dueRange !== "all") {
+    const days = daysUntil(task.dueDate);
+    if (filters.dueRange === "overdue" && days >= 0) return false;
+    if (filters.dueRange === "today" && days !== 0) return false;
+    if (filters.dueRange === "7" && (days < 0 || days > 7)) return false;
+    if (filters.dueRange === "30" && (days < 0 || days > 30)) return false;
+  }
   return true;
 }
 
@@ -79,8 +89,21 @@ function urgencyBadge(iso: string) {
 
 export function ParalegalDashboard() {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
-  const counts = getParalegalSummaryCounts();
-  const updatedAt = useMemo(() => new Date().toLocaleString(), []);
+  const workflow = useParalegalWorkflow();
+  const workflowSnapshot = useMemo(
+    () => ({
+      tasks: workflow.tasks,
+      reviews: workflow.reviews,
+      timeEntries: workflow.timeEntries,
+      expenses: workflow.expenses,
+    }),
+    [workflow.tasks, workflow.reviews, workflow.timeEntries, workflow.expenses],
+  );
+  const counts = getParalegalSummaryCounts(workflowSnapshot);
+  const updatedAt = useMemo(
+    () => new Date().toLocaleString(),
+    [workflowSnapshot],
+  );
 
   const attorneys = useMemo(
     () => [...new Set(PARALEGAL_ASSIGNED_MATTERS.map((m) => m.attorneyName))],
@@ -92,12 +115,17 @@ export function ParalegalDashboard() {
   );
 
   const priorityQueue = useMemo(
-    () => getPriorityQueue().filter((t) => matchesFilters(t, filters)),
-    [filters],
+    () =>
+      getPriorityQueue(workflowSnapshot).filter((t) =>
+        matchesFilters(t, filters),
+      ),
+    [filters, workflowSnapshot],
   );
   const deadlines = getUpcomingDeadlines();
-  const reviews = getReviewQueue().filter((r) => r.status !== "approved");
-  const timeReminders = getTimeExpenseReminders();
+  const reviews = getReviewQueue(workflowSnapshot).filter(
+    (r) => r.status !== "approved",
+  );
+  const timeReminders = getTimeExpenseReminders(workflowSnapshot);
 
   const summaryCards = [
     {
@@ -121,7 +149,7 @@ export function ParalegalDashboard() {
     {
       title: "Waiting on Attorney",
       value: counts.waitingOnAttorney,
-      href: "/attorney/dashboard?focus=reviews",
+      href: "/attorney/tasks?filter=waiting_attorney",
       icon: PauseCircle,
     },
     {
@@ -225,7 +253,7 @@ export function ParalegalDashboard() {
             Defaults to {DEMO_PARALEGAL.fullName}&apos;s assigned work only (not firm-wide).
           </CardDescription>
         </CardHeader>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <Select
             label="Assigned attorney"
             value={filters.attorney}
@@ -270,6 +298,18 @@ export function ParalegalDashboard() {
               { value: "high", label: "High" },
               { value: "medium", label: "Medium" },
               { value: "low", label: "Low" },
+            ]}
+          />
+          <Select
+            label="Due-date range"
+            value={filters.dueRange}
+            onChange={(e) => setFilters((f) => ({ ...f, dueRange: e.target.value }))}
+            options={[
+              { value: "all", label: "Any due date" },
+              { value: "overdue", label: "Overdue" },
+              { value: "today", label: "Due today" },
+              { value: "7", label: "Next 7 days" },
+              { value: "30", label: "Next 30 days" },
             ]}
           />
         </div>
@@ -500,6 +540,11 @@ export function ParalegalDashboard() {
             <Link href="/attorney/time?filter=rejected">
               <Button size="sm" variant="ghost">
                 Correct Rejected Entries
+              </Button>
+            </Link>
+            <Link href="/attorney/expenses?filter=missing_receipt">
+              <Button size="sm" variant="ghost">
+                Expenses missing receipts
               </Button>
             </Link>
           </div>

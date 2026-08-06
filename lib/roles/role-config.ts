@@ -101,7 +101,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   paralegal: {
     displayName: USER_ROLE_LABELS.paralegal,
-    defaultRoute: "/attorney/dashboard",
+    defaultRoute: "/dashboard",
     allowedRoutes: [
       "dashboard",
       "attorney_hub",
