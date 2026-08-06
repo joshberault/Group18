@@ -5,12 +5,13 @@ import Link from "next/link";
 import {
   AlertTriangle,
   Briefcase,
+  Calendar,
   CheckSquare,
   Clock,
   Flag,
   Inbox,
   Scale,
-  Send,
+  StickyNote,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { KPICard } from "@/components/ui/KPICard";
@@ -27,7 +28,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/Table";
-import type { ParalegalTask } from "@/lib/paralegal/demo-data";
+import type {
+  ParalegalAlert,
+  ParalegalDeadline,
+  ParalegalReviewItem,
+} from "@/lib/paralegal/demo-data";
 import {
   DEADLINE_TYPE_LABELS,
   dueLabel,
@@ -39,8 +44,11 @@ import {
   DEMO_ATTORNEY,
   getAttorneyAlerts,
   getAttorneyMatters,
+  getAttorneyMatterIdForTitle,
   getAttorneyPriorityActions,
   getAttorneyReviewInbox,
+  getAttorneyReviewMatterHref,
+  getAttorneyReviewRelatedWorkHref,
   getAttorneySummaryCounts,
   getUpcomingAttorneyDeadlines,
 } from "@/lib/attorney/dashboard-data";
@@ -57,10 +65,59 @@ const DEFAULT_FILTERS: FilterState = {
   priority: "all",
 };
 
-function matchesFilters(task: ParalegalTask, filters: FilterState) {
-  if (filters.matter !== "all" && task.matterId !== filters.matter) return false;
-  if (filters.client !== "all" && task.clientId !== filters.client) return false;
-  if (filters.priority !== "all" && task.priority !== filters.priority) return false;
+function matchesReviewFilters(
+  review: ParalegalReviewItem,
+  filters: FilterState,
+  matters: ReturnType<typeof getAttorneyMatters>,
+) {
+  if (filters.matter !== "all") {
+    const matter = matters.find((m) => m.id === filters.matter);
+    if (matter && review.matterTitle !== matter.title) return false;
+  }
+  if (filters.client !== "all") {
+    const clientMatter = matters.find((m) => m.clientId === filters.client);
+    if (clientMatter && review.clientName !== clientMatter.clientName) return false;
+  }
+  return true;
+}
+
+function matchesDeadlineFilters(
+  deadline: ParalegalDeadline,
+  filters: FilterState,
+  matters: ReturnType<typeof getAttorneyMatters>,
+) {
+  if (filters.matter !== "all") {
+    if (!deadline.matterId || deadline.matterId !== filters.matter) return false;
+  }
+  if (filters.client !== "all") {
+    const clientMatter = matters.find((m) => m.clientId === filters.client);
+    if (
+      clientMatter &&
+      deadline.clientName !== clientMatter.clientName &&
+      deadline.clientName !== "—"
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function matchesAlertFilters(
+  alert: ParalegalAlert,
+  filters: FilterState,
+  matters: ReturnType<typeof getAttorneyMatters>,
+) {
+  if (filters.matter !== "all") {
+    if (alert.matterId && alert.matterId !== filters.matter) return false;
+    if (!alert.matterId && filters.matter !== "all") return false;
+  }
+  if (filters.client !== "all") {
+    if (alert.clientId && alert.clientId !== filters.client) return false;
+    if (!alert.clientId) {
+      const clientMatter = matters.find((m) => m.clientId === filters.client);
+      if (clientMatter && alert.clientName !== clientMatter.clientName) return false;
+    }
+  }
   return true;
 }
 
@@ -77,24 +134,38 @@ export function AttorneyDashboard() {
   const counts = getAttorneySummaryCounts();
   const updatedAt = useMemo(() => new Date().toLocaleString(), []);
   const matters = getAttorneyMatters();
-  const clients = useMemo(
-    () => [...new Set(matters.map((m) => m.clientName))],
-    [matters],
-  );
+  const clients = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const matter of matters) {
+      byId.set(matter.clientId, matter.clientName);
+    }
+    return [...byId.entries()].map(([id, name]) => ({ id, name }));
+  }, [matters]);
 
   const priorityQueue = useMemo(
-    () => getAttorneyPriorityActions().filter((t) => matchesFilters(t, filters)),
+    () => getAttorneyPriorityActions(filters),
     [filters],
   );
-  const reviews = getAttorneyReviewInbox();
-  const deadlines = getUpcomingAttorneyDeadlines();
-  const alerts = getAttorneyAlerts();
+  const reviews = useMemo(
+    () => getAttorneyReviewInbox().filter((r) => matchesReviewFilters(r, filters, matters)),
+    [filters, matters],
+  );
+  const deadlines = useMemo(
+    () =>
+      getUpcomingAttorneyDeadlines()
+        .filter((d) => matchesDeadlineFilters(d, filters, matters)),
+    [filters, matters],
+  );
+  const alerts = useMemo(
+    () => getAttorneyAlerts().filter((a) => matchesAlertFilters(a, filters, matters)),
+    [filters, matters],
+  );
 
   const summaryCards = [
     {
       title: "Reviews Awaiting Me",
       value: counts.awaitingMyReview,
-      href: "/attorney/dashboard?focus=reviews",
+      href: "#review-inbox",
       icon: Inbox,
       subtitle: "Submitted / under review",
     },
@@ -164,43 +235,38 @@ export function AttorneyDashboard() {
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
           <CardDescription>
-            Attorney-permitted actions. Conflict clearing and fee arrangement changes stay with authorized firm roles.
+            Daily shortcuts for {DEMO_ATTORNEY.fullName} — assigned matters, billable time, tasks, deadlines, and paralegal submissions awaiting your review.
           </CardDescription>
         </CardHeader>
         <div className="flex flex-wrap gap-2">
-          <Link href="/attorney/dashboard?focus=reviews">
+          <Link href="/attorney/tasks">
             <Button>
+              <CheckSquare className="h-4 w-4" /> Review Assigned Tasks
+            </Button>
+          </Link>
+          <Link href="#review-inbox">
+            <Button variant="secondary">
               <Inbox className="h-4 w-4" /> Open Review Inbox
             </Button>
           </Link>
-          <Link href="/attorney/tasks?filter=waiting_on_attorney">
+          <Link href="/attorney/time">
             <Button variant="secondary">
-              <Scale className="h-4 w-4" /> Decide Pending Legal Questions
-            </Button>
-          </Link>
-          <Link href="/attorney/time?action=add">
-            <Button variant="secondary">
-              <Clock className="h-4 w-4" /> Add Time Entry
+              <Clock className="h-4 w-4" /> Log Time
             </Button>
           </Link>
           <Link href="/attorney/matters">
             <Button variant="secondary">
-              <Briefcase className="h-4 w-4" /> View My Matters
+              <Briefcase className="h-4 w-4" /> My Matters
             </Button>
           </Link>
-          <Link href="/attorney/tasks?filter=deadlines_7">
+          <Link href="/attorney/calendar">
             <Button variant="secondary">
-              <Flag className="h-4 w-4" /> View Upcoming Deadlines
+              <Calendar className="h-4 w-4" /> Calendar
             </Button>
           </Link>
-          <Link href="/attorney/tasks">
+          <Link href="/attorney/notes">
             <Button variant="secondary">
-              <CheckSquare className="h-4 w-4" /> Review Assigned Tasks
-            </Button>
-          </Link>
-          <Link href="/clients">
-            <Button variant="secondary">
-              <Send className="h-4 w-4" /> Escalate Client / Conflict Issue
+              <StickyNote className="h-4 w-4" /> Case Notes
             </Button>
           </Link>
         </div>
@@ -242,10 +308,10 @@ export function AttorneyDashboard() {
             onChange={(e) => setFilters((f) => ({ ...f, client: e.target.value }))}
             options={[
               { value: "all", label: "All my clients" },
-              ...clients.map((c) => {
-                const id = matters.find((m) => m.clientName === c)?.clientId ?? c;
-                return { value: id, label: c };
-              }),
+              ...clients.map((client) => ({
+                value: client.id,
+                label: client.name,
+              })),
             ]}
           />
           <Select
@@ -264,6 +330,7 @@ export function AttorneyDashboard() {
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
+        <div id="review-inbox">
         <Card>
           <CardHeader>
             <CardTitle>Review inbox</CardTitle>
@@ -304,10 +371,10 @@ export function AttorneyDashboard() {
                       {waitingDays > 2 ? ` · Waiting ${waitingDays} days` : null}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <Link href="/attorney/dashboard?focus=reviews">
+                      <Link href={getAttorneyReviewMatterHref(r)}>
                         <Button size="sm">Review</Button>
                       </Link>
-                      <Link href="/attorney/tasks">
+                      <Link href={getAttorneyReviewRelatedWorkHref(r)}>
                         <Button size="sm" variant="secondary">
                           Open related work
                         </Button>
@@ -319,6 +386,7 @@ export function AttorneyDashboard() {
             )}
           </ul>
         </Card>
+        </div>
 
         <Card>
           <CardHeader>
@@ -326,7 +394,9 @@ export function AttorneyDashboard() {
             <CardDescription>Your matters — structured filing and review dates.</CardDescription>
           </CardHeader>
           <ul className="space-y-3">
-            {deadlines.map((d) => (
+            {deadlines.map((d) => {
+              const matterId = getAttorneyMatterIdForTitle(d.matterTitle);
+              return (
               <li
                 key={d.id}
                 className="rounded-lg border border-gray-100 bg-gray-50/70 p-3 text-sm"
@@ -335,14 +405,35 @@ export function AttorneyDashboard() {
                   <p className="font-medium text-navy-900">
                     {DEADLINE_TYPE_LABELS[d.type]}: {d.label}
                   </p>
-                  {urgencyBadge(d.dueAt)}
+                  {matterId ? (
+                    <Link href={`/attorney/calendar?date=${d.dueAt.slice(0, 10)}`}>
+                      {urgencyBadge(d.dueAt)}
+                    </Link>
+                  ) : (
+                    urgencyBadge(d.dueAt)
+                  )}
                 </div>
                 <p className="mt-1 text-muted">
                   {d.clientName} · {d.matterTitle}
                 </p>
                 <p className="mt-2 text-navy-900">Required action: {d.requiredAction}</p>
+                {matterId && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Link href={`/attorney/tasks?tab=deadlines&matter=${matterId}`}>
+                      <Button size="sm" variant="secondary">
+                        View deadline
+                      </Button>
+                    </Link>
+                    <Link href={`/attorney/matters/${matterId}`}>
+                      <Button size="sm" variant="ghost">
+                        Open matter
+                      </Button>
+                    </Link>
+                  </div>
+                )}
               </li>
-            ))}
+            );
+            })}
           </ul>
         </Card>
       </div>
@@ -395,7 +486,7 @@ export function AttorneyDashboard() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Link href={`/attorney/tasks?task=${task.id}`}>
+                    <Link href={`/attorney/tasks?tab=all&matter=${task.matterId}`}>
                       <Button size="sm" variant="secondary">
                         Open
                       </Button>

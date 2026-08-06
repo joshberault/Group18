@@ -16,7 +16,13 @@ import {
 } from "@/components/ui/Table";
 import type { TimeEntry } from "@/types/database";
 
-export function TimeEntryList({ entries }: { entries: TimeEntry[] }) {
+export function TimeEntryList({
+  entries,
+  editable = true,
+}: {
+  entries: TimeEntry[];
+  editable?: boolean;
+}) {
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
 
   if (entries.length === 0) {
@@ -58,14 +64,18 @@ export function TimeEntryList({ entries }: { entries: TimeEntry[] }) {
                 </span>
               </TableCell>
               <TableCell>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setEditingEntry(entry)}
-                  aria-label="Edit time entry"
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
+                {editable ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingEntry(entry)}
+                    aria-label="Edit time entry"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <span className="text-xs text-muted">—</span>
+                )}
               </TableCell>
             </TableRow>
           ))}

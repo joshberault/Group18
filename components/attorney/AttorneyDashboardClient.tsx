@@ -87,16 +87,22 @@ export function AttorneyDashboardClient() {
       )}
 
       <div className="flex flex-wrap gap-2">
-        <Link href="/attorney/time">
+        <Link href="/attorney/tasks">
           <Button size="sm">
-            <Clock className="mr-2 h-4 w-4" />
-            Start / Log Time
+            <ListTodo className="mr-2 h-4 w-4" />
+            Review Assigned Tasks
           </Button>
         </Link>
-        <Link href="/attorney/tasks">
+        <Link href="/attorney/time">
           <Button size="sm" variant="secondary">
-            <ListTodo className="mr-2 h-4 w-4" />
-            Today&apos;s Tasks
+            <Clock className="mr-2 h-4 w-4" />
+            Log Time
+          </Button>
+        </Link>
+        <Link href="/attorney/matters">
+          <Button size="sm" variant="secondary">
+            <Briefcase className="mr-2 h-4 w-4" />
+            My Matters
           </Button>
         </Link>
         <Link href="/attorney/calendar">

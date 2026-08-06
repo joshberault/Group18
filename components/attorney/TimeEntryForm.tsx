@@ -22,6 +22,7 @@ type Props = {
   submitterRole?: UserRole;
   onCreated: () => void;
   previewMode?: boolean;
+  useProviderStore?: boolean;
 };
 
 export function TimeEntryForm({
@@ -30,7 +31,9 @@ export function TimeEntryForm({
   submitterRole = "attorney",
   onCreated,
   previewMode = false,
+  useProviderStore = false,
 }: Props) {
+  const { addTimeEntry } = useAttorneyData();
   const [matterId, setMatterId] = useState(matters[0]?.id ?? "");
   const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
   const [hours, setHours] = useState("1.0");
@@ -53,6 +56,22 @@ export function TimeEntryForm({
 
     if (!description.trim()) {
       setError("Description is required.");
+      return;
+    }
+
+    if (useProviderStore) {
+      addTimeEntry({
+        matter_id: matterId,
+        profile_id: profileId,
+        entry_date: entryDate,
+        hours: parsedHours,
+        description: description.trim(),
+        is_billable: isBillable,
+      });
+      setDescription("");
+      setHours("1.0");
+      setSuccess("Time entry saved and submitted for manager approval.");
+      onCreated();
       return;
     }
 
