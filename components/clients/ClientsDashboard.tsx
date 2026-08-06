@@ -25,6 +25,7 @@ import { filterClientsForParalegalDemo } from "@/lib/paralegal/demo-data";
 import { CLIENTS_MODULE_ROLES } from "@/lib/clients/types";
 import type { ClientScheduleEvent, FirmClient } from "@/lib/clients/types";
 import { fetchClients, fetchScheduleEvents } from "@/lib/clients/queries";
+import { getDemoClientScheduleEvents } from "@/lib/clients/schedule-demo-data";
 import { USER_ROLE_LABELS } from "@/lib/types";
 
 export function ClientsDashboard() {
@@ -74,10 +75,17 @@ export function ClientsDashboard() {
   }, [clients, role, filters]);
 
   const visibleEvents = useMemo(() => {
-    if (role !== "paralegal") return events;
-    const allowedIds = new Set(visibleClients.map((c) => c.id));
-    return events.filter((e) => allowedIds.has(e.client_id));
-  }, [events, role, visibleClients]);
+    const clientsForScope =
+      role === "paralegal"
+        ? filterClientsForParalegalDemo(clients)
+        : filterClientsForRole(clients, role, []);
+    const allowedIds = new Set(clientsForScope.map((c) => c.id));
+
+    const scoped = events.filter((e) => allowedIds.has(e.client_id));
+    if (scoped.length > 0) return scoped;
+
+    return getDemoClientScheduleEvents(scheduleMonth, clientsForScope);
+  }, [clients, events, role, scheduleMonth]);
 
   return (
     <ClientsAccessGuard allowedRoles={CLIENTS_MODULE_ROLES}>
