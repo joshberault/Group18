@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FileDown, Search } from "lucide-react";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
-import { getFirmAdminMatterRows } from "@/lib/matters/shared-matters";
+import { fetchFirmAdminMatterRows } from "@/lib/matters/shared-matters";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -23,7 +25,17 @@ import {
 } from "@/components/ui/Table";
 
 export function FirmAdministratorMattersView() {
-  const rows = useMemo(() => getFirmAdminMatterRows(), []);
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof fetchFirmAdminMatterRows>>["rows"]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    void (async () => {
+      const result = await fetchFirmAdminMatterRows();
+      setRows(result.rows);
+      setError(result.error);
+      setLoading(false);
+    })();
+  }, []);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selected, setSelected] = useState<(typeof rows)[0] | null>(null);
@@ -62,6 +74,20 @@ export function FirmAdministratorMattersView() {
         r.adminStatus,
         r.setupGap ?? "",
       ]),
+    );
+  }
+
+  if (loading) {
+    return <LoadingState message="Loading matters..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Matters unavailable"
+        description={error}
+        moduleLabel="Firm Administrator"
+      />
     );
   }
 

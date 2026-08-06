@@ -10,10 +10,14 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
+import type { AmClientEntity } from "@/lib/mock-data/accounting-manager/entities";
 import {
-  amClients,
-  amMatters,
-} from "@/lib/mock-data/accounting-manager/entities";
+  fetchAccountingClients,
+  fetchAccountingMatters,
+  useSupabaseQuery,
+} from "@/lib/accounting";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import { formatCurrency } from "@/lib/utils/cn";
 import { AccountingTabs } from "@/components/accounting-manager/shared/AccountingTabs";
@@ -168,7 +172,7 @@ const AP_AGING = [
   },
 ];
 
-function computeArAging(clients: typeof amClients) {
+function computeArAging(clients: AmClientEntity[]) {
   const buckets = [
     { bucket: "0–30 Days", amount: 0, clients: 0 },
     { bucket: "31–60 Days", amount: 0, clients: 0 },
@@ -201,6 +205,14 @@ function computeArAging(clients: typeof amClients) {
 }
 
 export function AccountingManagerReportsView() {
+  const { data: clientsData, loading: clientsLoading, error: clientsError } =
+    useSupabaseQuery(fetchAccountingClients, []);
+  const { data: mattersData, loading: mattersLoading, error: mattersError } =
+    useSupabaseQuery(fetchAccountingMatters, []);
+  const amClients = clientsData ?? [];
+  const amMatters = mattersData ?? [];
+  const loading = clientsLoading || mattersLoading;
+  const error = clientsError ?? mattersError;
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
   const [activeReport, setActiveReport] = useState<string>("income_statement");
   const [favorites, setFavorites] = useState<string[]>([
@@ -683,6 +695,20 @@ export function AccountingManagerReportsView() {
   };
 
   const activeReportDef = REPORT_CATALOG.find((r) => r.id === activeReport);
+
+  if (loading) {
+    return <LoadingState message="Loading report data..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Report data unavailable"
+        description={error}
+        moduleLabel="Financial Reports"
+      />
+    );
+  }
 
   return (
     <>

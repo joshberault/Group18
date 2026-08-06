@@ -2,12 +2,11 @@
 
 import { useMemo, useState } from "react";
 import {
+  arAgingBucketOptions,
   arAttorneyOptions,
   arCollectionStatusOptions,
   arCollectorOptions,
-  arCollectionsQueue,
   arOfficeOptions,
-  arAgingBucketOptions,
   type ArCollectionsRecord,
   type CollectionStatus,
 } from "@/lib/mock-data/ar-oversight";
@@ -46,6 +45,7 @@ export interface CollectionsQueueFilters {
 interface CollectionsQueueSectionProps {
   filters: CollectionsQueueFilters;
   onFiltersChange: (filters: CollectionsQueueFilters) => void;
+  records?: ArCollectionsRecord[];
 }
 
 function statusToBadgeKey(status: CollectionStatus): string {
@@ -73,6 +73,7 @@ function matchesExceptionType(
 export function CollectionsQueueSection({
   filters,
   onFiltersChange,
+  records = [],
 }: CollectionsQueueSectionProps) {
   const [page, setPage] = useState(0);
   const [selectedRecord, setSelectedRecord] =
@@ -84,7 +85,7 @@ export function CollectionsQueueSection({
       ? Number.parseFloat(filters.minBalance)
       : 0;
 
-    return arCollectionsQueue
+    return records
       .filter((record) => {
         if (filters.exceptionsOnly && !record.isException) return false;
         if (
@@ -144,7 +145,7 @@ export function CollectionsQueueSection({
         );
       })
       .sort((a, b) => sortPriority(b) - sortPriority(a));
-  }, [filters]);
+  }, [filters, records]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages - 1);

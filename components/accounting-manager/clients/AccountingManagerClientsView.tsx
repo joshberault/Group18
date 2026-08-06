@@ -13,10 +13,15 @@ import {
 import {
   AM_OFFICES,
   AM_PARTNERS,
-  amClients,
-  getMattersByClientId,
   type AmClientEntity,
 } from "@/lib/mock-data/accounting-manager/entities";
+import {
+  fetchAccountingClients,
+  fetchAccountingMatters,
+  useSupabaseQuery,
+} from "@/lib/accounting";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import { invoicesHref } from "@/lib/billing/routes";
 import { formatCurrency } from "@/lib/utils/cn";
@@ -81,6 +86,13 @@ function paymentStatusKey(status: AmClientEntity["paymentStatus"]) {
 
 export function AccountingManagerClientsView() {
   const router = useRouter();
+  const { data: clientsData, loading, error } = useSupabaseQuery(
+    fetchAccountingClients,
+    [],
+  );
+  const { data: mattersData } = useSupabaseQuery(fetchAccountingMatters, []);
+  const amClients = clientsData ?? [];
+  const allMatters = mattersData ?? [];
   const [filters, setFilters] = useState<ClientFilters>(defaultFilters);
   const [sortKey, setSortKey] = useState<SortKey>("totalAr");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -274,8 +286,22 @@ export function AccountingManagerClientsView() {
   };
 
   const relatedMatters = selectedClient
-    ? getMattersByClientId(selectedClient.id)
+    ? allMatters.filter((m) => m.clientId === selectedClient.id)
     : [];
+
+  if (loading) {
+    return <LoadingState message="Loading client financials..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Client data unavailable"
+        description={error}
+        moduleLabel="Clients"
+      />
+    );
+  }
 
   return (
     <>

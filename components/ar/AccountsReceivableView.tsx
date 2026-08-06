@@ -9,16 +9,14 @@ import {
   FileDown,
   FileText,
 } from "lucide-react";
-import {
-  arAgingBuckets,
-  arAttorneyResponsibility,
-  arClientRiskProfiles,
-  arCollectionExceptions,
-  arPaymentExceptions,
-  arRecentActivity,
-  arSummaryKpis,
-  type CollectionRisk,
+import type {
+  ArCollectionException,
+  ArActivityEvent,
+  CollectionRisk,
 } from "@/lib/mock-data/ar-oversight";
+import { fetchReceivablesWorkspace, useSupabaseQuery } from "@/lib/accounting";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import { formatCurrency } from "@/lib/utils/cn";
 import {
@@ -80,6 +78,16 @@ type ArModal =
 
 export function AccountsReceivableView() {
   const searchParams = useSearchParams();
+  const { data: workspace, loading, error } = useSupabaseQuery(
+    fetchReceivablesWorkspace,
+    [],
+  );
+  const arSummaryKpis = workspace?.summaryKpis ?? [];
+  const arAgingBuckets = workspace?.agingBuckets ?? [];
+  const arClientRiskProfiles = workspace?.clientRiskProfiles ?? [];
+  const arAttorneyResponsibility = workspace?.attorneyResponsibility ?? [];
+  const arPaymentExceptions = workspace?.paymentExceptions ?? [];
+  const collectionsQueue = workspace?.collectionsQueue ?? [];
   const queueRef = useRef<HTMLDivElement>(null);
   const writeOffRef = useRef<HTMLDivElement>(null);
   const paymentExceptionRef = useRef<HTMLDivElement>(null);
@@ -114,7 +122,8 @@ export function AccountsReceivableView() {
   const [cashAmount, setCashAmount] = useState("");
   const [cashInvoice, setCashInvoice] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
-  const [sessionActivity, setSessionActivity] = useState(arRecentActivity);
+  const [sessionActivity, setSessionActivity] = useState<ArActivityEvent[]>([]);
+  const arCollectionExceptions: ArCollectionException[] = [];
 
   useEffect(() => {
     const section = searchParams.get("section");
@@ -231,6 +240,20 @@ export function AccountsReceivableView() {
   };
 
   const totalAr = arAgingBuckets.reduce((sum, b) => sum + b.amount, 0);
+
+  if (loading) {
+    return <LoadingState message="Loading receivables..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Receivables data unavailable"
+        description={error}
+        moduleLabel="Accounts Receivable"
+      />
+    );
+  }
 
   return (
     <>
@@ -448,6 +471,7 @@ export function AccountsReceivableView() {
         <CollectionsQueueSection
           filters={queueFilters}
           onFiltersChange={setQueueFilters}
+          records={collectionsQueue}
         />
       </div>
 

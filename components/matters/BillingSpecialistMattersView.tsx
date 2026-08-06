@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FileDown, Search } from "lucide-react";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
-import { getBillingSpecialistMatterRows } from "@/lib/matters/shared-matters";
+import { fetchBillingSpecialistMatterRows } from "@/lib/matters/shared-matters";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { formatCurrency } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -26,7 +28,17 @@ import {
 
 export function BillingSpecialistMattersView() {
   const router = useRouter();
-  const rows = useMemo(() => getBillingSpecialistMatterRows(), []);
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof fetchBillingSpecialistMatterRows>>["rows"]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    void (async () => {
+      const result = await fetchBillingSpecialistMatterRows();
+      setRows(result.rows);
+      setError(result.error);
+      setLoading(false);
+    })();
+  }, []);
   const [search, setSearch] = useState("");
   const [prebillFilter, setPrebillFilter] = useState("all");
   const [selected, setSelected] = useState<(typeof rows)[0] | null>(null);
@@ -64,6 +76,20 @@ export function BillingSpecialistMattersView() {
         r.prebillStatus,
         r.nextBillingDate,
       ]),
+    );
+  }
+
+  if (loading) {
+    return <LoadingState message="Loading matters..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Matters unavailable"
+        description={error}
+        moduleLabel="Billing Specialist"
+      />
     );
   }
 

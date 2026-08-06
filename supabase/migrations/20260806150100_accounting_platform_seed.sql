@@ -1,0 +1,2 @@
+-- Intentionally empty: no demo seed data.
+-- All modules read from Supabase and show zeros/empty state until records are entered.

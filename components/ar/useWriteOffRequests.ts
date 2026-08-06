@@ -1,10 +1,14 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import {
-  arWriteOffRequests,
-  type ArWriteOffRequest,
-  type WriteOffApprovalStatus,
+  decideWriteOff,
+  fetchReceivablesWorkspace,
+} from "@/lib/accounting";
+import type {
+  ArWriteOffRequest,
+  WriteOffApprovalStatus,
 } from "@/lib/mock-data/ar-oversight";
 
 export interface WriteOffToast {
@@ -25,9 +29,8 @@ interface PendingReject {
 export type PendingWriteOffAction = PendingApprove | PendingReject;
 
 export function useWriteOffRequests() {
-  const [requests, setRequests] = useState<ArWriteOffRequest[]>(() =>
-    arWriteOffRequests.map((request) => ({ ...request })),
-  );
+  const { selectedRole } = useDemoRole();
+  const [requests, setRequests] = useState<ArWriteOffRequest[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
     null,
   );
@@ -37,22 +40,17 @@ export function useWriteOffRequests() {
   const [rejectError, setRejectError] = useState("");
   const [toast, setToast] = useState<WriteOffToast | null>(null);
 
+  const refresh = useCallback(async () => {
+    const result = await fetchReceivablesWorkspace();
+    setRequests(result.data.writeOffRequests);
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
   const selectedRequest =
     requests.find((request) => request.id === selectedRequestId) ?? null;
-
-  const updateRequest = useCallback(
-    (
-      requestId: string,
-      updates: Partial<ArWriteOffRequest>,
-    ) => {
-      setRequests((current) =>
-        current.map((request) =>
-          request.id === requestId ? { ...request, ...updates } : request,
-        ),
-      );
-    },
-    [],
-  );
 
   const isActionable = (status: WriteOffApprovalStatus) =>
     status === "Pending" || status === "Under Review";
@@ -88,16 +86,28 @@ export function useWriteOffRequests() {
   const confirmApprove = useCallback(() => {
     if (!pendingAction || pendingAction.type !== "approve") return;
 
-    updateRequest(pendingAction.requestId, {
-      approvalStatus: "Approved",
-    });
-    setToast({
-      message: "Write-off request approved.",
-      variant: "success",
-    });
-    setPendingAction(null);
-    setSelectedRequestId(null);
-  }, [pendingAction, updateRequest]);
+    void (async () => {
+      const result = await decideWriteOff({
+        requestId: pendingAction.requestId,
+        approve: true,
+        reviewer: { name: "Alex Morgan", role: selectedRole },
+      });
+      if (result.ok) {
+        setToast({
+          message: "Write-off request approved.",
+          variant: "success",
+        });
+        await refresh();
+      } else {
+        setToast({
+          message: result.error ?? "Failed to approve write-off.",
+          variant: "error",
+        });
+      }
+      setPendingAction(null);
+      setSelectedRequestId(null);
+    })();
+  }, [pendingAction, refresh, selectedRole]);
 
   const confirmReject = useCallback(() => {
     if (!pendingAction || pendingAction.type !== "reject") return;
@@ -108,19 +118,31 @@ export function useWriteOffRequests() {
       return;
     }
 
-    updateRequest(pendingAction.requestId, {
-      approvalStatus: "Rejected",
-      rejectionReason: trimmedReason,
-    });
-    setToast({
-      message: "Write-off request rejected.",
-      variant: "success",
-    });
-    setPendingAction(null);
-    setRejectReason("");
-    setRejectError("");
-    setSelectedRequestId(null);
-  }, [pendingAction, rejectReason, updateRequest]);
+    void (async () => {
+      const result = await decideWriteOff({
+        requestId: pendingAction.requestId,
+        approve: false,
+        reviewer: { name: "Alex Morgan", role: selectedRole },
+        rejectionReason: trimmedReason,
+      });
+      if (result.ok) {
+        setToast({
+          message: "Write-off request rejected.",
+          variant: "success",
+        });
+        await refresh();
+      } else {
+        setToast({
+          message: result.error ?? "Failed to reject write-off.",
+          variant: "error",
+        });
+      }
+      setPendingAction(null);
+      setRejectReason("");
+      setRejectError("");
+      setSelectedRequestId(null);
+    })();
+  }, [pendingAction, rejectReason, refresh, selectedRole]);
 
   return {
     requests,
