@@ -336,7 +336,20 @@ export function getNavigationForRole(role: UserRole): NavItem[] {
     return PROSPECTIVE_CLIENT_NAV_ITEMS;
   }
 
-  return getNavItemsForRole(role);
+  const items = getNavItemsForRole(role);
+
+  // Managing Partner demo: never show Time & Expenses or Client Portal.
+  if (role === "managing_partner") {
+    return items.filter(
+      (item) =>
+        item.routeKey !== "time" &&
+        item.routeKey !== "client_portal" &&
+        item.href !== "/attorney/time" &&
+        !item.href.startsWith("/client-portal"),
+    );
+  }
+
+  return items;
 }
 
 export function isValidDemoRole(value: string): value is UserRole {

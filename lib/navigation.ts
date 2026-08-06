@@ -238,6 +238,15 @@ export function getNavRoles(href: string): UserRole[] {
 export function getNavItemsForRole(role: UserRole): NavItem[] {
   return NAV_ITEMS.filter((item) => canAccessNavItem(role, item.roles ?? []))
     .map((item) => {
+      if (
+        role === "managing_partner" &&
+        (item.routeKey === "time" ||
+          item.routeKey === "client_portal" ||
+          item.href === "/attorney/time" ||
+          item.href.startsWith("/client-portal"))
+      ) {
+        return null;
+      }
       if (item.href === "/dashboard" && usesAttorneyHubAsHome(role)) {
         return {
           ...item,
