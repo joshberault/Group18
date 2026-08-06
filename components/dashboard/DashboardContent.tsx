@@ -487,6 +487,7 @@ export function DashboardContent() {
           icon={Briefcase}
           href={firmKpiHref("activeMatters")}
           interactive={kpiInteractive}
+          variant="success"
         />
         <DashboardKpiCard
           title="Unbilled Time"

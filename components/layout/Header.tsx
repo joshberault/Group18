@@ -30,13 +30,13 @@ import {
   PARALEGAL_NOTIFICATION_UPDATE_EVENT,
   type ParalegalNotification,
 } from "@/lib/paralegal/notifications-store";
-import { USER_ROLE_LABELS, USER_ROLES, type UserRole } from "@/lib/types";
+import { type UserRole } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
 import { FirmNotificationsMenu } from "./FirmNotificationsMenu";
 import { GlobalSearch } from "./GlobalSearch";
 import { useDemoRole } from "./DemoRoleProvider";
+import { DemoRoleSelect } from "./DemoRoleSelect";
 import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Select";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -57,7 +57,7 @@ type FeedNotification = {
 
 export function Header({ onMenuClick, className }: HeaderProps) {
   const router = useRouter();
-  const { selectedRole, setSelectedRole, identity } = useDemoRole();
+  const { selectedRole, setSelectedRole, identity, roleDisplayLabel } = useDemoRole();
   const [attorneyNotifications, setAttorneyNotifications] = useState<
     AttorneyNotification[]
   >([]);
@@ -117,11 +117,6 @@ export function Header({ onMenuClick, className }: HeaderProps) {
     setNotificationsOpen(false);
     refreshNotifications();
   }, [selectedRole, refreshNotifications]);
-
-  const roleOptions = USER_ROLES.map((r) => ({
-    value: r,
-    label: USER_ROLE_LABELS[r],
-  }));
 
   function handleRoleChange(newRole: UserRole) {
     setSelectedRole(newRole);
@@ -210,14 +205,7 @@ export function Header({ onMenuClick, className }: HeaderProps) {
 
       <div className="flex flex-1 items-center justify-end gap-3 md:flex-none">
         <div className="hidden sm:block">
-          <Select
-            label="Demo role"
-            options={roleOptions}
-            value={selectedRole}
-            onChange={(e) => handleRoleChange(e.target.value as UserRole)}
-            className="min-w-[200px]"
-            aria-label="Switch demonstration role"
-          />
+          <DemoRoleSelect onRoleChange={handleRoleChange} />
         </div>
 
         {usesRoleFeed ? (
@@ -331,7 +319,7 @@ export function Header({ onMenuClick, className }: HeaderProps) {
           <p className="text-sm font-medium text-navy-900">
             {identity.fullName}
           </p>
-          <p className="text-xs text-muted">{USER_ROLE_LABELS[selectedRole]}</p>
+          <p className="text-xs text-muted">{roleDisplayLabel}</p>
         </div>
 
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-900 text-sm font-semibold text-gold-500">
