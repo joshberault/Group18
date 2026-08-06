@@ -19,6 +19,22 @@ export type MatterRetainerSummary = {
   message: string | null;
 };
 
+export type ClientRetainerUsage = {
+  /** True when the client has at least one matter with an initial retainer amount. */
+  hasRetainer: boolean;
+  clientId: string | null;
+  initialAmount: number;
+  remainingBalance: number;
+  amountUsed: number;
+  /** 0–100 */
+  percentUsed: number;
+  message: string | null;
+};
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
 /**
  * Total retainer balance available for a firm client (sum of matter balances).
  * Alias: sum of retainer_balance across the client's matters.
@@ -57,7 +73,7 @@ export async function fetchClientRetainerBalance(
     );
 
     return {
-      totalBalance: Math.round(totalBalance * 100) / 100,
+      totalBalance: roundMoney(totalBalance),
       matterCount: rows.length,
       message:
         rows.length === 0
@@ -78,6 +94,127 @@ export async function fetchClientRetainerBalance(
 
 /** Optional alias — same as fetchClientRetainerBalance. */
 export const sumClientRetainerBalances = fetchClientRetainerBalance;
+
+/**
+ * Initial / remaining / used retainer totals for Account Summary.
+ * Only matters with a positive retainer_amount count as having a retainer.
+ * Does not invent or seed demo balances.
+ */
+export async function fetchClientRetainerUsage(input: {
+  clientNumber?: string | null;
+  clientName?: string | null;
+}): Promise<ClientRetainerUsage> {
+  const empty: ClientRetainerUsage = {
+    hasRetainer: false,
+    clientId: null,
+    initialAmount: 0,
+    remainingBalance: 0,
+    amountUsed: 0,
+    percentUsed: 0,
+    message: null,
+  };
+
+  const supabase = createClientSafe();
+  if (!supabase) {
+    return {
+      ...empty,
+      message:
+        "Supabase is not configured. Retainer balances cannot be loaded.",
+    };
+  }
+
+  const clientNumber = input.clientNumber?.trim() ?? "";
+  const clientName = input.clientName?.trim() ?? "";
+
+  try {
+    let clientId: string | null = null;
+
+    if (clientNumber) {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("client_number", clientNumber)
+        .maybeSingle();
+      if (error) {
+        return { ...empty, message: error.message };
+      }
+      clientId = (data?.id as string | undefined) ?? null;
+    }
+
+    if (!clientId && clientName) {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name")
+        .ilike("name", clientName)
+        .limit(1)
+        .maybeSingle();
+      if (error) {
+        return { ...empty, message: error.message };
+      }
+      clientId = (data?.id as string | undefined) ?? null;
+    }
+
+    if (!clientId) {
+      return empty;
+    }
+
+    const { data: matters, error: mattersError } = await supabase
+      .from("matters")
+      .select("id, title, retainer_amount, retainer_balance, billing_type")
+      .eq("client_id", clientId);
+
+    if (mattersError) {
+      return { ...empty, clientId, message: mattersError.message };
+    }
+
+    const retainerMatters = (matters ?? []).filter((row) => {
+      const initial = Number(row.retainer_amount);
+      return Number.isFinite(initial) && initial > 0;
+    });
+
+    if (retainerMatters.length === 0) {
+      return { ...empty, clientId };
+    }
+
+    const initialAmount = roundMoney(
+      retainerMatters.reduce(
+        (sum, row) => sum + (Number(row.retainer_amount) || 0),
+        0,
+      ),
+    );
+    const remainingBalance = roundMoney(
+      retainerMatters.reduce((sum, row) => {
+        const balance = Number(row.retainer_balance);
+        return sum + (Number.isFinite(balance) ? Math.max(0, balance) : 0);
+      }, 0),
+    );
+    const amountUsed = roundMoney(
+      Math.max(0, initialAmount - remainingBalance),
+    );
+    const percentUsed =
+      initialAmount > 0
+        ? Math.min(100, Math.round((amountUsed / initialAmount) * 1000) / 10)
+        : 0;
+
+    return {
+      hasRetainer: true,
+      clientId,
+      initialAmount,
+      remainingBalance,
+      amountUsed,
+      percentUsed,
+      message: null,
+    };
+  } catch (err) {
+    return {
+      ...empty,
+      message:
+        err instanceof Error
+          ? err.message
+          : "Could not load retainer usage.",
+    };
+  }
+}
 
 /**
  * Retainer balance for a single matter (authoritative for applying to an invoice).
@@ -117,7 +254,7 @@ export async function fetchMatterRetainerBalance(
 
     return {
       matterId,
-      balance: Math.round(balance * 100) / 100,
+      balance: roundMoney(balance),
       amount: amount != null && Number.isFinite(amount) ? amount : null,
       message: null,
     };
@@ -144,7 +281,7 @@ export async function applyRetainerToMatter(
   remainingBalance: number;
   error?: string;
 }> {
-  const amount = Math.round(Math.max(0, applyAmount) * 100) / 100;
+  const amount = roundMoney(Math.max(0, applyAmount));
   if (amount <= 0) {
     const current = await fetchMatterRetainerBalance(matterId);
     return { ok: true, remainingBalance: current.balance };
@@ -177,8 +314,7 @@ export async function applyRetainerToMatter(
       };
     }
 
-    const remaining =
-      Math.round(Math.max(0, current.balance - amount) * 100) / 100;
+    const remaining = roundMoney(Math.max(0, current.balance - amount));
 
     const { error } = await supabase
       .from("matters")

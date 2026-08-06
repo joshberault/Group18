@@ -276,6 +276,19 @@ export async function deleteManagedInvoice(
   invoiceNumber: string,
 ): Promise<PersistResult> {
   const result = await deleteInvoiceInSupabase(invoiceNumber);
+
+  // Drop immediately from the shared in-memory catalog so every role's
+  // useSyncExternalStore subscribers (dashboard KPIs, AR, invoices list)
+  // drop the row even before the next network re-fetch finishes.
+  if (result.ok && canUseDom()) {
+    const next = readCache().filter(
+      (row) => row.invoiceNumber !== invoiceNumber,
+    );
+    writeCache(next);
+    notifyInvoicesUpdated();
+  }
+
+  // Authoritative reload from Supabase — single source of truth for all roles.
   await refreshInvoiceCatalog();
   const stillVisible = getAllManagedInvoices().some(
     (row) => row.invoiceNumber === invoiceNumber,
@@ -283,9 +296,11 @@ export async function deleteManagedInvoice(
   return {
     ok: result.ok && !stillVisible,
     count: getAllManagedInvoices().length,
-    error: stillVisible
-      ? result.error || "Invoice still visible after delete"
-      : result.error,
+    error: !result.ok
+      ? result.error
+      : stillVisible
+        ? result.error || "Invoice still visible after delete"
+        : undefined,
   };
 }
 

@@ -162,10 +162,18 @@ export function OutstandingReceivablesSection() {
   const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null);
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
   const [actionNote, setActionNote] = useState<string | null>(null);
+  const [highlightNumber, setHighlightNumber] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
+      const hl = params.get("highlight");
+      if (hl) {
+        setHighlightNumber(hl);
+        setClientSearch("");
+        setAttorney("all");
+        setAging("all");
+      }
       if (params.get("view") === "overdue") {
         setOverdueOnly(true);
         setStatus("all");
@@ -181,8 +189,15 @@ export function OutstandingReceivablesSection() {
   const filteredSorted = useMemo(() => {
     const q = clientSearch.trim().toLowerCase();
     const next = rows.filter((row) => {
+      if (highlightNumber && row.invoiceNumber === highlightNumber) {
+        return true;
+      }
       if (overdueOnly && !row.isOverdue) return false;
-      if (q && !row.client.toLowerCase().includes(q)) return false;
+      if (q) {
+        const clientMatch = row.client.toLowerCase().includes(q);
+        const matterMatch = (row.legalMatter || "").toLowerCase().includes(q);
+        if (!clientMatch && !matterMatch) return false;
+      }
       if (attorney !== "all" && row.attorney !== attorney) return false;
       if (status !== "all" && row.status !== status) return false;
       if (aging !== "all" && row.agingBucket !== aging) return false;
@@ -190,6 +205,10 @@ export function OutstandingReceivablesSection() {
     });
 
     return [...next].sort((a, b) => {
+      if (highlightNumber) {
+        if (a.invoiceNumber === highlightNumber) return -1;
+        if (b.invoiceNumber === highlightNumber) return 1;
+      }
       const result = compareRows(a, b, sortKey);
       return sortDir === "asc" ? result : -result;
     });
@@ -202,6 +221,7 @@ export function OutstandingReceivablesSection() {
     overdueOnly,
     sortKey,
     sortDir,
+    highlightNumber,
   ]);
 
   function handleSort(key: SortKey) {
@@ -449,7 +469,7 @@ export function OutstandingReceivablesSection() {
       <Card className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Input
-            label="Search by client"
+            label="Search by client or matter"
             type="search"
             value={clientSearch}
             onChange={(e) => setClientSearch(e.target.value)}
@@ -540,7 +560,11 @@ export function OutstandingReceivablesSection() {
               filteredSorted.map((row) => (
                 <TableRow
                   key={row.id}
-                  className={cn(row.isOverdue && "bg-red-50/40")}
+                  className={cn(
+                    row.isOverdue && "bg-red-50/40",
+                    highlightNumber === row.invoiceNumber &&
+                      "ring-2 ring-inset ring-navy-900 bg-gold-100/40",
+                  )}
                 >
                   <TableCell className="font-semibold">
                     {row.invoiceNumber}

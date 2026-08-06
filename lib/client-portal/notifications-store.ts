@@ -7,7 +7,8 @@ export const NOTIFICATION_UPDATE_EVENT = "client-notifications-updated";
 export type ClientNotificationType =
   | (typeof clientNotifications)[number]["type"]
   | "dispute_denied"
-  | "invoice_added";
+  | "invoice_added"
+  | "badge_earned";
 
 export type ClientNotification = {
   id: string;
@@ -144,6 +145,21 @@ export function addInvoiceAddedNotification(input: {
     caseNumber: input.matterReference,
     actionLabel: "View Account Summary",
     actionHref: "/client-portal/account-summary",
+  });
+}
+
+export function addBadgeEarnedNotification(badgeId: string) {
+  if (typeof window === "undefined") return;
+
+  persistDynamicNotification({
+    id: `notif-badge-earned-${badgeId}-${Date.now()}`,
+    title: "New badge earned",
+    message:
+      "You’ve earned a new badge! Navigate to your badges to see your latest accomplishment!",
+    createdAt: new Date().toISOString(),
+    type: "badge_earned",
+    actionLabel: "View badges",
+    actionHref: "/client-portal/my-badges",
   });
 }
 

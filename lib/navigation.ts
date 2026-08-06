@@ -3,6 +3,7 @@ import {
   BarChart3,
   Briefcase,
   Calculator,
+  CircleDollarSign,
   Clock,
   FileText,
   LayoutDashboard,
@@ -18,8 +19,11 @@ import type { UserRole } from "@/lib/types";
 
 export type RouteKey =
   | "dashboard"
+  | "analytics"
   | "clients"
   | "matters"
+  | "admin"
+  | "administration"
   | "attorney_hub"
   | "time"
   | "tasks"
@@ -30,15 +34,13 @@ export type RouteKey =
   | "receivables"
   | "accounting"
   | "reports"
-  | "analytics"
   | "risk_center"
   | "client_portal"
   | "trust_accounting"
   | "revenue_ledger"
   | "banking"
   | "accounts_payable"
-  | "audit_log"
-  | "administration";
+  | "audit_log";
 
 export interface NavItem {
   routeKey: RouteKey;
@@ -57,9 +59,12 @@ const ALL_ROLES: UserRole[] = [
   "billing_specialist",
   "firm_administrator",
   "client",
+  "prospective_client",
 ];
 
-const STAFF: UserRole[] = ALL_ROLES.filter((r) => r !== "client");
+const STAFF: UserRole[] = ALL_ROLES.filter(
+  (r) => r !== "client" && r !== "prospective_client",
+);
 const ATTORNEY_TEAM: UserRole[] = ["managing_partner", "attorney", "paralegal"];
 const BILLING_TEAM: UserRole[] = [
   "managing_partner",
@@ -70,6 +75,8 @@ const BILLING_TEAM: UserRole[] = [
 /**
  * Sidebar navigation with demo-role visibility.
  * Admin/Staff Information is Firm Administrator only (Person 5).
+ * Accounting Manager uses lib/navigation/accounting-manager-nav.ts.
+ * Prospective Client and Client use dedicated nav files via getNavigationForRole.
  */
 export const NAV_ITEMS: NavItem[] = [
   {
@@ -78,7 +85,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/dashboard",
     icon: LayoutDashboard,
     description: "Firm overview and key metrics",
-    roles: ALL_ROLES,
+    roles: [...STAFF, "prospective_client"],
   },
   {
     routeKey: "analytics",
@@ -151,6 +158,14 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/invoices",
     icon: FileText,
     description: "Invoice generation and collections",
+    roles: BILLING_TEAM,
+  },
+  {
+    routeKey: "receivables",
+    label: "Accounts Receivable",
+    href: "/receivables",
+    icon: CircleDollarSign,
+    description: "Outstanding AR, payments, and reminders",
     roles: BILLING_TEAM,
   },
   {

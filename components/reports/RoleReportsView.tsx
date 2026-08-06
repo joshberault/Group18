@@ -11,7 +11,14 @@ import { RevenueByClientReport } from "@/components/billing/RevenueByClientRepor
 import type { UserRole } from "@/lib/types";
 
 const REPORT_LINKS: Record<
-  Exclude<UserRole, "accounting_manager" | "client" | "attorney" | "paralegal">,
+  Exclude<
+    UserRole,
+    | "accounting_manager"
+    | "client"
+    | "prospective_client"
+    | "attorney"
+    | "paralegal"
+  >,
   { title: string; description: string; links: { label: string; href: string }[] }
 > = {
   managing_partner: {
@@ -52,6 +59,7 @@ export function RoleReportsView() {
   if (
     selectedRole === "accounting_manager" ||
     selectedRole === "client" ||
+    selectedRole === "prospective_client" ||
     selectedRole === "attorney" ||
     selectedRole === "paralegal"
   ) {

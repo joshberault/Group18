@@ -1,10 +1,10 @@
 import {
+  Award,
   Bell,
   Briefcase,
   ClipboardList,
   CreditCard,
   GitBranch,
-  LayoutDashboard,
   MessageSquare,
   Upload,
   Wallet,
@@ -13,13 +13,6 @@ import type { NavItem } from "@/lib/navigation";
 
 /** Sidebar navigation used ONLY when the demo role is Client. */
 export const CLIENT_NAV_ITEMS: NavItem[] = [
-  {
-    routeKey: "dashboard",
-    label: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    description: "Your overview and key updates",
-  },
   {
     routeKey: "client_portal",
     label: "Account Summary",
@@ -75,6 +68,13 @@ export const CLIENT_NAV_ITEMS: NavItem[] = [
     href: "/client-portal/notifications",
     icon: Bell,
     description: "Billing, document, and case alerts",
+  },
+  {
+    routeKey: "client_portal",
+    label: "My Badges",
+    href: "/client-portal/my-badges",
+    icon: Award,
+    description: "Badges earned for staying on top of your matter",
   },
 ];
 

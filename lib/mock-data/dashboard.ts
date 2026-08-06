@@ -12,6 +12,8 @@ export const ROLE_WELCOME_MESSAGES: Record<UserRole, string> = {
   firm_administrator:
     "Operational oversight across clients, staff, and firm settings.",
   client: "Your matters, invoices, and trust balance summary.",
+  prospective_client:
+    "Share your legal needs and request a consultation with our team.",
 };
 
 export const ROLE_SUMMARY_TITLES: Record<UserRole, string> = {
@@ -22,6 +24,7 @@ export const ROLE_SUMMARY_TITLES: Record<UserRole, string> = {
   accounting_manager: "Accounting Operations Summary",
   firm_administrator: "Firm Administration Summary",
   client: "Client Portal Preview",
+  prospective_client: "Consultation Request",
 };
 
 export const ROLE_SUMMARY_CONTENT: Record<UserRole, string> = {
@@ -39,6 +42,8 @@ export const ROLE_SUMMARY_CONTENT: Record<UserRole, string> = {
     "User access reviews due this month. 3 new client onboarding requests pending assignment.",
   client:
     "2 open matters, 1 outstanding invoice, and $12,500 in trust funds on account.",
+  prospective_client:
+    "Complete the consultation request form to connect with CounselFlow.",
 };
 
 export const dashboardKpis = {

@@ -29,7 +29,9 @@ export function getDefaultHomePath(role: UserRole): string {
       // Daily action center lives on /dashboard; Attorney Hub is a separate module.
       return "/dashboard";
     case "client":
-      return "/client-portal";
+      return "/client-portal/account-summary";
+    case "prospective_client":
+      return "/dashboard";
     case "billing_specialist":
       return "/billing";
     case "firm_administrator":
@@ -46,7 +48,6 @@ export function canAccessFirmDashboard(role: UserRole): boolean {
     "managing_partner",
     "billing_specialist",
     "firm_administrator",
-    "client",
   ].includes(role);
 }
 
