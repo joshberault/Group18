@@ -24,6 +24,7 @@ import {
   loadBillingClients,
   loadBillingMattersForClient,
 } from "@/lib/billing/counselflow-catalog";
+import { pushFinalizedInvoiceToClientPortal } from "@/lib/billing/finalize-invoice-to-portal";
 import { toIsoDate } from "@/lib/billing/billing-period";
 import {
   BILLING_ROUTES,
@@ -1255,9 +1256,18 @@ export function GenerateInvoiceWizard() {
     setDueDate(due);
 
     if (saved.ok) {
+      const portalPush = pushFinalizedInvoiceToClientPortal({
+        invoiceNumber: number,
+        invoiceDate: invDate,
+        totalDue: totals.totalDue,
+        client,
+        matter,
+      });
       setManagementLinkNumber(number);
       setSuccessNote(
-        `Invoice ${number} finalized as Sent and added to Invoice Management (${saved.count} generated invoice${saved.count === 1 ? "" : "s"} stored). Use the link below to open it.`,
+        portalPush.chargeAdded
+          ? `Invoice ${number} finalized as Sent, added to Invoice Management, and charged to the client Account Summary (${saved.count} generated invoice${saved.count === 1 ? "" : "s"} stored). A client notification was sent.`
+          : `Invoice ${number} finalized as Sent and added to Invoice Management (${saved.count} generated invoice${saved.count === 1 ? "" : "s"} stored). Client Account Summary already had this invoice charge.`,
       );
       setMessages([]);
     } else {

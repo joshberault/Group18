@@ -21,6 +21,7 @@ import {
   INVOICE_CHARGES_UPDATE_EVENT,
   type DynamicInvoiceCharge,
 } from "@/lib/client-portal/invoice-charge-store";
+import { isPortalClientName } from "@/lib/client-portal/invoice-client-map";
 import {
   getRecurringPayment,
   RECURRING_PAYMENT_EVENT,
@@ -83,7 +84,7 @@ function ControlStatusBadge({ status }: { status: "clear" | "review" | "matched"
 }
 
 export function AccountSummary() {
-  const { matchesCase } = useCaseSelection();
+  const { matchesCase, isAllCases } = useCaseSelection();
   const [view, setView] = useState<SummaryView>("home");
   const [recurring, setRecurring] = useState<RecurringPaymentSetup | null>(null);
   const [dynamicCharges, setDynamicCharges] = useState<DynamicInvoiceCharge[]>(
@@ -125,10 +126,18 @@ export function AccountSummary() {
 
   const visibleCharges = useMemo(
     () =>
-      [...dynamicCharges, ...invoiceCharges].filter((charge) =>
-        matchesCase(charge.caseNumber),
-      ),
-    [dynamicCharges, matchesCase],
+      [...dynamicCharges, ...invoiceCharges].filter((charge) => {
+        if (matchesCase(charge.caseNumber)) return true;
+        if (
+          "clientName" in charge &&
+          typeof charge.clientName === "string" &&
+          isPortalClientName(charge.clientName)
+        ) {
+          return isAllCases;
+        }
+        return false;
+      }),
+    [dynamicCharges, matchesCase, isAllCases],
   );
 
   const chargeTotal = visibleCharges.reduce(
