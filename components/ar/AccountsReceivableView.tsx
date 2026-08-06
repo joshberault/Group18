@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   CreditCard,
@@ -78,9 +79,31 @@ type ArModal =
   | null;
 
 export function AccountsReceivableView() {
+  const searchParams = useSearchParams();
   const queueRef = useRef<HTMLDivElement>(null);
+  const writeOffRef = useRef<HTMLDivElement>(null);
+  const paymentExceptionRef = useRef<HTMLDivElement>(null);
+
+  const initialFilters = (): CollectionsQueueFilters => {
+    const next = { ...defaultQueueFilters };
+    const kpi = searchParams.get("kpi");
+    const section = searchParams.get("section");
+    const filter = searchParams.get("filter");
+    if (kpi === "90plus") next.agingBucket = "90+";
+    if (kpi === "stale") next.collectionStatus = "No Activity";
+    if (section === "write-offs") {
+      next.collectionStatus = "Write-Off Requested";
+    }
+    if (section === "payment-exceptions") {
+      next.exceptionsOnly = true;
+      if (filter === "unapplied") next.exceptionType = "unapplied_payments";
+      if (filter === "failed") next.search = "failed";
+    }
+    return next;
+  };
+
   const [queueFilters, setQueueFilters] =
-    useState<CollectionsQueueFilters>(defaultQueueFilters);
+    useState<CollectionsQueueFilters>(initialFilters);
   const [modal, setModal] = useState<ArModal>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [paymentClient, setPaymentClient] = useState("");
@@ -92,6 +115,19 @@ export function AccountsReceivableView() {
   const [cashInvoice, setCashInvoice] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [sessionActivity, setSessionActivity] = useState(arRecentActivity);
+
+  useEffect(() => {
+    const section = searchParams.get("section");
+    if (section === "write-offs" && writeOffRef.current) {
+      writeOffRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+    if (section === "payment-exceptions" && paymentExceptionRef.current) {
+      paymentExceptionRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+    if (searchParams.get("kpi") && queueRef.current) {
+      queueRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [searchParams]);
 
   function riskVariant(risk: CollectionRisk) {
     if (risk === "Green") return "success" as const;
@@ -504,7 +540,9 @@ export function AccountsReceivableView() {
         </Card>
       </div>
 
-      <WriteOffApprovalsSection />
+      <div ref={writeOffRef}>
+        <WriteOffApprovalsSection />
+      </div>
 
       {/* Section 9: Recent Collection Activity */}
       <Card>

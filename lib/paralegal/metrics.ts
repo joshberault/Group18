@@ -1,13 +1,21 @@
 import {
   PARALEGAL_DEADLINES,
-  PARALEGAL_EXPENSES,
-  PARALEGAL_REVIEW_QUEUE,
-  PARALEGAL_TASKS,
-  PARALEGAL_TIME_ENTRIES,
   type ParalegalDeadline,
+  type ParalegalReviewItem,
   type ParalegalTask,
 } from "@/lib/paralegal/demo-data";
+import {
+  getParalegalWorkflow,
+  type ParalegalWorkflowState,
+} from "@/lib/paralegal/workflow-store";
 
+export {
+  filterExpensesByQuery,
+  filterTasksByQuery,
+  filterTimeByQuery,
+} from "@/lib/paralegal/filters";
+
+/** Shared Paralegal dashboard metric helpers (seed + workflow store). */
 function startOfDay(d: Date) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -15,7 +23,9 @@ function startOfDay(d: Date) {
 }
 
 function parseDay(isoDate: string) {
-  return startOfDay(new Date(isoDate.includes("T") ? isoDate : `${isoDate}T12:00:00`));
+  return startOfDay(
+    new Date(isoDate.includes("T") ? isoDate : `${isoDate}T12:00:00`),
+  );
 }
 
 export function daysUntil(isoDate: string): number {
@@ -32,8 +42,12 @@ export function dueLabel(isoDate: string): string {
   return `Due in ${days} Days`;
 }
 
-export function getParalegalSummaryCounts() {
-  const tasks = PARALEGAL_TASKS;
+function resolveState(state?: ParalegalWorkflowState): ParalegalWorkflowState {
+  return state ?? getParalegalWorkflow();
+}
+
+export function getParalegalSummaryCounts(state?: ParalegalWorkflowState) {
+  const { tasks, timeEntries } = resolveState(state);
   const today = startOfDay(new Date());
 
   const tasksDueToday = tasks.filter(
@@ -43,7 +57,9 @@ export function getParalegalSummaryCounts() {
   ).length;
 
   const overdueTasks = tasks.filter(
-    (t) => t.status === "overdue" || (parseDay(t.dueDate) < today && t.status !== "completed"),
+    (t) =>
+      t.status === "overdue" ||
+      (parseDay(t.dueDate) < today && t.status !== "completed"),
   ).length;
 
   const deadlinesWithin7 = PARALEGAL_DEADLINES.filter((d) => {
@@ -51,12 +67,14 @@ export function getParalegalSummaryCounts() {
     return days >= 0 && days <= 7;
   }).length;
 
-  const waitingOnAttorney = tasks.filter((t) => t.status === "waiting_on_attorney").length;
+  const waitingOnAttorney = tasks.filter(
+    (t) => t.status === "waiting_on_attorney",
+  ).length;
 
   const draftOrMissingTime =
-    PARALEGAL_TIME_ENTRIES.filter((e) => e.status === "draft" || e.status === "rejected")
+    timeEntries.filter((e) => e.status === "draft" || e.status === "rejected")
       .length +
-    PARALEGAL_TIME_ENTRIES.filter((e) => e.description.includes("No entry")).length;
+    timeEntries.filter((e) => e.description.includes("No entry")).length;
 
   const blockedTasks = tasks.filter((t) => t.status === "blocked").length;
 
@@ -70,18 +88,25 @@ export function getParalegalSummaryCounts() {
   };
 }
 
-export function getPriorityQueue(): ParalegalTask[] {
+export function getPriorityQueue(
+  state?: ParalegalWorkflowState,
+): ParalegalTask[] {
+  const { tasks } = resolveState(state);
   const rank = (t: ParalegalTask) => {
     const days = daysUntil(t.dueDate);
     if (t.status === "overdue" || days < 0) return 0;
     if (days === 0) return 1;
     if (days <= 2) return 2;
     if (t.status === "blocked") return 3;
-    if (t.status === "in_progress" && t.notes?.toLowerCase().includes("returned")) return 4;
+    if (
+      t.status === "in_progress" &&
+      t.notes?.toLowerCase().includes("returned")
+    )
+      return 4;
     return 5 + days;
   };
 
-  return [...PARALEGAL_TASKS]
+  return [...tasks]
     .filter((t) => t.status !== "completed")
     .sort((a, b) => rank(a) - rank(b) || a.dueDate.localeCompare(b.dueDate))
     .slice(0, 8);
@@ -93,8 +118,11 @@ export function getUpcomingDeadlines(limit = 6): ParalegalDeadline[] {
     .slice(0, limit);
 }
 
-export function getReviewQueue() {
-  return [...PARALEGAL_REVIEW_QUEUE].sort((a, b) => {
+export function getReviewQueue(
+  state?: ParalegalWorkflowState,
+): ParalegalReviewItem[] {
+  const { reviews } = resolveState(state);
+  return [...reviews].sort((a, b) => {
     const order: Record<string, number> = {
       returned_for_revision: 0,
       submitted: 1,
@@ -106,17 +134,20 @@ export function getReviewQueue() {
   });
 }
 
-export function getTimeExpenseReminders() {
+export function getTimeExpenseReminders(state?: ParalegalWorkflowState) {
+  const { timeEntries, expenses } = resolveState(state);
   const today = new Date().toISOString().slice(0, 10);
-  const timeToday = PARALEGAL_TIME_ENTRIES.filter(
+  const timeToday = timeEntries.filter(
     (e) => e.entryDate === today && e.hours > 0,
   );
-  const drafts = PARALEGAL_TIME_ENTRIES.filter((e) => e.status === "draft" && e.hours > 0);
-  const rejected = PARALEGAL_TIME_ENTRIES.filter((e) => e.status === "rejected");
-  const missingDays = PARALEGAL_TIME_ENTRIES.filter((e) =>
+  const drafts = timeEntries.filter(
+    (e) => e.status === "draft" && e.hours > 0,
+  );
+  const rejected = timeEntries.filter((e) => e.status === "rejected");
+  const missingDays = timeEntries.filter((e) =>
     e.description.includes("No entry"),
   );
-  const expensesMissingReceipt = PARALEGAL_EXPENSES.filter((e) => e.receiptMissing);
+  const expensesMissingReceipt = expenses.filter((e) => e.receiptMissing);
 
   const hoursToday = timeToday.reduce((sum, e) => sum + e.hours, 0);
 

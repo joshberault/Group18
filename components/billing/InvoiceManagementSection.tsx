@@ -126,6 +126,11 @@ export function InvoiceManagementSection({ invoices }: Props) {
     setGeneratedCount(countGeneratedInvoices());
   }
 
+  async function reloadFromSupabase() {
+    await refreshInvoiceCatalog();
+    refreshCatalog();
+  }
+
   function todayIso(): string {
     return new Date().toISOString().slice(0, 10);
   }
@@ -142,7 +147,7 @@ export function InvoiceManagementSection({ invoices }: Props) {
         : paid > 0
           ? "Partially Paid"
           : invoice.status;
-    await updateManagedInvoice(invoice.invoiceNumber, {
+    const updated = await updateManagedInvoice(invoice.invoiceNumber, {
       amountPaid: paid,
       remainingBalance: remaining,
       status: newStatus as InvoiceStatus,
@@ -157,15 +162,17 @@ export function InvoiceManagementSection({ invoices }: Props) {
         },
       ],
     });
-    refreshCatalog();
+    await reloadFromSupabase();
     setActionNote(
-      `Payment of ${formatCurrency(amount)} recorded for ${invoice.invoiceNumber}.`,
+      updated
+        ? `Payment of ${formatCurrency(amount)} recorded for ${invoice.invoiceNumber}.`
+        : `Could not record payment for ${invoice.invoiceNumber}.`,
     );
   }
 
   async function handleConfirmDelete(invoice: Invoice) {
     const result = await deleteManagedInvoice(invoice.invoiceNumber);
-    refreshCatalog();
+    await reloadFromSupabase();
     setActionNote(
       result.ok
         ? `Invoice ${invoice.invoiceNumber} deleted.`
@@ -174,17 +181,24 @@ export function InvoiceManagementSection({ invoices }: Props) {
   }
 
   useEffect(() => {
+    // Optional initial paint from props only; live list always reloads from Supabase.
     if (invoices && invoices.length > 0) {
       setCatalog(invoices);
-      return;
     }
 
-    const refresh = () => {
+    const onCacheUpdated = () => {
       refreshCatalog();
     };
+    const reload = () => {
+      void reloadFromSupabase();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        reload();
+      }
+    };
 
-    void refreshInvoiceCatalog().then(refresh);
-    refresh();
+    void reloadFromSupabase();
 
     try {
       const params = new URLSearchParams(window.location.search);
@@ -278,13 +292,13 @@ export function InvoiceManagementSection({ invoices }: Props) {
       /* ignore */
     }
 
-    window.addEventListener(INVOICES_UPDATED_EVENT, refresh);
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener(INVOICES_UPDATED_EVENT, onCacheUpdated);
+    window.addEventListener("focus", reload);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
-      window.removeEventListener(INVOICES_UPDATED_EVENT, refresh);
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener(INVOICES_UPDATED_EVENT, onCacheUpdated);
+      window.removeEventListener("focus", reload);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [invoices]);
 

@@ -26,6 +26,7 @@ import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { JobApplicationsPanel } from "@/components/admin/JobApplicationsPanel";
 import { ParalegalDashboard } from "@/components/dashboard/ParalegalDashboard";
 import { AttorneyDashboard } from "@/components/dashboard/AttorneyDashboard";
+import { AccountingManagerDashboard } from "@/components/accounting-manager/dashboard/AccountingManagerDashboard";
 import { PendingTimeApprovalsPanel } from "@/components/time/PendingTimeApprovalsPanel";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { KPICard } from "@/components/ui/KPICard";
@@ -88,6 +89,23 @@ const BILLING_SPECIALIST_KPI_HREFS = {
   trustFunds: "/accounting/trust",
   monthlyCollections: "/invoices?status=paid",
   overdueInvoices: invoicesHref({ view: "overdue" }),
+} as const;
+
+/** Firm Administrator destinations — firm-admin-safe routes only (no /attorney/time). */
+const FIRM_ADMINISTRATOR_KPI_HREFS = {
+  activeMatters: "/matters",
+  unbilledTime: "/billing",
+  outstandingAR: "/receivables",
+  trustFunds: "/accounting/trust",
+  monthlyCollections: invoicesHref({ view: "completed" }),
+} as const;
+
+const MANAGING_PARTNER_KPI_HREFS = {
+  activeMatters: "/matters",
+  unbilledTime: "/billing",
+  outstandingAR: "/receivables",
+  trustFunds: "/accounting/trust",
+  monthlyCollections: "/reports",
 } as const;
 
 const BILLING_SPECIALIST_QUICK_ACTIONS = [
@@ -166,6 +184,9 @@ export function DashboardContent() {
   const router = useRouter();
   const { role } = useDemoRole();
   const isBillingSpecialist = role === "billing_specialist";
+  const isFirmAdministrator = role === "firm_administrator";
+  /** Live firm KPIs from invoice catalog + firm-kpis (Billing Specialist & Firm Admin). */
+  const usesLiveFirmKpis = isBillingSpecialist || isFirmAdministrator;
 
   const invoices = useSyncExternalStore(
     subscribeInvoiceCatalog,
@@ -181,7 +202,7 @@ export function DashboardContent() {
   const [unbilledLoading, setUnbilledLoading] = useState(false);
 
   useEffect(() => {
-    if (!isBillingSpecialist) {
+    if (!usesLiveFirmKpis) {
       setActiveMattersCount(null);
       setUnbilledHours(null);
       setActiveMattersLoading(false);
@@ -208,7 +229,7 @@ export function DashboardContent() {
     return () => {
       cancelled = true;
     };
-  }, [isBillingSpecialist]);
+  }, [usesLiveFirmKpis]);
 
   const paidMonthlyCollections = useMemo(
     () => getMonthlyCollectionsFromPaidInvoices(invoices, 6),
@@ -232,19 +253,19 @@ export function DashboardContent() {
 
   const trustDisplay = getTrustFundsHeldDisplay();
 
-  const collectionsChartData = isBillingSpecialist
+  const collectionsChartData = usesLiveFirmKpis
     ? paidMonthlyCollections
     : monthlyCollectionsChart;
 
-  const monthlyCollectionsKpiValue = isBillingSpecialist
+  const monthlyCollectionsKpiValue = usesLiveFirmKpis
     ? collectionsThisMonth
     : dashboardKpis.monthlyCollections;
 
-  const monthlyCollectionsSubtitle = isBillingSpecialist
+  const monthlyCollectionsSubtitle = usesLiveFirmKpis
     ? "From fully paid invoices (this month)"
     : "Collected this month";
 
-  const chartDescription = isBillingSpecialist
+  const chartDescription = usesLiveFirmKpis
     ? "Last 6 months of collections from fully paid invoices in the billing catalog"
     : "Mock trend data for dashboard visualization";
 
@@ -321,7 +342,7 @@ export function DashboardContent() {
     ? "Live from the shared invoice catalog — updates when invoices change."
     : "Mock data — replace with live Supabase queries on your feature branch.";
 
-  const activeMattersValue = isBillingSpecialist
+  const activeMattersValue = usesLiveFirmKpis
     ? activeMattersLoading
       ? "…"
       : activeMattersCount != null
@@ -329,7 +350,7 @@ export function DashboardContent() {
         : "—"
     : String(dashboardKpis.activeMatters);
 
-  const activeMattersSubtitle = isBillingSpecialist
+  const activeMattersSubtitle = usesLiveFirmKpis
     ? activeMattersCount != null
       ? "Open matters in firm catalog"
       : activeMattersLoading
@@ -337,7 +358,7 @@ export function DashboardContent() {
         : "Matters data unavailable"
     : "Open across all practice groups";
 
-  const unbilledTimeValue = isBillingSpecialist
+  const unbilledTimeValue = usesLiveFirmKpis
     ? unbilledLoading
       ? "…"
       : unbilledHours != null
@@ -345,25 +366,25 @@ export function DashboardContent() {
         : "—"
     : formatHours(dashboardKpis.unbilledTimeHours);
 
-  const unbilledTimeSubtitle = isBillingSpecialist
+  const unbilledTimeSubtitle = usesLiveFirmKpis
     ? "Approved & not yet billed"
     : "Pending approval or billing";
 
-  const outstandingArValue = isBillingSpecialist
+  const outstandingArValue = usesLiveFirmKpis
     ? formatCurrency(outstandingAr)
     : formatCurrency(dashboardKpis.outstandingAR);
 
-  const outstandingArSubtitle = isBillingSpecialist
+  const outstandingArSubtitle = usesLiveFirmKpis
     ? "From AR on open invoices"
     : "Accounts receivable balance";
 
-  const trustFundsValue = isBillingSpecialist
+  const trustFundsValue = usesLiveFirmKpis
     ? trustDisplay.kind === "unavailable"
       ? trustDisplay.message
       : formatCurrency(trustDisplay.value)
     : formatCurrency(dashboardKpis.trustFundsHeld);
 
-  const trustFundsSubtitle = isBillingSpecialist
+  const trustFundsSubtitle = usesLiveFirmKpis
     ? "Trust ledger not connected"
     : "Client trust balances";
 
@@ -374,6 +395,23 @@ export function DashboardContent() {
   if (role === "attorney") {
     return <AttorneyDashboard />;
   }
+
+  if (role === "accounting_manager") {
+    return <AccountingManagerDashboard />;
+  }
+
+  const isManagingPartner = role === "managing_partner";
+  const kpiInteractive =
+    isBillingSpecialist || isManagingPartner || isFirmAdministrator;
+
+  const firmKpiHref = (
+    key: keyof typeof FIRM_ADMINISTRATOR_KPI_HREFS,
+  ): string | undefined => {
+    if (isBillingSpecialist) return BILLING_SPECIALIST_KPI_HREFS[key];
+    if (isFirmAdministrator) return FIRM_ADMINISTRATOR_KPI_HREFS[key];
+    if (isManagingPartner) return MANAGING_PARTNER_KPI_HREFS[key];
+    return undefined;
+  };
 
   return (
     <>
@@ -429,41 +467,41 @@ export function DashboardContent() {
           value={activeMattersValue}
           subtitle={activeMattersSubtitle}
           icon={Briefcase}
-          href={BILLING_SPECIALIST_KPI_HREFS.activeMatters}
-          interactive={isBillingSpecialist}
+          href={firmKpiHref("activeMatters")}
+          interactive={kpiInteractive}
         />
         <DashboardKpiCard
           title="Unbilled Time"
           value={unbilledTimeValue}
           subtitle={unbilledTimeSubtitle}
           icon={Clock}
-          href={BILLING_SPECIALIST_KPI_HREFS.unbilledTime}
-          interactive={isBillingSpecialist}
+          href={firmKpiHref("unbilledTime")}
+          interactive={kpiInteractive}
         />
         <DashboardKpiCard
           title="Outstanding A/R"
           value={outstandingArValue}
           subtitle={outstandingArSubtitle}
           icon={DollarSign}
-          href={BILLING_SPECIALIST_KPI_HREFS.outstandingAR}
-          interactive={isBillingSpecialist}
+          href={firmKpiHref("outstandingAR")}
+          interactive={kpiInteractive}
         />
         <DashboardKpiCard
           title="Trust Funds Held"
           value={trustFundsValue}
           subtitle={trustFundsSubtitle}
           icon={Landmark}
-          href={BILLING_SPECIALIST_KPI_HREFS.trustFunds}
-          interactive={isBillingSpecialist}
+          href={firmKpiHref("trustFunds")}
+          interactive={kpiInteractive}
         />
         <DashboardKpiCard
           title="Monthly Collections"
           value={formatCurrency(monthlyCollectionsKpiValue)}
           subtitle={monthlyCollectionsSubtitle}
-          trend={isBillingSpecialist ? undefined : "+8.2% vs. last month"}
+          trend={usesLiveFirmKpis ? undefined : "+8.2% vs. last month"}
           icon={TrendingUp}
-          href={BILLING_SPECIALIST_KPI_HREFS.monthlyCollections}
-          interactive={isBillingSpecialist}
+          href={firmKpiHref("monthlyCollections")}
+          interactive={kpiInteractive}
         />
         {isBillingSpecialist ? (
           <DashboardKpiCard

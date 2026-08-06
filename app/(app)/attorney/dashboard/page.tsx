@@ -4,15 +4,20 @@ import { Suspense } from "react";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { AttorneyDashboard } from "@/components/dashboard/AttorneyDashboard";
 import { ParalegalAttorneyHub } from "@/components/paralegal/ParalegalAttorneyHub";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 export default function AttorneyDashboardPage() {
   const { role } = useDemoRole();
   if (role === "paralegal") {
-    return <ParalegalAttorneyHub />;
+    return (
+      <Suspense fallback={<LoadingState message="Opening Attorney Hub…" />}>
+        <ParalegalAttorneyHub />
+      </Suspense>
+    );
   }
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<LoadingState message="Opening dashboard…" />}>
       <AttorneyDashboard />
     </Suspense>
   );

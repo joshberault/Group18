@@ -28,12 +28,6 @@ export const DEMO_PROFILE: Profile = {
   role: "attorney",
 };
 
-export const DEMO_ATTORNEYS: DemoAttorney[] = [
-  { id: DEMO_PROFILE.id, full_name: "George Giddens" },
-  { id: "attorney-2", full_name: "Sarah Mitchell" },
-  { id: "attorney-3", full_name: "James Porter" },
-];
-
 /** Title shown after the attorney name in Attorney Hub. */
 export const DEMO_ATTORNEY_TITLE: AttorneyTitle = "Senior Partner";
 
@@ -41,6 +35,12 @@ export const DEMO_ATTORNEY_TITLE: AttorneyTitle = "Senior Partner";
 export function isDevPreview(): boolean {
   return process.env.NEXT_PUBLIC_DEV_PREVIEW !== "false";
 }
+
+export const DEMO_ATTORNEYS: DemoAttorney[] = [
+  { id: DEMO_PROFILE.id, full_name: "George Giddens" },
+  { id: "attorney-2", full_name: "Sarah Mitchell" },
+  { id: "attorney-3", full_name: "James Porter" },
+];
 
 export const DEMO_MATTERS: Matter[] = [
   {

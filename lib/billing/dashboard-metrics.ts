@@ -44,9 +44,9 @@ export function filterInvoicesByPeriod(
 }
 
 /**
- * Live dashboard metrics for a billing period.
- * - Invoice count / revenue / open AR slices use invoice issue date in range
- * - Collections use payment dates (and fully paid invoices without payment rows by issue date)
+ * Live Billing dashboard metrics for a period (Supabase-backed invoice list).
+ * - Invoice count / revenue / open AR: invoice issue date in range
+ * - Collections: paymentHistory (from payments table) + paid fallbacks
  */
 export function computeDashboardMetricsForPeriod(
   allInvoices: Invoice[],

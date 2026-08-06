@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+} from "react";
 import {
   AlertTriangle,
   CircleDollarSign,
@@ -12,8 +19,22 @@ import {
 import { MetricCard } from "@/components/billing/MetricCard";
 import { RevenueByAttorney } from "@/components/billing/RevenueByAttorney";
 import { RevenueByClient } from "@/components/billing/RevenueByClient";
+import { InvoiceStatusBadge } from "@/components/billing/invoice-status";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/Card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/Table";
 import {
   createDefaultBillingPeriod,
   formatPeriodLabel,
@@ -26,8 +47,10 @@ import { computeDashboardMetricsForPeriod } from "@/lib/billing/dashboard-metric
 import {
   getManagedInvoicesSnapshot,
   getServerInvoicesSnapshot,
+  refreshInvoiceCatalog,
   subscribeInvoiceCatalog,
 } from "@/lib/billing/invoice-management-store";
+import { buildInvoiceStatusSummary } from "@/lib/billing/invoice-status-summary";
 import {
   BILLING_ROUTES,
   invoicesHref,
@@ -53,15 +76,26 @@ function formatInteger(value: number): string {
 
 export function BillingDashboard({ data }: Props) {
   const { source } = data;
+  const router = useRouter();
 
   const [period, setPeriod] = useState<BillingPeriodState>(() =>
     createDefaultBillingPeriod(),
   );
 
+  // Subscribe re-fetches on mount/focus/poll; explicit refresh ensures first paint after DB load.
+  useEffect(() => {
+    void refreshInvoiceCatalog();
+  }, []);
+
   const allInvoices = useSyncExternalStore(
     subscribeInvoiceCatalog,
     getManagedInvoicesSnapshot,
     getServerInvoicesSnapshot,
+  );
+
+  const statusSummary = useMemo(
+    () => buildInvoiceStatusSummary(allInvoices),
+    [allInvoices],
   );
 
   const activeRange = useMemo(() => {
@@ -150,8 +184,8 @@ export function BillingDashboard({ data }: Props) {
             {outsidePeriodCount > 0
               ? ` (${formatInteger(outsidePeriodCount)} outside this period)`
               : ""}
-            . Data source:{" "}
-            {source === "supabase" ? "Supabase" : "demo / placeholder"}.
+            . Metrics use the firm invoice catalog (Supabase
+            {source === "supabase" ? "" : "; server handshake pending"}).
           </p>
           <div
             className="mt-4 flex flex-wrap gap-2"
@@ -252,10 +286,53 @@ export function BillingDashboard({ data }: Props) {
         />
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="mb-6 grid gap-6 lg:grid-cols-2">
         <RevenueByAttorney rows={revenueByAttorney} linkMode="report" />
         <RevenueByClient rows={revenueByClient} linkMode="report" />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Invoice Status Summary</CardTitle>
+          <CardDescription>
+            Counts and amounts from firm invoices in Supabase — click a row to
+            open that status in Invoice Management
+          </CardDescription>
+        </CardHeader>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Status</TableHead>
+              <TableHead>Count</TableHead>
+              <TableHead>Amount</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {statusSummary.map((row) => (
+              <TableRow
+                key={row.key}
+                className="cursor-pointer transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-navy-900"
+                tabIndex={0}
+                role="link"
+                aria-label={`View ${row.label} invoices in Invoice Management`}
+                onClick={() => router.push(row.href)}
+                onKeyDown={(e: KeyboardEvent<HTMLTableRowElement>) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    router.push(row.href);
+                  }
+                }}
+              >
+                <TableCell>
+                  <InvoiceStatusBadge status={row.label} />
+                </TableCell>
+                <TableCell>{formatInteger(row.count)}</TableCell>
+                <TableCell>{formatCurrency(row.amount)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }

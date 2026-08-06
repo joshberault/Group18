@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { searchGlobalRecords, type GlobalSearchResult } from "@/lib/demo/global-search";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils/cn";
@@ -12,15 +13,21 @@ const TYPE_LABELS = {
   matter: "Matter",
   invoice: "Invoice",
   receivable: "Receivable",
+  document: "Document",
+  task: "Task",
 } as const;
 
 export function GlobalSearch() {
   const router = useRouter();
+  const { selectedRole } = useDemoRole();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const results = useMemo(() => searchGlobalRecords(query), [query]);
+  const results = useMemo(
+    () => searchGlobalRecords(query, selectedRole),
+    [query, selectedRole],
+  );
 
   useEffect(() => {
     function handleClick(event: MouseEvent) {

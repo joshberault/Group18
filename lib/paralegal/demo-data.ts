@@ -610,11 +610,11 @@ export const PARALEGAL_ALERTS: ParalegalAlert[] = [
   {
     id: "palert-contact",
     kind: "missing_contact",
-    title: "Missing preferred contact method — Maria Santos",
-    detail: "Phone is on file but preferred communication method is blank.",
+    title: "Confirm preferred contact method — Maria Santos",
+    detail: "Phone is on file; confirm the client’s preferred way to reach them when updating contact fields.",
     clientId: "client-santos",
     clientName: "Maria Santos",
-    recommendedAction: "Update allowed contact fields on the client record.",
+    recommendedAction: "Update allowed contact fields on the client record (phone, email, address, primary contact).",
     href: "/clients",
   },
   {

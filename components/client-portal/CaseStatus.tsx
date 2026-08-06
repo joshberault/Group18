@@ -60,7 +60,7 @@ function TaskStatusIcon({
 
 export function CaseStatus() {
   const { role } = useDemoRole();
-  const { selectedCases, isAllCases } = useCaseSelection();
+  const { selectedCases, isMultipleCases } = useCaseSelection();
   const roleCanCheckOffTasks = role === "attorney" || role === "paralegal";
 
   const [selectedCaseId, setSelectedCaseId] = useState(
@@ -200,7 +200,7 @@ export function CaseStatus() {
         </div>
       </Card>
 
-      {isAllCases && selectedCases.length > 1 && (
+      {isMultipleCases && (
         <div className="flex flex-wrap gap-2">
           {selectedCases.map((engagedCase) => {
             const selected = engagedCase.id === selectedCase.id;
