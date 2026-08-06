@@ -8,6 +8,13 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useRouter } from "next/navigation";
+import {
+  DEFAULT_ATTORNEY_DEMO_SPECIALTY,
+  DEMO_ATTORNEY_SPECIALTY_STORAGE_KEY,
+  getAttorneySpecialtyOption,
+  getStoredAttorneySpecialty,
+  type AttorneyDemoSpecialty,
+} from "@/lib/attorney/specialties";
 import type { NavItem } from "@/lib/navigation";
 import type { Permission } from "@/lib/roles/permissions";
 import {
@@ -21,7 +28,7 @@ import {
   getRoleDefinition,
   isValidDemoRole,
 } from "@/lib/roles/role-config";
-import type { UserRole } from "@/lib/types";
+import { USER_ROLE_LABELS, type UserRole } from "@/lib/types";
 
 function getStoredRole(): UserRole {
   if (typeof window === "undefined") {
@@ -34,7 +41,7 @@ function getStoredRole(): UserRole {
   return DEFAULT_DEMO_ROLE;
 }
 
-function subscribeToRole(callback: () => void) {
+function subscribeToDemoPreferences(callback: () => void) {
   window.addEventListener("storage", callback);
   return () => window.removeEventListener("storage", callback);
 }
@@ -42,6 +49,12 @@ function subscribeToRole(callback: () => void) {
 interface DemoRoleContextValue {
   selectedRole: UserRole;
   setSelectedRole: (role: UserRole) => void;
+  /** Active when selectedRole is attorney — used for demo matter/client filtering. */
+  attorneySpecialty: AttorneyDemoSpecialty | null;
+  attorneyPracticeAreaName: string | null;
+  selectAttorneySpecialty: (specialty: AttorneyDemoSpecialty) => void;
+  /** Header-friendly role line (includes specialty when attorney). */
+  roleDisplayLabel: string;
   /** @deprecated Use selectedRole — kept for main-branch components */
   role: UserRole;
   /** @deprecated Use setSelectedRole */
@@ -60,22 +73,51 @@ const DemoRoleContext = createContext<DemoRoleContextValue | null>(null);
 export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const selectedRole = useSyncExternalStore(
-    subscribeToRole,
+    subscribeToDemoPreferences,
     getStoredRole,
     () => DEFAULT_DEMO_ROLE,
+  );
+
+  const attorneySpecialtyStored = useSyncExternalStore(
+    subscribeToDemoPreferences,
+    getStoredAttorneySpecialty,
+    () => DEFAULT_ATTORNEY_DEMO_SPECIALTY,
+  );
+
+  const attorneySpecialty =
+    selectedRole === "attorney" ? attorneySpecialtyStored : null;
+
+  const attorneyPracticeAreaName = attorneySpecialty
+    ? getAttorneySpecialtyOption(attorneySpecialty).practiceAreaName
+    : null;
+
+  const navigateIfNeeded = useCallback(
+    (role: UserRole) => {
+      const currentPath = window.location.pathname;
+      if (!canAccessRoute(role, currentPath)) {
+        router.push(getDefaultRouteForRole(role));
+      }
+    },
+    [router],
   );
 
   const setSelectedRole = useCallback(
     (newRole: UserRole) => {
       localStorage.setItem(DEMO_ROLE_STORAGE_KEY, newRole);
       window.dispatchEvent(new Event("storage"));
-
-      const currentPath = window.location.pathname;
-      if (!canAccessRoute(newRole, currentPath)) {
-        router.push(getDefaultRouteForRole(newRole));
-      }
+      navigateIfNeeded(newRole);
     },
-    [router],
+    [navigateIfNeeded],
+  );
+
+  const selectAttorneySpecialty = useCallback(
+    (specialty: AttorneyDemoSpecialty) => {
+      localStorage.setItem(DEMO_ATTORNEY_SPECIALTY_STORAGE_KEY, specialty);
+      localStorage.setItem(DEMO_ROLE_STORAGE_KEY, "attorney");
+      window.dispatchEvent(new Event("storage"));
+      navigateIfNeeded("attorney");
+    },
+    [navigateIfNeeded],
   );
 
   const permissions = useMemo(
@@ -98,10 +140,21 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
     [selectedRole],
   );
 
+  const roleDisplayLabel = useMemo(() => {
+    if (selectedRole === "attorney" && attorneySpecialty) {
+      return getAttorneySpecialtyOption(attorneySpecialty).label;
+    }
+    return USER_ROLE_LABELS[selectedRole];
+  }, [attorneySpecialty, selectedRole]);
+
   const value = useMemo<DemoRoleContextValue>(
     () => ({
       selectedRole,
       setSelectedRole,
+      attorneySpecialty,
+      attorneyPracticeAreaName,
+      selectAttorneySpecialty,
+      roleDisplayLabel,
       role: selectedRole,
       setRole: setSelectedRole,
       permissions,
@@ -115,6 +168,10 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
     [
       selectedRole,
       setSelectedRole,
+      attorneySpecialty,
+      attorneyPracticeAreaName,
+      selectAttorneySpecialty,
+      roleDisplayLabel,
       permissions,
       hasPermission,
       navigationItems,
