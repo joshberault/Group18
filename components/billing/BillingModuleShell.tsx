@@ -1,10 +1,9 @@
 import type { ReactNode } from "react";
-import "./billing-module.css";
 
 /**
- * Scopes Billing styles and layout under .billing-module so CounselFlow
- * shell, Tailwind theme, and teammate modules are not overridden.
+ * Legacy no-op wrapper — Billing pages now use CounselFlow AppShell only.
+ * Kept so any stray imports compile safely.
  */
 export function BillingModuleShell({ children }: { children: ReactNode }) {
-  return <div className="billing-module">{children}</div>;
+  return <>{children}</>;
 }

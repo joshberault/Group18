@@ -249,6 +249,15 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
     return isAccountingManagerRoute(pathname);
   }
 
+  // Billing Specialist may open Client Trust Accounts from the firm Dashboard KPI.
+  if (
+    role === "billing_specialist" &&
+    (pathname === "/accounting/trust" ||
+      pathname.startsWith("/accounting/trust/"))
+  ) {
+    return true;
+  }
+
   if (isAccountingManagerExclusivePath(pathname)) {
     return false;
   }

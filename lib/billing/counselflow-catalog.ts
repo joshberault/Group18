@@ -1,7 +1,7 @@
 /**
- * Adapter: Billing Generate Invoice ↔ CounselFlow Clients module data.
- * Reuses fetchClients / fetchRelatedMatters (Supabase clients + matters tables).
- * Does not invent parallel client/matter stores.
+ * Adapter: Billing Generate Invoice ↔ CounselFlow Clients + Matters.
+ * Reuses fetchClients / fetchRelatedMatters — no parallel client/matter stores.
+ * Time & expenses are hydrated separately via matter-wip (time_entries).
  */
 
 import { displayClientName } from "@/lib/clients/types";
@@ -12,13 +12,10 @@ import type {
   GenerateMatter,
   MatterStatus,
 } from "@/lib/billing/generate-invoice-types";
-import {
-  GENERATE_CLIENTS,
-  getMattersForClient,
-} from "@/lib/billing/generate-invoice-seed";
 import { toIsoDate } from "@/lib/billing/billing-period";
+import { fetchClientRetainerBalance } from "@/lib/billing/retainer";
 
-export type CatalogSource = "counselflow" | "seed_fallback" | "empty";
+export type CatalogSource = "counselflow" | "empty";
 
 export type BillingClientCatalog = {
   clients: GenerateClient[];
@@ -77,7 +74,21 @@ export function mapFirmClientToGenerate(client: FirmClient): GenerateClient {
   };
 }
 
-/** Map a firm matter row into Generate Invoice matter shape (no seed time lines). */
+/**
+ * Prefill trustRetainerBalance from the sum of matter retainer_balance
+ * (CounselFlow has no separate trust ledger table).
+ */
+export async function enrichClientWithRetainerBalance(
+  client: GenerateClient,
+): Promise<GenerateClient> {
+  const summary = await fetchClientRetainerBalance(client.id);
+  return {
+    ...client,
+    trustRetainerBalance: summary.totalBalance,
+  };
+}
+
+/** Map a firm matter row into Generate Invoice shape (WIP loaded after select). */
 export function mapRelatedMatterToGenerate(
   matter: RelatedMatterSummary,
   firmClientId: string,
@@ -99,30 +110,19 @@ export function mapRelatedMatterToGenerate(
 }
 
 /**
- * Load clients for the Generate Invoice dropdown from CounselFlow CRM.
- * Falls back to built-in seed only when Supabase is not configured.
+ * Load clients for the Generate Invoice dropdown from CounselFlow CRM only.
+ * Retainer balances are loaded when a client is selected (not for every row).
  */
 export async function loadBillingClients(): Promise<BillingClientCatalog> {
   const result = await fetchClients();
 
   if (result.error && result.data.length === 0) {
-    const notConfigured =
-      result.error.includes("not configured") ||
-      result.error.includes("NEXT_PUBLIC_SUPABASE");
-
-    if (notConfigured) {
-      return {
-        clients: GENERATE_CLIENTS.map((c) => ({ ...c })),
-        source: "seed_fallback",
-        message:
-          "CounselFlow Clients is unavailable (Supabase not configured). Showing demo clients so the invoice workflow can still run.",
-      };
-    }
-
     return {
       clients: [],
       source: "empty",
-      message: `Could not load firm clients: ${result.error}`,
+      message: result.error.includes("not configured")
+        ? "CounselFlow Clients is unavailable (Supabase not configured). Configure NEXT_PUBLIC_SUPABASE_URL and the publishable key, then reload."
+        : `Could not load firm clients: ${result.error}`,
     };
   }
 
@@ -150,43 +150,11 @@ export async function loadBillingClients(): Promise<BillingClientCatalog> {
 }
 
 /**
- * Load matters for the selected firm client (CounselFlow matters by client_id).
- * Seed matters only when the client is a legacy seed/fallback client (`gc-*` ids).
+ * Load matters for the selected firm client from CounselFlow matters (by client_id).
  */
 export async function loadBillingMattersForClient(
   firmClientId: string,
-  options?: { catalogSource?: CatalogSource },
 ): Promise<BillingMatterCatalog> {
-  // Session-created clients never hit Supabase
-  if (firmClientId.startsWith("gc-custom-")) {
-    return {
-      matters: [],
-      source: "empty",
-      message: null,
-    };
-  }
-
-  // Seed-fallback clients keep matching seed matters for the offline demo only
-  if (
-    options?.catalogSource === "seed_fallback" ||
-    firmClientId.startsWith("gc-")
-  ) {
-    const seeded = getMattersForClient(firmClientId);
-    return {
-      matters: seeded.map((m) => ({
-        ...m,
-        timeEntries: m.timeEntries.map((t) => ({ ...t })),
-        expenses: m.expenses.map((e) => ({ ...e })),
-        writeDowns: m.writeDowns.map((w) => ({ ...w })),
-      })),
-      source: "seed_fallback",
-      message:
-        options?.catalogSource === "seed_fallback"
-          ? "Using demo matters (Supabase not configured)."
-          : null,
-    };
-  }
-
   const result = await fetchRelatedMatters(firmClientId);
 
   if (result.error && result.data.length === 0) {
@@ -202,7 +170,7 @@ export async function loadBillingMattersForClient(
       matters: [],
       source: "empty",
       message:
-        "This client has no matters in CounselFlow yet. Open the Clients module to review matters, or add a matter for this invoice session only.",
+        "This client has no matters in CounselFlow yet. Create or link a matter for this client (Clients module / related matters), then return here.",
     };
   }
 

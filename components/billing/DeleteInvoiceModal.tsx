@@ -6,6 +6,9 @@ import {
   verifyBillingAdminPassword,
 } from "@/lib/billing/admin-gate";
 import type { Invoice } from "@/lib/billing/invoice-types";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 type Props = {
   invoice: Invoice;
@@ -52,123 +55,81 @@ export function DeleteInvoiceModal({
   }
 
   return (
-    <div
-      className="inv-modal-backdrop"
-      role="presentation"
-      onClick={onClose}
+    <Modal
+      isOpen
+      onClose={onClose}
+      title="Delete invoice"
+      description={invoice.invoiceNumber}
     >
-      <div
-        className="inv-modal inv-modal--delete"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={`${formId}-title`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="inv-modal__header">
-          <div>
-            <p className="inv-modal__kicker">{invoice.invoiceNumber}</p>
-            <h2 id={`${formId}-title`}>Delete invoice</h2>
-          </div>
-          <button type="button" className="inv-modal__close" onClick={onClose}>
-            Close
-          </button>
-        </header>
-
-        <div className="inv-modal__body">
-          {done ? (
-            <>
-              <div className="inv-delete-success" role="status">
-                Invoice <strong>{invoice.invoiceNumber}</strong> was permanently
-                removed after admin authorization.
-              </div>
-              <div className="inv-delete-actions">
-                <button
-                  type="button"
-                  className="dashboard__create-btn"
-                  onClick={onClose}
-                >
-                  Done
-                </button>
-              </div>
-            </>
-          ) : (
-            <form onSubmit={handleSubmit} className="inv-delete-form">
-              <p className="inv-delete-warn">
-                Deleting an invoice is permanent and requires billing
-                administrator approval. This cannot be undone from the demo
-                store.
-              </p>
-
-              <dl className="inv-dl">
-                <div>
-                  <dt>Client</dt>
-                  <dd>{invoice.client}</dd>
-                </div>
-                <div>
-                  <dt>Total</dt>
-                  <dd>{formatCurrency(invoice.totalAmount)}</dd>
-                </div>
-                <div>
-                  <dt>Status</dt>
-                  <dd>{invoice.status}</dd>
-                </div>
-                <div>
-                  <dt>Attorney</dt>
-                  <dd>{invoice.attorney}</dd>
-                </div>
-              </dl>
-
-              <label className="inv-field">
-                <span>Confirm invoice number</span>
-                <input
-                  type="text"
-                  autoComplete="off"
-                  value={confirmNumber}
-                  onChange={(e) => setConfirmNumber(e.target.value)}
-                  placeholder={invoice.invoiceNumber}
-                  required
-                />
-              </label>
-
-              <label className="inv-field">
-                <span>Admin password</span>
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter billing admin password"
-                  required
-                />
-              </label>
-
-              <p className="inv-delete-hint">
-                Demo admin password:{" "}
-                <code>{BILLING_ADMIN_PASSWORD}</code>
-              </p>
-
-              {error ? (
-                <p className="inv-delete-error" role="alert">
-                  {error}
-                </p>
-              ) : null}
-
-              <div className="inv-delete-actions">
-                <button type="submit" className="inv-delete-confirm-btn">
-                  Authorize &amp; delete
-                </button>
-                <button
-                  type="button"
-                  className="inv-view-btn"
-                  onClick={onClose}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
+      {done ? (
+        <div className="space-y-4">
+          <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+            Invoice <strong>{invoice.invoiceNumber}</strong> was permanently
+            removed after admin authorization.
+          </p>
+          <Button onClick={onClose}>Done</Button>
         </div>
-      </div>
-    </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4" id={formId}>
+          <p className="text-sm text-amber-900">
+            Deleting an invoice is permanent and requires billing administrator
+            approval. This cannot be undone from the demo store.
+          </p>
+          <dl className="grid gap-2 sm:grid-cols-2 text-sm">
+            <div>
+              <dt className="text-xs text-muted">Client</dt>
+              <dd className="font-medium text-navy-900">{invoice.client}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Total</dt>
+              <dd className="font-medium text-navy-900">
+                {formatCurrency(invoice.totalAmount)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Status</dt>
+              <dd className="font-medium text-navy-900">{invoice.status}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Attorney</dt>
+              <dd className="font-medium text-navy-900">{invoice.attorney}</dd>
+            </div>
+          </dl>
+          <Input
+            label="Confirm invoice number"
+            value={confirmNumber}
+            onChange={(e) => setConfirmNumber(e.target.value)}
+            placeholder={invoice.invoiceNumber}
+            required
+            autoComplete="off"
+          />
+          <Input
+            label="Admin password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter billing admin password"
+            required
+            autoComplete="current-password"
+          />
+          <p className="text-xs text-muted">
+            Demo admin password: <code>{BILLING_ADMIN_PASSWORD}</code>
+          </p>
+          {error ? (
+            <p className="text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="danger">
+              Authorize &amp; delete
+            </Button>
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+    </Modal>
   );
 }

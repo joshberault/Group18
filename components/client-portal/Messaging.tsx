@@ -19,6 +19,7 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { caseInformation } from "@/lib/mock-data/client-portal";
 import { addAttorneyMessageReceivedNotification } from "@/lib/attorney/notifications-store";
+import { addParalegalMessageReceivedNotification } from "@/lib/paralegal/notifications-store";
 import { cn } from "@/lib/utils/cn";
 
 type Step = "recipients" | "cases" | "topic" | "compose" | "sent";
@@ -187,6 +188,19 @@ export function Messaging() {
     ) {
       for (const engagedCase of relatedCases) {
         addAttorneyMessageReceivedNotification({
+          sender: identity.fullName,
+          subject: subject.trim(),
+          matterName: engagedCase.title,
+          matterNumber: engagedCase.caseNumber,
+        });
+      }
+    }
+    if (
+      selectedRole === "client" &&
+      selectedRecipientOptions.some((recipient) => recipient.role === "paralegal")
+    ) {
+      for (const engagedCase of relatedCases) {
+        addParalegalMessageReceivedNotification({
           sender: identity.fullName,
           subject: subject.trim(),
           matterName: engagedCase.title,

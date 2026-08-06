@@ -29,7 +29,11 @@ import {
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Textarea } from "@/components/ui/Textarea";
+import { CASE_TYPE_LABELS } from "@/lib/client-portal/case-task-lists";
+import type { TaskOwner } from "@/lib/client-portal/case-task-lists";
+import { addCaseStatusUpdateNotification } from "@/lib/client-portal/notifications-store";
 import {
   addMatterDocument,
   addMatterMessage,
@@ -53,6 +57,13 @@ import {
   PARALEGAL_ASSIGNED_MATTERS,
   type ParalegalAssignmentMatter,
 } from "@/lib/paralegal/demo-data";
+import {
+  addParalegalRequestReceivedNotification,
+} from "@/lib/paralegal/notifications-store";
+import {
+  addAttorneyMessageReceivedNotification,
+  addAttorneyRequestReceivedNotification,
+} from "@/lib/attorney/notifications-store";
 import { cn } from "@/lib/utils/cn";
 
 type MatterFeature = "status" | "documentation" | "requests" | "messaging";
@@ -60,12 +71,35 @@ type MatterFeature = "status" | "documentation" | "requests" | "messaging";
 const FEATURES: Array<{
   id: MatterFeature;
   label: string;
+  description: string;
   icon: typeof GitBranch;
 }> = [
-  { id: "status", label: "Case Status", icon: GitBranch },
-  { id: "documentation", label: "Documentation", icon: FileText },
-  { id: "requests", label: "Requests", icon: ClipboardList },
-  { id: "messaging", label: "Messaging", icon: MessageSquare },
+  {
+    id: "status",
+    label: "Case Status",
+    description:
+      "Major client and legal-team tasks for this matter, by case type.",
+    icon: GitBranch,
+  },
+  {
+    id: "documentation",
+    label: "Documentation",
+    description: "Upload, review, and manage matter documents by type.",
+    icon: FileText,
+  },
+  {
+    id: "requests",
+    label: "Requests",
+    description: "Create, fulfill, and review requests for the matter team.",
+    icon: ClipboardList,
+  },
+  {
+    id: "messaging",
+    label: "Messaging",
+    description:
+      "Create Athena-style messages to the client or attorney on the matter.",
+    icon: MessageSquare,
+  },
 ];
 
 function formatFileSize(bytes: number) {
@@ -85,7 +119,9 @@ function formatTimestamp(value: string) {
 
 export function MatterWorkspace() {
   const { identity } = useDemoRole();
-  const [activeFeature, setActiveFeature] = useState<MatterFeature>("status");
+  const [activeFeature, setActiveFeature] = useState<MatterFeature | null>(
+    null,
+  );
   const [matterId, setMatterId] = useState(PARALEGAL_ASSIGNED_MATTERS[0].id);
   const [statuses, setStatuses] = useState<MatterCaseStatus[]>([]);
   const [documents, setDocuments] = useState<MatterDocument[]>([]);
@@ -95,6 +131,10 @@ export function MatterWorkspace() {
   const matter =
     PARALEGAL_ASSIGNED_MATTERS.find((item) => item.id === matterId) ??
     PARALEGAL_ASSIGNED_MATTERS[0];
+
+  const activeFeatureMeta = FEATURES.find(
+    (feature) => feature.id === activeFeature,
+  );
 
   const refresh = useCallback(() => {
     setStatuses(getMatterStatuses());
@@ -110,21 +150,78 @@ export function MatterWorkspace() {
       window.removeEventListener(MATTER_WORKSPACE_UPDATE_EVENT, refresh);
   }, [refresh]);
 
-  return (
-    <section aria-labelledby="matter-workspace-heading" className="space-y-6">
-      <Card className="border-gold-500/30 bg-gradient-to-r from-navy-900 to-navy-800 text-white">
-        <div className="flex flex-col gap-5 p-1 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+  if (!activeFeature || !activeFeatureMeta) {
+    return (
+      <section aria-labelledby="matter-workspace-heading" className="space-y-6">
+        <Card className="border-gold-500/30 bg-gradient-to-r from-navy-900 to-navy-800 text-white">
+          <div className="p-1">
             <p className="text-sm font-medium text-gold-500">Matter workspace</p>
             <h2
               id="matter-workspace-heading"
               className="mt-1 text-2xl font-semibold"
             >
-              Case activity by matter
+              Choose a matter feature
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-gray-200">
-              Review status, documents, requests, and messages for one matter at
-              a time.
+              Open Case Status, Documentation, Requests, or Messaging, then
+              toggle by matter name / case #.
+            </p>
+          </div>
+        </Card>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {FEATURES.map((feature) => {
+            const Icon = feature.icon;
+            return (
+              <button
+                key={feature.id}
+                type="button"
+                onClick={() => setActiveFeature(feature.id)}
+                className="rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-colors hover:border-navy-900 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-900"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-navy-900 text-white">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <h3 className="mt-4 text-lg font-semibold text-navy-900">
+                  {feature.label}
+                </h3>
+                <p className="mt-2 text-sm text-muted">{feature.description}</p>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    );
+  }
+
+  const ActiveIcon = activeFeatureMeta.icon;
+
+  return (
+    <section aria-labelledby="matter-workspace-heading" className="space-y-6">
+      <Card className="border-gold-500/30 bg-gradient-to-r from-navy-900 to-navy-800 text-white">
+        <div className="flex flex-col gap-5 p-1 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setActiveFeature(null)}
+              className="mb-2 -ml-2 text-gray-200 hover:bg-white/10 hover:text-white"
+            >
+              <ArrowLeft className="mr-1.5 h-4 w-4" />
+              All features
+            </Button>
+            <p className="text-sm font-medium text-gold-500">Matter workspace</p>
+            <h2
+              id="matter-workspace-heading"
+              className="mt-1 flex items-center gap-2 text-2xl font-semibold"
+            >
+              <ActiveIcon className="h-6 w-6" />
+              {activeFeatureMeta.label}
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm text-gray-200">
+              Toggle by matter name / case # to review this feature for one
+              matter at a time.
             </p>
           </div>
           <div className="w-full lg:w-[430px]">
@@ -208,6 +305,19 @@ export function MatterWorkspace() {
   );
 }
 
+
+function ownerLabel(owner: TaskOwner) {
+  if (owner === "client") return "Client";
+  if (owner === "legal_team") return "Legal team";
+  return "Client & legal team";
+}
+
+function ownerBadgeVariant(owner: TaskOwner) {
+  if (owner === "client") return "gold" as const;
+  if (owner === "legal_team") return "default" as const;
+  return "neutral" as const;
+}
+
 function CaseStatusPanel({
   matter,
   statuses,
@@ -217,14 +327,18 @@ function CaseStatusPanel({
   statuses: MatterCaseStatus[];
   onSaved: () => void;
 }) {
+  const { identity } = useDemoRole();
   const status = statuses.find((item) => item.matterId === matter.id);
+  const [checkMessage, setCheckMessage] = useState<string | null>(null);
 
   if (!status) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Case Status</CardTitle>
-          <CardDescription>No status record exists for this matter.</CardDescription>
+          <CardDescription>
+            No status record exists for this matter.
+          </CardDescription>
         </CardHeader>
       </Card>
     );
@@ -232,83 +346,159 @@ function CaseStatusPanel({
 
   const completed = status.tasks.filter((task) => task.completed).length;
   const progress = Math.round((completed / status.tasks.length) * 100);
+  const firstIncompleteIndex = status.tasks.findIndex(
+    (task) => !task.completed,
+  );
 
-  function toggleTask(taskId: string) {
+  function taskDisplayStatus(index: number, completedTask: boolean) {
+    if (completedTask) return "completed" as const;
+    if (index === firstIncompleteIndex) return "in_progress" as const;
+    return "pending" as const;
+  }
+
+  function toggleTask(taskId: string, taskTitle: string, wasCompleted: boolean) {
+    const nextTasks = status!.tasks.map((task) =>
+      task.id === taskId ? { ...task, completed: !task.completed } : task,
+    );
     saveMatterStatus({
       ...status!,
-      tasks: status!.tasks.map((task) =>
-        task.id === taskId ? { ...task, completed: !task.completed } : task,
-      ),
+      tasks: nextTasks,
     });
+
+    if (!wasCompleted) {
+      addCaseStatusUpdateNotification({
+        caseNumber: matter.matterNumber,
+        caseTitle: matter.title,
+        taskTitle,
+        completedBy: identity.fullName,
+      });
+      setCheckMessage(
+        `Marked “${taskTitle}” complete. A case status update notification was sent to the client.`,
+      );
+    } else {
+      setCheckMessage(`Marked “${taskTitle}” incomplete.`);
+    }
+
     onSaved();
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-6">
+      <Card className="border-gold-500/30 bg-gradient-to-r from-navy-900 to-navy-800 text-white">
+        <div className="flex flex-col gap-4 p-1 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <CardTitle>{matter.title}</CardTitle>
-            <CardDescription>
-              Case # {matter.matterNumber} · Opened {matter.openDate} ·{" "}
-              {matter.practiceArea}
-            </CardDescription>
+            <p className="text-sm font-medium text-gold-500">Case progress</p>
+            <p className="mt-1 text-2xl font-semibold tracking-tight">
+              Task list by case type
+            </p>
+            <p className="mt-2 max-w-2xl text-sm text-gray-200">
+              Major client and legal-team tasks for{" "}
+              {CASE_TYPE_LABELS[matter.caseType]}, matching the client portal
+              Case Status list. Check off completed tasks to notify the client.
+            </p>
           </div>
-          <div className="flex gap-2">
-            <Badge variant={matter.status === "on_hold" ? "warning" : "success"}>
-              {matter.status.replaceAll("_", " ")}
-            </Badge>
-            <Badge variant="neutral">{status.phase}</Badge>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 text-gold-500">
+            <GitBranch className="h-6 w-6" />
           </div>
         </div>
-      </CardHeader>
+      </Card>
 
-      <p className="text-sm text-navy-900">{status.summary}</p>
-      <p className="mt-3 text-sm font-medium text-navy-900">
-        Next deadline: {status.nextDeadline}
-      </p>
-
-      <div className="mt-5">
-        <div className="mb-2 flex justify-between text-sm">
-          <span className="font-medium text-navy-900">
-            {completed} of {status.tasks.length} tasks complete
-          </span>
-          <span className="text-muted">{progress}%</span>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-          <div
-            className="h-full rounded-full bg-navy-900 transition-all"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
-
-      <ul className="mt-5 space-y-3">
-        {status.tasks.map((task) => (
-          <li
-            key={task.id}
-            className={cn(
-              "flex items-start gap-3 rounded-xl border px-4 py-3",
-              task.completed
-                ? "border-green-200 bg-green-50"
-                : "border-gray-200 bg-white",
-            )}
-          >
-            <input
-              type="checkbox"
-              checked={task.completed}
-              onChange={() => toggleTask(task.id)}
-              className="mt-1 h-4 w-4 accent-navy-900"
-              aria-label={`Mark ${task.title} ${task.completed ? "incomplete" : "complete"}`}
-            />
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-navy-900">{task.title}</p>
-              <p className="mt-1 text-xs text-muted">Owner: {task.owner}</p>
+              <CardTitle>{matter.title}</CardTitle>
+              <CardDescription>
+                Case # {matter.matterNumber} ·{" "}
+                {CASE_TYPE_LABELS[matter.caseType]} · Opened {matter.openDate}
+              </CardDescription>
             </div>
-          </li>
-        ))}
-      </ul>
-    </Card>
+            <div className="flex gap-2">
+              <Badge
+                variant={matter.status === "on_hold" ? "warning" : "success"}
+              >
+                {matter.status.replaceAll("_", " ")}
+              </Badge>
+              <Badge variant="neutral">{status.phase}</Badge>
+            </div>
+          </div>
+        </CardHeader>
+
+        <p className="text-sm text-navy-900">{status.summary}</p>
+        <p className="mt-3 text-sm font-medium text-navy-900">
+          Next deadline: {status.nextDeadline}
+        </p>
+
+        {checkMessage && (
+          <p className="mt-4 rounded-lg bg-gold-100 px-3 py-2 text-sm text-navy-900">
+            {checkMessage}
+          </p>
+        )}
+
+        <div className="mt-5">
+          <div className="mb-2 flex justify-between text-sm">
+            <span className="font-medium text-navy-900">
+              {completed} of {status.tasks.length} major tasks completed
+            </span>
+            <span className="text-muted">{progress}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+            <div
+              className="h-full rounded-full bg-navy-900 transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+
+        <ol className="mt-5 space-y-3">
+          {status.tasks.map((task, index) => {
+            const displayStatus = taskDisplayStatus(index, task.completed);
+
+            return (
+              <li
+                key={task.id}
+                className={cn(
+                  "rounded-xl border px-4 py-4",
+                  displayStatus === "completed" &&
+                    "border-green-200 bg-green-50/40",
+                  displayStatus === "in_progress" &&
+                    "border-gold-500/40 bg-gold-100/30",
+                  displayStatus === "pending" && "border-gray-200 bg-white",
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={task.completed}
+                    onChange={() =>
+                      toggleTask(task.id, task.title, task.completed)
+                    }
+                    className="mt-1 h-4 w-4 accent-navy-900"
+                    aria-label={`Mark ${task.title} ${
+                      task.completed ? "incomplete" : "complete"
+                    }`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-navy-900">
+                        {index + 1}. {task.title}
+                      </p>
+                      <StatusBadge status={displayStatus} />
+                      <Badge variant={ownerBadgeVariant(task.owner)}>
+                        {ownerLabel(task.owner)}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-navy-900">
+                      {task.description}
+                    </p>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </Card>
+    </div>
   );
 }
 
@@ -329,10 +519,29 @@ function DocumentationPanel({
   const [error, setError] = useState<string | null>(null);
   const [deletionRequest, setDeletionRequest] =
     useState<ClientDocumentDeletionRequest | null>(null);
+  const [deletionTick, setDeletionTick] = useState(0);
   const visible = documents.filter((item) => item.matterId === matter.id);
   const pendingDeletionRequests = getClientDocumentDeletionRequests().filter(
-    (request) => request.status === "pending",
+    (request) =>
+      request.status === "pending" &&
+      (request.matterNumber === matter.matterNumber ||
+        request.matterName === matter.title),
   );
+  const pendingByDocumentId = useMemo(() => {
+    const map = new Map<string, ClientDocumentDeletionRequest>();
+    for (const request of pendingDeletionRequests) {
+      map.set(request.documentId, request);
+      map.set(request.documentName, request);
+    }
+    return map;
+  }, [pendingDeletionRequests, deletionTick]);
+
+  useEffect(() => {
+    const refresh = () => setDeletionTick((value) => value + 1);
+    window.addEventListener(MATTER_WORKSPACE_UPDATE_EVENT, refresh);
+    return () =>
+      window.removeEventListener(MATTER_WORKSPACE_UPDATE_EVENT, refresh);
+  }, []);
 
   const documentTypeOptions = [
     "Signed contracts",
@@ -391,6 +600,7 @@ function DocumentationPanel({
         : `The deletion request for ${deletionRequest.documentName} was denied.`,
     );
     setDeletionRequest(null);
+    setDeletionTick((value) => value + 1);
   }
 
   return (
@@ -481,74 +691,123 @@ function DocumentationPanel({
             <CardTitle>Matter documents</CardTitle>
             <CardDescription>
               {visible.length} document(s) for this case. Red documents have a
-              client deletion request awaiting a decision.
+              client deletion request — click to approve or deny.
             </CardDescription>
           </CardHeader>
-
-          {pendingDeletionRequests.length > 0 && (
-            <div className="mb-5">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-700">
-                Client deletion requests
-              </p>
-              <ul className="space-y-3">
-                {pendingDeletionRequests.map((request) => (
-                  <li key={request.id}>
-                    <button
-                      type="button"
-                      onClick={() => setDeletionRequest(request)}
-                      className="flex w-full items-start gap-3 rounded-xl border border-red-300 bg-red-50 px-3 py-3 text-left transition-colors hover:bg-red-100"
-                    >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-700">
-                        <FileX2 className="h-5 w-5" />
-                      </div>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-red-900">
-                          {request.documentName}
-                        </span>
-                        <span className="mt-1 block text-xs text-red-700">
-                          {request.documentType} · {request.matterName} · Case #{" "}
-                          {request.matterNumber}
-                        </span>
-                        <span className="mt-2 block text-xs text-red-800">
-                          Requested by {request.requestedBy}: {request.reason}
-                        </span>
-                        <span className="mt-2 block text-xs font-semibold text-red-900">
-                          Click to approve or deny deletion
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
 
           {visible.length === 0 ? (
             <p className="text-sm text-muted">No documentation uploaded yet.</p>
           ) : (
             <ul className="space-y-3">
-              {visible.map((document) => (
-                <li
-                  key={document.id}
-                  className="flex items-start gap-3 rounded-xl border border-gray-200 px-3 py-3"
-                >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-navy-900/5 text-navy-900">
-                    <FileText className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-navy-900">
-                      {document.name}
-                    </p>
-                    <p className="mt-1 text-xs text-muted">
-                      {document.documentType} · {document.sizeLabel}
-                    </p>
-                    <p className="mt-1 text-xs text-muted">
-                      Uploaded by {document.uploadedBy} · {document.uploadedAt}
-                    </p>
-                  </div>
-                </li>
-              ))}
+              {visible.map((document) => {
+                const pendingDeletion =
+                  pendingByDocumentId.get(document.id) ??
+                  pendingByDocumentId.get(document.name);
+                if (pendingDeletion) {
+                  return (
+                    <li key={document.id}>
+                      <button
+                        type="button"
+                        onClick={() => setDeletionRequest(pendingDeletion)}
+                        className="flex w-full items-start gap-3 rounded-xl border border-red-300 bg-red-50 px-3 py-3 text-left transition-colors hover:bg-red-100"
+                      >
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-700">
+                          <FileX2 className="h-5 w-5" />
+                        </div>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-red-900">
+                            {document.name}
+                          </span>
+                          <span className="mt-1 block text-xs text-red-700">
+                            {document.documentType} · {document.sizeLabel}
+                          </span>
+                          <span className="mt-1 block text-xs text-red-800">
+                            Deletion requested by {pendingDeletion.requestedBy}:{" "}
+                            {pendingDeletion.reason}
+                          </span>
+                          <span className="mt-2 block text-xs font-semibold text-red-900">
+                            Click to approve or deny deletion
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                }
+
+                return (
+                  <li
+                    key={document.id}
+                    className="flex items-start gap-3 rounded-xl border border-gray-200 px-3 py-3"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-navy-900/5 text-navy-900">
+                      <FileText className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-navy-900">
+                        {document.name}
+                      </p>
+                      <p className="mt-1 text-xs text-muted">
+                        {document.documentType} · {document.sizeLabel}
+                      </p>
+                      <p className="mt-1 text-xs text-muted">
+                        Uploaded by {document.uploadedBy} · {document.uploadedAt}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
+          )}
+
+          {pendingDeletionRequests.some(
+            (request) =>
+              !visible.some(
+                (document) =>
+                  document.id === request.documentId ||
+                  document.name === request.documentName,
+              ),
+          ) && (
+            <div className="mt-5">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-700">
+                Other client deletion requests
+              </p>
+              <ul className="space-y-3">
+                {pendingDeletionRequests
+                  .filter(
+                    (request) =>
+                      !visible.some(
+                        (document) =>
+                          document.id === request.documentId ||
+                          document.name === request.documentName,
+                      ),
+                  )
+                  .map((request) => (
+                    <li key={request.id}>
+                      <button
+                        type="button"
+                        onClick={() => setDeletionRequest(request)}
+                        className="flex w-full items-start gap-3 rounded-xl border border-red-300 bg-red-50 px-3 py-3 text-left transition-colors hover:bg-red-100"
+                      >
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-700">
+                          <FileX2 className="h-5 w-5" />
+                        </div>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-red-900">
+                            {request.documentName}
+                          </span>
+                          <span className="mt-1 block text-xs text-red-700">
+                            {request.documentType} · Case #{" "}
+                            {request.matterNumber}
+                          </span>
+                          <span className="mt-2 block text-xs text-red-800">
+                            Requested by {request.requestedBy}: {request.reason}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            </div>
           )}
         </Card>
       </div>
@@ -578,8 +837,8 @@ function DocumentationPanel({
               </p>
             </div>
             <p className="text-sm text-muted">
-              Approving permanently removes the document from the client’s
-              documentation list. Denying restores it to its normal state.
+              Approving permanently removes the document. Denying keeps the
+              document and clears the deletion request.
             </p>
             <div className="flex flex-wrap justify-end gap-2">
               <Button
@@ -682,6 +941,27 @@ function RequestsPanel({
       status: "pending",
       createdAt: new Date().toISOString().slice(0, 10),
     });
+
+    const requestTitle =
+      summary.length > 60 ? `${summary.slice(0, 57)}...` : summary;
+    if (sentTo.includes("Paralegal") || sentTo === "Parker Legal — Paralegal") {
+      addParalegalRequestReceivedNotification({
+        requestTitle,
+        sentBy: requestedBy,
+        sentByRole: "attorney",
+        matterName: matter.title,
+        matterNumber: matter.matterNumber,
+      });
+    }
+    if (sentTo.includes("Attorney")) {
+      addAttorneyRequestReceivedNotification({
+        requestTitle,
+        sentBy: requestedBy,
+        matterName: matter.title,
+        matterNumber: matter.matterNumber,
+      });
+    }
+
     setConfirmation(`Request sent to ${sentTo} for ${matter.title}.`);
     goHome();
   }
@@ -787,6 +1067,82 @@ function RequestsPanel({
   }
 
   if (view === "fulfilled") {
+    if (activeRequest) {
+      return (
+        <div className="mx-auto max-w-2xl">
+          <BackToRequests
+            onClick={() => {
+              setActiveRequestId(null);
+              resetForm();
+            }}
+            label="Back to fulfilled requests"
+          />
+          <Card>
+            <CardHeader>
+              <CardTitle>Fulfilled request</CardTitle>
+              <CardDescription>
+                Completed request for {matter.title} · Case #{" "}
+                {matter.matterNumber}.
+              </CardDescription>
+            </CardHeader>
+            <div className="space-y-5">
+              <Textarea
+                id="fulfilled-request-description"
+                label="Describe the request"
+                className="min-h-32"
+                value={activeRequest.details}
+                readOnly
+              />
+              <Select
+                id="fulfilled-request-recipient"
+                label="Who it is sent to"
+                options={[
+                  {
+                    value: activeRequest.assignedTo,
+                    label: activeRequest.assignedTo,
+                  },
+                ]}
+                value={activeRequest.assignedTo}
+                disabled
+              />
+              {activeRequest.fulfillment && (
+                <div className="rounded-xl border border-green-200 bg-green-50/50 px-4 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-green-800">
+                    Fulfillment
+                  </p>
+                  <Textarea
+                    id="fulfilled-request-fulfillment-description"
+                    label="Describe how the request was fulfilled"
+                    className="mt-3 min-h-28"
+                    value={activeRequest.fulfillment.details}
+                    readOnly
+                  />
+                  <div className="mt-4">
+                    <Select
+                      id="fulfilled-request-fulfillment-recipient"
+                      label="Who it is sent to"
+                      options={[
+                        {
+                          value: activeRequest.fulfillment.sentTo,
+                          label: activeRequest.fulfillment.sentTo,
+                        },
+                      ]}
+                      value={activeRequest.fulfillment.sentTo}
+                      disabled
+                    />
+                  </div>
+                  <p className="mt-3 text-xs text-muted">
+                    Fulfilled by {activeRequest.fulfillment.fulfilledBy} ·{" "}
+                    {activeRequest.fulfillment.fulfilledAt}
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      );
+    }
+
     return (
       <div className="mx-auto max-w-3xl">
         <BackToRequests onClick={goHome} />
@@ -794,7 +1150,8 @@ function RequestsPanel({
           <CardHeader>
             <CardTitle>Fulfilled requests</CardTitle>
             <CardDescription>
-              Completed requests for Case # {matter.matterNumber}.
+              Select a completed request for Case # {matter.matterNumber} to
+              review the description and who it was sent to.
             </CardDescription>
           </CardHeader>
           {fulfilledRequests.length === 0 ? (
@@ -804,35 +1161,28 @@ function RequestsPanel({
           ) : (
             <ul className="space-y-3">
               {fulfilledRequests.map((request) => (
-                <li
-                  key={request.id}
-                  className="rounded-xl border border-green-200 bg-green-50/50 px-4 py-4"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <p className="text-sm font-semibold text-navy-900">
-                      {request.subject}
-                    </p>
+                <li key={request.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveRequestId(request.id);
+                      setError(null);
+                    }}
+                    className="flex w-full items-start justify-between gap-4 rounded-xl border border-green-200 bg-green-50/50 px-4 py-4 text-left transition-colors hover:border-green-300 hover:bg-green-50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-navy-900">
+                        {request.subject}
+                      </span>
+                      <span className="mt-1 block text-xs text-muted">
+                        Sent to {request.assignedTo} · {request.createdAt}
+                      </span>
+                      <span className="mt-2 block text-sm text-navy-900">
+                        {request.details}
+                      </span>
+                    </span>
                     <Badge variant="success">completed</Badge>
-                  </div>
-                  <p className="mt-2 text-sm text-navy-900">{request.details}</p>
-                  <p className="mt-2 text-xs text-muted">
-                    Requested by {request.requestedBy} · {request.createdAt}
-                  </p>
-                  {request.fulfillment && (
-                    <div className="mt-3 rounded-lg border border-gray-200 bg-white px-3 py-3">
-                      <p className="text-xs font-semibold text-navy-900">
-                        Fulfillment
-                      </p>
-                      <p className="mt-1 text-sm text-navy-900">
-                        {request.fulfillment.details}
-                      </p>
-                      <p className="mt-2 text-xs text-muted">
-                        Sent to {request.fulfillment.sentTo} by{" "}
-                        {request.fulfillment.fulfilledBy} ·{" "}
-                        {request.fulfillment.fulfilledAt}
-                      </p>
-                    </div>
-                  )}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -927,11 +1277,7 @@ function RequestsPanel({
           className="space-y-5"
         >
           <Textarea
-            label={
-              isFulfilling
-                ? "Describe how the request was fulfilled"
-                : "Describe the request"
-            }
+            label="Describe the request"
             className="min-h-40"
             value={details}
             onChange={(event) => {
@@ -946,7 +1292,7 @@ function RequestsPanel({
           />
 
           <Select
-            label={isFulfilling ? "Send fulfillment to" : "Send request to"}
+            label="Who it is sent to"
             options={[
               { value: "", label: "Select a recipient" },
               ...recipients.map((value) => ({ value, label: value })),
@@ -991,16 +1337,22 @@ function BackToRequests({
   );
 }
 
-type MessagingView = "inbox" | "recipients" | "topic" | "compose";
+type MessagingView = "inbox" | "recipients" | "topic" | "compose" | "sent";
+
+type MatterRecipientOption = {
+  value: string;
+  label: string;
+  role: "client" | "attorney";
+};
 
 const MESSAGE_TOPICS = [
   "General case correspondence",
   "New case updates",
   "Settlement discussion",
   "Other",
-];
+] as const;
 
-const MESSAGE_STEPS: Array<Exclude<MessagingView, "inbox">> = [
+const MESSAGE_STEPS: Array<Exclude<MessagingView, "inbox" | "sent">> = [
   "recipients",
   "topic",
   "compose",
@@ -1023,22 +1375,32 @@ function MessagingPanel({
   const [body, setBody] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirmation, setConfirmation] = useState<string | null>(null);
+  const [sentSummary, setSentSummary] = useState<string | null>(null);
 
   const visible = useMemo(
     () => messages.filter((item) => item.matterId === matter.id),
     [messages, matter.id],
   );
 
-  const contacts = useMemo(
+  const contacts = useMemo<MatterRecipientOption[]>(
     () => [
-      { value: matter.clientName, label: `${matter.clientName} — Client` },
-      ...matter.paralegalNames.map((name) => ({
-        value: name,
-        label: `${name} — Paralegal`,
-      })),
+      {
+        value: `client:${matter.clientId}`,
+        label: `${matter.clientName} — Client`,
+        role: "client",
+      },
+      {
+        value: `attorney:${matter.attorneyId}`,
+        label: `${matter.attorneyName} — Attorney`,
+        role: "attorney",
+      },
     ],
-    [matter.clientName, matter.paralegalNames],
+    [
+      matter.attorneyId,
+      matter.attorneyName,
+      matter.clientId,
+      matter.clientName,
+    ],
   );
 
   const resetWizard = useCallback(() => {
@@ -1053,13 +1415,15 @@ function MessagingPanel({
 
   useEffect(() => {
     setView("inbox");
-    setConfirmation(null);
+    setSentSummary(null);
     resetWizard();
   }, [matter.id, resetWizard]);
 
-  const selectedLabels = recipients
-    .map((value) => contacts.find((contact) => contact.value === value)?.label)
-    .filter((label): label is string => Boolean(label));
+  const selectedContacts = recipients
+    .map((value) => contacts.find((contact) => contact.value === value))
+    .filter((contact): contact is MatterRecipientOption => Boolean(contact));
+
+  const selectedLabels = selectedContacts.map((contact) => contact.label);
 
   function contactOptions(index: number) {
     const chosenElsewhere = new Set(
@@ -1067,8 +1431,13 @@ function MessagingPanel({
     );
 
     return [
-      { value: "", label: "Select a recipient" },
-      ...contacts.filter((contact) => !chosenElsewhere.has(contact.value)),
+      { value: "", label: "Select a client or attorney" },
+      ...contacts
+        .filter((contact) => !chosenElsewhere.has(contact.value))
+        .map((contact) => ({
+          value: contact.value,
+          label: contact.label,
+        })),
     ];
   }
 
@@ -1109,59 +1478,66 @@ function MessagingPanel({
       senderRole: "Legal team",
       recipients: selectedLabels,
       subject: subject.trim(),
-      body: `${body.trim()}${attachment ? `\n\nAttachment: ${attachment.name}` : ""}`,
+      body: `${body.trim()}${
+        attachment ? `\n\nAttachment: ${attachment.name}` : ""
+      }`,
       sentAt: new Date().toISOString(),
     });
-    setConfirmation(
-      `Message sent to ${selectedLabels.join(", ")} for ${matter.title}.`,
+
+    if (selectedContacts.some((contact) => contact.role === "attorney")) {
+      addAttorneyMessageReceivedNotification({
+        sender,
+        subject: subject.trim(),
+        matterName: matter.title,
+        matterNumber: matter.matterNumber,
+      });
+    }
+
+    setSentSummary(
+      `Your message was sent to ${selectedLabels.join(", ")} for ${matter.title}.`,
     );
     resetWizard();
-    setView("inbox");
+    setView("sent");
   }
 
   if (view === "inbox") {
     return (
       <div className="mx-auto max-w-4xl">
-        {confirmation && (
-          <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">
-            {confirmation}
-          </p>
-        )}
-        <Card>
-          <CardHeader>
-            <CardTitle>Matter messaging</CardTitle>
-            <CardDescription>
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold text-navy-900">Messages</h2>
+            <p className="mt-1 text-sm text-muted">
               Secure conversation for {matter.title} · Case #{" "}
               {matter.matterNumber}.
-            </CardDescription>
-          </CardHeader>
+            </p>
+          </div>
 
           <button
             type="button"
             onClick={() => {
               resetWizard();
-              setConfirmation(null);
+              setSentSummary(null);
               setView("recipients");
             }}
-            className="mb-5 flex w-full items-start gap-4 rounded-xl border border-gray-200 px-4 py-4 text-left transition-colors hover:border-navy-700/40 hover:bg-surface"
+            className="mb-6 flex w-full items-start gap-4 rounded-2xl border border-gray-200 bg-surface px-5 py-5 text-left transition-colors hover:border-navy-700/40 hover:bg-white"
           >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-navy-900 text-gold-500">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-navy-900 text-gold-500">
               <Send className="h-5 w-5" />
             </div>
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-navy-900">
+              <span className="block text-base font-semibold text-navy-900">
                 Create a new message
               </span>
               <span className="mt-1 block text-sm text-muted">
-                Message the client or a paralegal on {matter.title}.
+                Message the client or attorney on this matter.
               </span>
             </span>
           </button>
 
-          <div className="max-h-[420px] space-y-3 overflow-y-auto rounded-xl bg-surface p-4">
+          <div className="max-h-[420px] space-y-3 overflow-y-auto rounded-2xl bg-surface p-4">
             {visible.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted">
-                No messages for this matter.
+              <p className="py-10 text-center text-sm text-muted">
+                No messages for this matter yet.
               </p>
             ) : (
               visible.map((message) => {
@@ -1222,7 +1598,42 @@ function MessagingPanel({
               })
             )}
           </div>
-        </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === "sent") {
+    return (
+      <div className="mx-auto max-w-2xl rounded-2xl border border-gray-200 bg-white px-6 py-12 text-center shadow-sm sm:px-10">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-green-700">
+          <CheckCircle2 className="h-7 w-7" />
+        </div>
+        <h2 className="mt-5 text-2xl font-semibold text-navy-900">
+          Your message was sent
+        </h2>
+        <p className="mx-auto mt-2 max-w-md text-sm text-muted">
+          {sentSummary}
+        </p>
+        <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              resetWizard();
+              setView("recipients");
+            }}
+          >
+            Create another message
+          </Button>
+          <Button
+            onClick={() => {
+              setSentSummary(null);
+              setView("inbox");
+            }}
+          >
+            Back to messages
+          </Button>
+        </div>
       </div>
     );
   }
@@ -1232,7 +1643,7 @@ function MessagingPanel({
   return (
     <div className="mx-auto max-w-3xl">
       <div
-        className="mb-6 flex items-center justify-center gap-2"
+        className="mb-7 flex items-center justify-center gap-2"
         aria-label="Message progress"
       >
         {MESSAGE_STEPS.map((step, index) => (
@@ -1250,7 +1661,7 @@ function MessagingPanel({
             {index < MESSAGE_STEPS.length - 1 && (
               <span
                 className={cn(
-                  "h-0.5 w-8 sm:w-16",
+                  "mx-1 h-0.5 w-10 sm:w-16",
                   index < currentStep ? "bg-navy-900" : "bg-gray-200",
                 )}
               />
@@ -1259,23 +1670,23 @@ function MessagingPanel({
         ))}
       </div>
 
-      <Card padding="lg">
+      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-10">
         {view === "recipients" && (
           <>
-            <div className="mb-7 text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gold-100 text-navy-900">
-                <MessageSquare className="h-6 w-6" />
+            <div className="mb-8 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gold-100 text-navy-900">
+                <MessageSquare className="h-7 w-7" />
               </div>
-              <h2 className="text-2xl font-semibold text-navy-900">
+              <h2 className="text-2xl font-semibold tracking-tight text-navy-900 sm:text-3xl">
                 To whom should we send the message?
               </h2>
-              <p className="mt-2 text-sm text-muted">
-                Choose the client or a paralegal assigned to {matter.title} ·
-                Case # {matter.matterNumber}.
+              <p className="mx-auto mt-3 max-w-lg text-sm text-muted sm:text-base">
+                Choose the client or attorney assigned to {matter.title} · Case
+                # {matter.matterNumber}.
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="mx-auto max-w-xl space-y-4">
               {recipients.map((recipient, index) => (
                 <div key={index} className="flex items-end gap-2">
                   <div className="min-w-0 flex-1">
@@ -1319,19 +1730,27 @@ function MessagingPanel({
             </div>
 
             {recipients.length < contacts.length && (
-              <Button
-                variant="ghost"
-                className="mt-4"
-                onClick={() => setRecipients((current) => [...current, ""])}
-              >
-                <Plus className="h-4 w-4" />
-                Add another recipient
-              </Button>
+              <div className="mx-auto mt-4 max-w-xl">
+                <Button
+                  variant="ghost"
+                  className="px-0 text-navy-900 hover:bg-transparent hover:text-navy-700"
+                  onClick={() =>
+                    setRecipients((current) => [...current, ""])
+                  }
+                >
+                  <Plus className="h-4 w-4" />
+                  Add another recipient
+                </Button>
+              </div>
             )}
 
-            {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+            {error && (
+              <p className="mx-auto mt-4 max-w-xl text-sm text-red-600">
+                {error}
+              </p>
+            )}
 
-            <div className="mt-8 flex justify-between gap-3">
+            <div className="mx-auto mt-10 flex max-w-xl justify-between gap-3">
               <Button
                 variant="ghost"
                 onClick={() => {
@@ -1340,7 +1759,7 @@ function MessagingPanel({
                 }}
               >
                 <ArrowLeft className="h-4 w-4" />
-                Back to messages
+                Cancel
               </Button>
               <Button onClick={continueFromRecipients}>Continue</Button>
             </div>
@@ -1349,22 +1768,22 @@ function MessagingPanel({
 
         {view === "topic" && (
           <>
-            <div className="mb-7 text-center">
-              <h2 className="text-2xl font-semibold text-navy-900">
+            <div className="mb-8 text-center">
+              <h2 className="text-2xl font-semibold tracking-tight text-navy-900 sm:text-3xl">
                 Next, tell us what your message is regarding
               </h2>
-              <p className="mt-2 text-sm text-muted">
+              <p className="mx-auto mt-3 max-w-lg text-sm text-muted sm:text-base">
                 To: {selectedLabels.join(", ")}
               </p>
             </div>
 
-            <fieldset className="space-y-3">
+            <fieldset className="mx-auto max-w-xl space-y-3">
               <legend className="sr-only">Message topic</legend>
               {MESSAGE_TOPICS.map((option) => (
                 <label
                   key={option}
                   className={cn(
-                    "flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-4 transition-colors",
+                    "flex cursor-pointer items-center gap-3 rounded-2xl border px-5 py-4 transition-colors",
                     topic === option
                       ? "border-navy-900 bg-navy-900/5"
                       : "border-gray-200 hover:border-navy-700/40",
@@ -1381,16 +1800,20 @@ function MessagingPanel({
                     }}
                     className="h-4 w-4 accent-navy-900"
                   />
-                  <span className="text-sm font-medium text-navy-900">
+                  <span className="text-sm font-medium text-navy-900 sm:text-base">
                     {option}
                   </span>
                 </label>
               ))}
             </fieldset>
 
-            {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+            {error && (
+              <p className="mx-auto mt-4 max-w-xl text-sm text-red-600">
+                {error}
+              </p>
+            )}
 
-            <div className="mt-8 flex justify-between gap-3">
+            <div className="mx-auto mt-10 flex max-w-xl justify-between gap-3">
               <Button variant="ghost" onClick={() => setView("recipients")}>
                 <ArrowLeft className="h-4 w-4" />
                 Back
@@ -1401,12 +1824,12 @@ function MessagingPanel({
         )}
 
         {view === "compose" && (
-          <form onSubmit={sendMessage}>
-            <div className="mb-7 text-center">
-              <h2 className="text-2xl font-semibold text-navy-900">
+          <form onSubmit={sendMessage} className="mx-auto max-w-xl">
+            <div className="mb-8 text-center">
+              <h2 className="text-2xl font-semibold tracking-tight text-navy-900 sm:text-3xl">
                 New Message
               </h2>
-              <p className="mt-2 text-sm text-muted">
+              <p className="mt-3 text-sm text-muted sm:text-base">
                 To: {selectedLabels.join(", ")}
               </p>
               <p className="mt-1 text-sm text-muted">
@@ -1436,7 +1859,7 @@ function MessagingPanel({
 
               <div>
                 <p className="mb-2 text-sm font-medium text-navy-900">
-                  Attachment
+                  Add an attachment
                 </p>
                 <input
                   ref={attachmentInput}
@@ -1447,7 +1870,7 @@ function MessagingPanel({
                   }
                 />
                 {attachment ? (
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 px-4 py-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <FileText className="h-5 w-5 shrink-0 text-navy-900" />
                       <span className="truncate text-sm text-navy-900">
@@ -1483,7 +1906,7 @@ function MessagingPanel({
 
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-            <div className="mt-8 flex flex-col-reverse justify-between gap-3 sm:flex-row">
+            <div className="mt-10 flex flex-col-reverse justify-between gap-3 sm:flex-row">
               <Button
                 type="button"
                 variant="ghost"
@@ -1499,7 +1922,7 @@ function MessagingPanel({
             </div>
           </form>
         )}
-      </Card>
+      </div>
     </div>
   );
 }

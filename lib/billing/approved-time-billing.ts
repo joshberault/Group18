@@ -1,10 +1,11 @@
-import type { AdminApproval, AdminEmployee, AdminMatter } from "@/lib/admin/types";
 import {
-  allocateNextInvoiceNumber,
+  allocateNextInvoiceNumberAsync,
   getAllManagedInvoices,
+  refreshInvoiceCatalog,
   upsertGeneratedInvoice,
 } from "@/lib/billing/invoice-management-store";
 import type { Invoice } from "@/lib/billing/invoice-types";
+import type { AdminApproval, AdminEmployee, AdminMatter } from "@/lib/admin/types";
 import {
   addDynamicInvoiceCharge,
   type DynamicInvoiceCharge,
@@ -37,12 +38,12 @@ function addDays(date: string, days: number) {
   return value.toISOString().slice(0, 10);
 }
 
-export function invoiceApprovedBillableTime(input: {
+export async function invoiceApprovedBillableTime(input: {
   approval: AdminApproval;
   employee: AdminEmployee;
   matter: AdminMatter;
   invoiceDate: string;
-}): ApprovedTimeBillingResult {
+}): Promise<ApprovedTimeBillingResult> {
   const { approval, employee, matter, invoiceDate } = input;
 
   if (
@@ -62,8 +63,11 @@ export function invoiceApprovedBillableTime(input: {
     };
   }
 
+  await refreshInvoiceCatalog();
+  const sourceKey = `approved-time-${approval.id}`;
   const existing = getAllManagedInvoices().find(
-    (invoice) => invoice.id === `approved-time-${approval.id}`,
+    (invoice) =>
+      invoice.sourceKey === sourceKey || invoice.id === sourceKey,
   );
   if (existing) {
     return {
@@ -76,14 +80,16 @@ export function invoiceApprovedBillableTime(input: {
 
   const hours = approval.timeEntryHours;
   const amount = Math.round(hours * rate * 100) / 100;
-  const invoiceNumber = allocateNextInvoiceNumber(
+  const invoiceNumber = await allocateNextInvoiceNumberAsync(
     Number(invoiceDate.slice(0, 4)),
   );
   const description =
-    approval.timeEntryDescription ?? `Approved billable time for ${matter.matterLabel}`;
+    approval.timeEntryDescription ??
+    `Approved billable time for ${matter.matterLabel}`;
 
   const invoice: Invoice = {
-    id: `approved-time-${approval.id}`,
+    id: sourceKey,
+    sourceKey,
     invoiceNumber,
     client: matter.clientName,
     legalMatter: matter.matterLabel,
@@ -95,6 +101,7 @@ export function invoiceApprovedBillableTime(input: {
     amountPaid: 0,
     remainingBalance: amount,
     status: "Sent",
+    matterId: matter.id,
     clientInfo: {
       name: matter.clientName,
       contact: matter.clientName,
@@ -120,7 +127,7 @@ export function invoiceApprovedBillableTime(input: {
     paymentHistory: [],
   };
 
-  const persisted = upsertGeneratedInvoice(invoice);
+  const persisted = await upsertGeneratedInvoice(invoice);
   if (!persisted.ok) {
     return {
       ok: false,
@@ -143,6 +150,7 @@ export function invoiceApprovedBillableTime(input: {
     employeeTitle: employee.title,
     hours,
     hourlyRate: rate,
+    source: "approved_time",
   };
   addDynamicInvoiceCharge(charge);
   addInvoiceAddedNotification({

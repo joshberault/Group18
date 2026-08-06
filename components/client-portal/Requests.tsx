@@ -21,7 +21,15 @@ import { Select } from "@/components/ui/Select";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Textarea } from "@/components/ui/Textarea";
 import { caseInformation, clientRequests } from "@/lib/mock-data/client-portal";
-import { addRequestFulfilledNotification } from "@/lib/attorney/notifications-store";
+import {
+  addAttorneyRequestReceivedNotification,
+  addRequestFulfilledNotification,
+} from "@/lib/attorney/notifications-store";
+import {
+  addParalegalRequestFulfilledNotification,
+  addParalegalRequestReceivedNotification,
+} from "@/lib/paralegal/notifications-store";
+import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
 import { cn } from "@/lib/utils/cn";
 
 type RequestOptionId =
@@ -143,6 +151,8 @@ const INCOMING_REQUESTS: IncomingRequest[] = [
 export function Requests() {
   const fulfillmentInputRef = useRef<HTMLInputElement>(null);
   const { identity, selectedRole } = useDemoRole();
+  const { selectedCases } = useCaseSelection();
+  const primaryMatter = selectedCases[0];
   const paralegals: RecipientOption[] = caseInformation.paralegals.map(
     (paralegal) => ({
       value: paralegal.id,
@@ -283,6 +293,35 @@ export function Requests() {
       },
       ...current,
     ]);
+
+    if (selectedRole === "client" && primaryMatter) {
+      const requestTitle = selectedRequest?.title ?? "Request";
+      const attorneySelected = recipients.some((value) =>
+        caseInformation.attorneys.some((attorney) => attorney.id === value),
+      );
+      const paralegalSelected = recipients.some((value) =>
+        caseInformation.paralegals.some((paralegal) => paralegal.id === value),
+      );
+
+      if (attorneySelected) {
+        addAttorneyRequestReceivedNotification({
+          requestTitle,
+          sentBy: identity.fullName,
+          matterName: primaryMatter.title,
+          matterNumber: primaryMatter.caseNumber,
+        });
+      }
+      if (paralegalSelected) {
+        addParalegalRequestReceivedNotification({
+          requestTitle,
+          sentBy: identity.fullName,
+          sentByRole: "client",
+          matterName: primaryMatter.title,
+          matterNumber: primaryMatter.caseNumber,
+        });
+      }
+    }
+
     setStep("submitted");
   }
 
@@ -348,6 +387,18 @@ export function Requests() {
       selectedIncomingRequest.role === "Attorney"
     ) {
       addRequestFulfilledNotification({
+        requestTitle: selectedIncomingRequest.title,
+        fulfilledBy: identity.fullName,
+        matterName: selectedIncomingRequest.matterName,
+        matterNumber: selectedIncomingRequest.matterNumber,
+      });
+    }
+    if (
+      selectedRole === "client" &&
+      (selectedIncomingRequest.role === "Paralegal" ||
+        selectedIncomingRequest.role === "Attorney")
+    ) {
+      addParalegalRequestFulfilledNotification({
         requestTitle: selectedIncomingRequest.title,
         fulfilledBy: identity.fullName,
         matterName: selectedIncomingRequest.matterName,

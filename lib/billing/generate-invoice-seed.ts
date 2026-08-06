@@ -1,7 +1,8 @@
 /**
- * Demo catalog only — Generate Invoice prefers CounselFlow clients/matters via
- * lib/billing/counselflow-catalog.ts. GENERATE_* is used only when Supabase is
- * not configured (offline seed fallback).
+ * Legacy demo catalog + firm letterhead only.
+ * Generate Invoice no longer loads GENERATE_CLIENTS / GENERATE_MATTERS for the
+ * workflow. Clients, matters, and time come from CounselFlow modules.
+ * Keep FIRM_INFO for invoice preview letterhead until a firm settings source exists.
  */
 import type {
   GenerateClient,
@@ -59,6 +60,17 @@ export const GENERATE_CLIENTS: GenerateClient[] = [
     email: "dpatel@lumentech.io",
     phone: "(650) 555-0160",
     address: "3500 Deer Creek Rd, Palo Alto, CA 94304",
+  },
+  {
+    id: "gc-5",
+    clientId: "CL-1042",
+    name: "Jordan Hale",
+    billingContact: "Jordan Hale",
+    billingMethod: "Fixed Fee",
+    trustRetainerBalance: 12500,
+    email: "jordan.hale@example.com",
+    phone: "(512) 555-0142",
+    address: "1842 West Oak St, Austin, TX 78701",
   },
 ];
 
@@ -447,6 +459,77 @@ export const GENERATE_MATTERS: GenerateMatter[] = [
         rate: 575,
         approvalStatus: "Approved",
         billed: true,
+      },
+    ],
+    expenses: [],
+    writeDowns: [],
+    courtesyDiscountApproved: 0,
+  },
+  {
+    id: "gm-hale-1",
+    clientId: "gc-5",
+    matterName: "State v. Hale — Traffic Citation",
+    matterNumber: "2026-0142",
+    responsibleAttorney: "Avery Counsel",
+    status: "Open",
+    billingPeriod: "2026-08",
+    timeEntries: [
+      {
+        id: "gt-hale-1",
+        date: "2026-08-01",
+        person: "Avery Counsel",
+        role: "Attorney",
+        description: "Case strategy conference and court preparation",
+        hours: 2.0,
+        rate: 500,
+        approvalStatus: "Approved",
+        billed: false,
+      },
+      {
+        id: "gt-hale-2",
+        date: "2026-08-03",
+        person: "Parker Legal",
+        role: "Staff",
+        description: "Assemble citation packet and client correspondence",
+        hours: 1.5,
+        rate: 125,
+        approvalStatus: "Approved",
+        billed: false,
+      },
+    ],
+    expenses: [
+      {
+        id: "ge-hale-1",
+        date: "2026-08-02",
+        category: "Filing fees",
+        description: "Traffic court filing fee",
+        amount: 85,
+        approved: true,
+        billed: false,
+      },
+    ],
+    writeDowns: [],
+    courtesyDiscountApproved: 0,
+  },
+  {
+    id: "gm-hale-2",
+    clientId: "gc-5",
+    matterName: "Hale Estate Planning Package",
+    matterNumber: "2026-0188",
+    responsibleAttorney: "Avery Counsel",
+    status: "Open",
+    billingPeriod: "2026-08",
+    timeEntries: [
+      {
+        id: "gt-hale-3",
+        date: "2026-08-04",
+        person: "Avery Counsel",
+        role: "Attorney",
+        description: "Draft will and powers of attorney revisions",
+        hours: 3.0,
+        rate: 500,
+        approvalStatus: "Approved",
+        billed: false,
       },
     ],
     expenses: [],

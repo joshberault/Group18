@@ -1,5 +1,4 @@
 import type { Invoice, InvoiceStatus } from "@/lib/billing/invoice-types";
-import { INVOICE_SEED } from "@/lib/billing/invoice-seed";
 
 export type AgingBucket =
   | "Current"
@@ -76,7 +75,7 @@ export function getAgingBucket(
  * Includes unpaid and partially paid invoices with remaining balance > 0.
  */
 export function getOutstandingReceivables(
-  invoices: Invoice[] = INVOICE_SEED,
+  invoices: Invoice[] = [],
   asOf = startOfToday(),
 ): OutstandingReceivableRow[] {
   return invoices
@@ -108,6 +107,51 @@ export function getReceivablesSummary(
     partiallyPaidCount: rows.filter(
       (r) => r.amountPaid > 0 && r.remainingBalance > 0,
     ).length,
+  };
+}
+
+/**
+ * True when an invoice is overdue by status or calendar rule:
+ * - status is Overdue, or
+ * - due date has passed and remaining balance > 0
+ */
+export function isInvoiceOverdue(
+  invoice: Invoice,
+  asOf = startOfToday(),
+): boolean {
+  if (invoice.status === "Overdue") return true;
+  const remaining = Number(invoice.remainingBalance) || 0;
+  if (remaining <= 0) return false;
+  if (invoice.status === "Paid" || invoice.status === "Cancelled") return false;
+  return getDaysOverdue(invoice.dueDate, asOf) > 0;
+}
+
+/** Overdue invoices from the managed catalog (same source as Invoice Management). */
+export function getOverdueInvoices(
+  invoices: Invoice[],
+  asOf = startOfToday(),
+): Invoice[] {
+  return invoices.filter((inv) => isInvoiceOverdue(inv, asOf));
+}
+
+export type OverdueInvoiceMetrics = {
+  count: number;
+  /** Sum of remaining balances on overdue invoices. */
+  amount: number;
+};
+
+export function getOverdueInvoiceMetrics(
+  invoices: Invoice[],
+  asOf = startOfToday(),
+): OverdueInvoiceMetrics {
+  const rows = getOverdueInvoices(invoices, asOf);
+  const amount = rows.reduce(
+    (sum, inv) => sum + (Number(inv.remainingBalance) || 0),
+    0,
+  );
+  return {
+    count: rows.length,
+    amount: Math.round(amount * 100) / 100,
   };
 }
 
