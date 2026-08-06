@@ -1,8 +1,12 @@
 "use client";
 
-import { ShieldAlert } from "lucide-react";
+import { AlertCircle, AlertTriangle, Info, ShieldAlert } from "lucide-react";
+import {
+  AnalyticsPageShell,
+  AnalyticsSectionDivider,
+} from "@/components/analytics/AnalyticsPageShell";
 import { RiskAlertsFeed } from "@/components/analytics/RiskAlertsFeed";
-import { Card } from "@/components/ui/Card";
+import { analyticsGridGap } from "@/components/analytics/analytics-styles";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KPICard } from "@/components/ui/KPICard";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -10,12 +14,17 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { useRiskAlerts } from "@/hooks/useRiskAlerts";
 
 export function RiskCenterContent() {
-  const { groupedAlerts, alertCount, loading, error, refresh, alerts } =
-    useRiskAlerts();
-
-  const highCount = alerts.filter((a) => a.severity === "high").length;
-  const mediumCount = alerts.filter((a) => a.severity === "medium").length;
-  const lowCount = alerts.filter((a) => a.severity === "low").length;
+  const {
+    alertCount,
+    severityCounts,
+    alertsBySeverity,
+    actionRecords,
+    loading,
+    error,
+    refresh,
+    updateAlertStatus,
+    markAlertViewed,
+  } = useRiskAlerts();
 
   if (loading) {
     return (
@@ -51,49 +60,46 @@ export function RiskCenterContent() {
   }
 
   return (
-    <>
-      <PageHeader
-        title="Risk Center"
-        description={`${alertCount} active alert${alertCount === 1 ? "" : "s"} from invoices, matters, trust, and write-downs`}
-      />
-
-      <Card className="mb-6 border-gold-500/30 bg-gradient-to-r from-navy-900 to-navy-800 text-white">
-        <div className="flex items-start gap-4 p-6">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10">
-            <ShieldAlert className="h-5 w-5 text-gold-500" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gold-500">Managing Partner View</p>
-            <p className="mt-2 text-sm text-gray-200">
-              Unified risk feed — unprofitable matters, overdue invoices, pending
-              write-downs, and low trust balances grouped by severity.
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+    <AnalyticsPageShell
+      title="Risk Center"
+      description={`${alertCount} active alert${alertCount === 1 ? "" : "s"} from invoices, matters, trust, and write-downs`}
+      icon={ShieldAlert}
+      bannerText="Tabbed severity views with alert action history — track review status, escalations, and resolution timestamps."
+    >
+      <div className={`grid ${analyticsGridGap} sm:grid-cols-3`}>
         <KPICard
           title="High Severity"
-          value={String(highCount)}
+          value={String(severityCounts.high)}
           subtitle="Requires immediate attention"
-          icon={ShieldAlert}
+          icon={AlertTriangle}
+          className="p-4"
         />
         <KPICard
           title="Medium Severity"
-          value={String(mediumCount)}
+          value={String(severityCounts.medium)}
           subtitle="Review within the week"
-          icon={ShieldAlert}
+          icon={AlertCircle}
+          className="p-4"
         />
         <KPICard
           title="Low Severity"
-          value={String(lowCount)}
+          value={String(severityCounts.low)}
           subtitle="Monitor and track"
-          icon={ShieldAlert}
+          icon={Info}
+          className="p-4"
         />
       </div>
 
-      <RiskAlertsFeed groupedAlerts={groupedAlerts} alertCount={alertCount} />
-    </>
+      <AnalyticsSectionDivider />
+
+      <RiskAlertsFeed
+        alertsBySeverity={alertsBySeverity}
+        severityCounts={severityCounts}
+        alertCount={alertCount}
+        actionRecords={actionRecords}
+        onMarkViewed={markAlertViewed}
+        onUpdateStatus={updateAlertStatus}
+      />
+    </AnalyticsPageShell>
   );
 }

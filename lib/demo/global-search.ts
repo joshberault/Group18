@@ -32,6 +32,7 @@ const ROLE_ALLOWED_TYPES: Record<UserRole, GlobalSearchResultType[]> = {
   accounting_manager: ["client", "matter", "invoice", "receivable"],
   firm_administrator: ["client", "matter", "invoice"],
   client: ["matter", "invoice", "document"],
+  prospective_client: [],
 };
 
 export function searchGlobalRecords(

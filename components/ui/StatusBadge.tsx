@@ -58,6 +58,10 @@ const statusConfig: Record<
   high: { label: "High", variant: "warning" },
   medium: { label: "Medium", variant: "gold" },
   low: { label: "Low", variant: "neutral" },
+  alert_open: { label: "Open", variant: "warning" },
+  reviewed: { label: "Reviewed", variant: "gold" },
+  escalated: { label: "Escalated", variant: "danger" },
+  resolved: { label: "Resolved", variant: "success" },
 };
 
 interface StatusBadgeProps {

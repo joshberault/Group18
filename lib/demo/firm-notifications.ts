@@ -1,4 +1,4 @@
-const STORAGE_KEY = "counselflow-firm-notifications-v1";
+const STORAGE_KEY = "counselflow-firm-notifications-v2";
 export const FIRM_NOTIFICATIONS_EVENT = "counselflow-firm-notifications-change";
 
 export interface FirmNotification {
@@ -14,10 +14,10 @@ export interface FirmNotification {
 const DEFAULT_NOTIFICATIONS: FirmNotification[] = [
   {
     id: "fn-1",
-    title: "Write-off pending approval",
-    message: "Meridian Capital Advisors — $5,100 write-off awaiting review.",
+    title: "Outstanding receivables need review",
+    message: "Open firm AR and overdue invoices for collection follow-up.",
     module: "Accounts Receivable",
-    href: "/receivables",
+    href: "/receivables?view=overdue",
     createdAt: "2026-08-05T09:15:00Z",
     read: false,
   },
@@ -32,10 +32,10 @@ const DEFAULT_NOTIFICATIONS: FirmNotification[] = [
   },
   {
     id: "fn-3",
-    title: "Attorney billing approval overdue",
-    message: "3 time entries pending manager approval for more than 5 days.",
-    module: "Administration",
-    href: "/admin/approvals",
+    title: "Invoice management",
+    message: "Review firm invoices and collections in Invoice Management.",
+    module: "Invoices & Collections",
+    href: "/invoices",
     createdAt: "2026-08-04T16:20:00Z",
     read: false,
   },

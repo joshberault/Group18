@@ -151,6 +151,8 @@ export async function loadBillingClients(): Promise<BillingClientCatalog> {
 
 /**
  * Load matters for the selected firm client from CounselFlow matters (by client_id).
+ * Excludes archived. Prefers open; includes closed so demos with closed-only
+ * matters remain billable.
  */
 export async function loadBillingMattersForClient(
   firmClientId: string,
@@ -174,10 +176,40 @@ export async function loadBillingMattersForClient(
     };
   }
 
+  // Billable list: drop archived only (keep open + closed for demo DB usability).
+  const billable = result.data.filter((m) => {
+    const status = (m.status ?? "").toLowerCase();
+    return status !== "archived";
+  });
+
+  if (billable.length === 0) {
+    return {
+      matters: [],
+      source: "empty",
+      message:
+        "This client has no open or closed matters to bill (only archived). Reopen or create a matter in CounselFlow, then return here.",
+    };
+  }
+
+  // Open first, then closed; stable by title.
+  const sorted = [...billable].sort((a, b) => {
+    const aOpen = mapMatterStatus(a.status) === "Open" ? 0 : 1;
+    const bOpen = mapMatterStatus(b.status) === "Open" ? 0 : 1;
+    if (aOpen !== bOpen) return aOpen - bOpen;
+    return (a.title || "").localeCompare(b.title || "", undefined, {
+      sensitivity: "base",
+    });
+  });
+
+  const hasOpen = sorted.some((m) => mapMatterStatus(m.status) === "Open");
+  const message = hasOpen
+    ? null
+    : "No open matters for this client. Closed matters are listed so you can still create an invoice.";
+
   return {
-    matters: result.data.map((m) => mapRelatedMatterToGenerate(m, firmClientId)),
+    matters: sorted.map((m) => mapRelatedMatterToGenerate(m, firmClientId)),
     source: "counselflow",
-    message: null,
+    message,
   };
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Briefcase,
   FileSignature,
@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { CASE_TYPE_LABELS } from "@/lib/client-portal/case-task-lists";
+import { recordClientBadgeEvent } from "@/lib/client-portal/badges";
 import { caseInformation as initialCaseInformation } from "@/lib/mock-data/client-portal";
 import { formatCurrency, cn } from "@/lib/utils/cn";
 
@@ -28,6 +29,10 @@ type CaseContract = {
 } | null;
 
 export function CaseInformation() {
+  useEffect(() => {
+    recordClientBadgeEvent("case_info_viewed");
+    recordClientBadgeEvent("engagement_reviewed");
+  }, []);
   const { selectedCases, isMultipleCases, matchesCase } = useCaseSelection();
   const contractInputRef = useRef<HTMLInputElement>(null);
   const [contract, setContract] = useState<CaseContract>(

@@ -138,7 +138,7 @@ export function AttorneyDashboard() {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const counts = getAttorneySummaryCounts();
   const timeReminders = getAttorneyTimeExpenseReminders();
-  const updatedAt = useMemo(() => new Date().toLocaleString(), []);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const matters = getAttorneyMatters();
   const clients = useMemo(() => {
     const byId = new Map<string, string>();
@@ -147,6 +147,10 @@ export function AttorneyDashboard() {
     }
     return [...byId.entries()].map(([id, name]) => ({ id, name }));
   }, [matters]);
+
+  useEffect(() => {
+    setUpdatedAt(new Date().toLocaleString());
+  }, []);
 
   const priorityQueue = useMemo(
     () => getAttorneyPriorityActions(filters),
@@ -229,7 +233,7 @@ export function AttorneyDashboard() {
           <p className="font-medium text-navy-900">
             {DEMO_ATTORNEY.fullName}, {DEMO_ATTORNEY.title}
           </p>
-          <p>Last updated {updatedAt}</p>
+          {updatedAt ? <p>Last updated {updatedAt}</p> : null}
         </div>
       </PageHeader>
 

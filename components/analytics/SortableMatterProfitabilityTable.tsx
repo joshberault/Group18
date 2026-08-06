@@ -1,6 +1,13 @@
 "use client";
 
 import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
+import { MatterHealthBadge } from "@/components/analytics/MatterHealthBadge";
+import {
+  analyticsCardClass,
+  analyticsSectionDescClass,
+  analyticsSectionTitleClass,
+  analyticsTableWrapClass,
+} from "@/components/analytics/analytics-styles";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
@@ -15,6 +22,7 @@ import type {
   ProfitabilitySortKey,
   SortDirection,
 } from "@/hooks/useMatterProfitabilityReport";
+import type { MatterHealthLevel } from "@/lib/analytics/matter-health";
 import type { MatterProfitabilityRow } from "@/lib/analytics/types";
 import { cn, formatCurrency } from "@/lib/utils/cn";
 
@@ -24,6 +32,7 @@ interface SortableMatterProfitabilityTableProps {
   sortKey: ProfitabilitySortKey;
   sortDirection: SortDirection;
   onSort: (key: ProfitabilitySortKey) => void;
+  healthByMatterId?: Record<string, MatterHealthLevel>;
 }
 
 function formatMargin(margin: number | null): string {
@@ -62,10 +71,10 @@ function SortableHeader({
       <button
         type="button"
         onClick={() => onSort(sortKey)}
-        className="inline-flex items-center gap-1 font-medium text-navy-900 hover:text-gold-600"
+        className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-navy-800 hover:text-gold-600"
       >
         {label}
-        <Icon className={cn("h-3.5 w-3.5", isActive ? "text-gold-600" : "text-muted")} />
+        <Icon className={cn("h-3.5 w-3.5", isActive ? "text-gold-600" : "text-gray-400")} />
       </button>
     </TableHead>
   );
@@ -77,16 +86,19 @@ export function SortableMatterProfitabilityTable({
   sortKey,
   sortDirection,
   onSort,
+  healthByMatterId = {},
 }: SortableMatterProfitabilityTableProps) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Matter Profitability Detail</CardTitle>
-        <CardDescription>
+    <Card padding="sm" className={analyticsCardClass}>
+      <CardHeader className="mb-3">
+        <CardTitle className={analyticsSectionTitleClass}>
+          Matter Profitability Detail
+        </CardTitle>
+        <CardDescription className={analyticsSectionDescClass}>
           {rowCount} matter{rowCount === 1 ? "" : "s"} — click column headers to sort
         </CardDescription>
       </CardHeader>
-      <div className="overflow-x-auto">
+      <div className={analyticsTableWrapClass}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -97,6 +109,7 @@ export function SortableMatterProfitabilityTable({
                 direction={sortDirection}
                 onSort={onSort}
               />
+              <TableHead>Health</TableHead>
               <TableHead>Client</TableHead>
               <TableHead>Practice Area</TableHead>
               <TableHead>Status</TableHead>
@@ -137,15 +150,28 @@ export function SortableMatterProfitabilityTable({
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="text-center text-muted">
+                <TableCell colSpan={13} className="text-center text-gray-500">
                   No billing or expense activity found.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={row.matter_id}>
-                  <TableCell className="min-w-[180px] font-medium">
+                <TableRow
+                  key={row.matter_id}
+                  className="hover:bg-navy-50/50"
+                >
+                  <TableCell className="min-w-[180px] font-medium text-navy-900">
                     {row.matter_title}
+                  </TableCell>
+                  <TableCell>
+                    {healthByMatterId[row.matter_id] ? (
+                      <MatterHealthBadge
+                        level={healthByMatterId[row.matter_id]}
+                        compact
+                      />
+                    ) : (
+                      "—"
+                    )}
                   </TableCell>
                   <TableCell>{row.client_name}</TableCell>
                   <TableCell>{row.practice_area ?? "—"}</TableCell>
@@ -158,7 +184,7 @@ export function SortableMatterProfitabilityTable({
                   <TableCell>{formatCurrency(row.total_expenses)}</TableCell>
                   <TableCell
                     className={
-                      row.net_profit < 0 ? "text-red-600" : "text-navy-900"
+                      row.net_profit < 0 ? "text-red-700" : "text-navy-900"
                     }
                   >
                     {formatCurrency(row.net_profit)}

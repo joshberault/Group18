@@ -34,19 +34,24 @@ export function ClientRelatedMatters() {
   const [notificationCount, setNotificationCount] = useState(0);
 
   const matters = useMemo(() => getMattersForClient(clientId), [clientId]);
-  const references = useMemo(
-    () => new Set(matters.map((matter) => matter.matterReference)),
-    [matters],
-  );
+  const clientFilterName = useMemo(() => {
+    if (clientId === "all") return null;
+    return (
+      CLIENT_OPTIONS.find((c) => c.value === clientId)?.label ?? null
+    );
+  }, [clientId]);
 
   useEffect(() => {
     function refresh() {
+      // Count is approximate until Notifications mounts with catalog — include dynamic rows.
       setNotificationCount(
-        getActiveNotifications().filter(
-          (notification) =>
-            !notification.matterReference ||
-            references.has(notification.matterReference),
-        ).length,
+        getActiveNotifications().filter((notification) => {
+          if (!clientFilterName) return true;
+          if (notification.clientName) {
+            return notification.clientName === clientFilterName;
+          }
+          return notification.message.includes(clientFilterName);
+        }).length,
       );
     }
 
@@ -54,7 +59,7 @@ export function ClientRelatedMatters() {
     window.addEventListener(CRM_NOTIFICATION_UPDATE_EVENT, refresh);
     return () =>
       window.removeEventListener(CRM_NOTIFICATION_UPDATE_EVENT, refresh);
-  }, [references]);
+  }, [clientFilterName]);
 
   return (
     <section
@@ -139,7 +144,12 @@ export function ClientRelatedMatters() {
         aria-labelledby={`crm-tab-${active}`}
         className="mt-6"
       >
-        {active === "notifications" && <Notifications matters={matters} />}
+        {active === "notifications" && (
+          <Notifications
+            matters={matters}
+            clientFilterName={clientFilterName}
+          />
+        )}
         {active === "payment-plan" && <ChangePaymentPlan matters={matters} />}
         {active === "messaging" && <Messaging matters={matters} />}
       </div>

@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Award,
   Bell,
   Briefcase,
   ClipboardList,
@@ -74,5 +75,12 @@ export const PORTAL_FEATURE_APPS: PortalFeatureApp[] = [
     description: "Billing, document, and case alerts",
     href: "/client-portal/notifications",
     icon: Bell,
+  },
+  {
+    id: "my-badges",
+    title: "My Badges",
+    description: "Badges earned for staying on top of your matter",
+    href: "/client-portal/my-badges",
+    icon: Award,
   },
 ];

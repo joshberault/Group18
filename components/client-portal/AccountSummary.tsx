@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
+import { RetainerBalanceCard } from "@/components/client-portal/RetainerBalanceCard";
 import { getMatterNameForCaseNumber } from "@/lib/client-portal/case-selection";
 import {
   getDynamicInvoiceCharges,
@@ -32,6 +33,7 @@ import {
   clientAccountSummary,
   invoiceCharges,
 } from "@/lib/mock-data/client-portal";
+import { recordClientBadgeEvent } from "@/lib/client-portal/badges";
 import { formatCurrency } from "@/lib/utils/cn";
 
 type SummaryView = "home" | "invoice" | "payment-plan";
@@ -91,6 +93,10 @@ export function AccountSummary() {
     [],
   );
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    recordClientBadgeEvent("account_summary_viewed");
+  }, []);
 
   const refreshRecurring = useCallback(() => {
     setRecurring(getRecurringPayment());
@@ -445,6 +451,11 @@ export function AccountSummary() {
           on {clientAccountSummary.lastPaymentDate}.
         </p>
       </Card>
+
+      <RetainerBalanceCard
+        clientNumber={clientAccountSummary.accountNumber}
+        clientName={clientAccountSummary.clientName}
+      />
 
       <Card>
         <CardHeader>

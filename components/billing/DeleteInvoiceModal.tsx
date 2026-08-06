@@ -1,10 +1,6 @@
 "use client";
 
 import { useId, useState } from "react";
-import {
-  BILLING_ADMIN_PASSWORD,
-  verifyBillingAdminPassword,
-} from "@/lib/billing/admin-gate";
 import type { Invoice } from "@/lib/billing/invoice-types";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -30,7 +26,6 @@ export function DeleteInvoiceModal({
   onConfirmDelete,
 }: Props) {
   const formId = useId();
-  const [password, setPassword] = useState("");
   const [confirmNumber, setConfirmNumber] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -43,10 +38,6 @@ export function DeleteInvoiceModal({
       setError(
         `Type the invoice number exactly (${invoice.invoiceNumber}) to confirm.`,
       );
-      return;
-    }
-    if (!verifyBillingAdminPassword(password)) {
-      setError("Admin password is incorrect. Deletion not authorized.");
       return;
     }
 
@@ -65,15 +56,15 @@ export function DeleteInvoiceModal({
         <div className="space-y-4">
           <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
             Invoice <strong>{invoice.invoiceNumber}</strong> was permanently
-            removed after admin authorization.
+            removed.
           </p>
           <Button onClick={onClose}>Done</Button>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4" id={formId}>
           <p className="text-sm text-amber-900">
-            Deleting an invoice is permanent and requires billing administrator
-            approval. This cannot be undone from the demo store.
+            Deleting an invoice is permanent. Confirm the invoice number below.
+            This cannot be undone from the demo store.
           </p>
           <dl className="grid gap-2 sm:grid-cols-2 text-sm">
             <div>
@@ -103,18 +94,6 @@ export function DeleteInvoiceModal({
             required
             autoComplete="off"
           />
-          <Input
-            label="Admin password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter billing admin password"
-            required
-            autoComplete="current-password"
-          />
-          <p className="text-xs text-muted">
-            Demo admin password: <code>{BILLING_ADMIN_PASSWORD}</code>
-          </p>
           {error ? (
             <p className="text-sm text-red-600" role="alert">
               {error}
@@ -122,7 +101,7 @@ export function DeleteInvoiceModal({
           ) : null}
           <div className="flex flex-wrap gap-2">
             <Button type="submit" variant="danger">
-              Authorize &amp; delete
+              Delete invoice
             </Button>
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancel

@@ -205,7 +205,6 @@ export function PayBalance() {
   const canDenyDisputes =
     role === "billing_specialist" ||
     role === "attorney" ||
-    role === "managing_partner" ||
     role === "firm_administrator";
 
   const visibleCharges = [...dynamicCharges, ...invoiceCharges].filter(

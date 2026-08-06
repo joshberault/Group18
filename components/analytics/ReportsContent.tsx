@@ -1,8 +1,12 @@
 "use client";
 
 import { BarChart3 } from "lucide-react";
+import {
+  AnalyticsPageShell,
+  AnalyticsSectionDivider,
+} from "@/components/analytics/AnalyticsPageShell";
+import { PracticeAreaBreakdown } from "@/components/analytics/PracticeAreaBreakdown";
 import { SortableMatterProfitabilityTable } from "@/components/analytics/SortableMatterProfitabilityTable";
-import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -12,6 +16,8 @@ export function ReportsContent() {
   const {
     rows,
     rowCount,
+    practiceAreaSummaries,
+    healthByMatterId,
     loading,
     error,
     refresh,
@@ -54,26 +60,15 @@ export function ReportsContent() {
   }
 
   return (
-    <>
-      <PageHeader
-        title="Reports"
-        description="Matter-level profitability detail from live Supabase data"
-      />
+    <AnalyticsPageShell
+      title="Reports"
+      description="Matter-level profitability and practice area performance from live Supabase data"
+      icon={BarChart3}
+      bannerText="Full profitability breakdown with practice area insights — revenue, collections, expenses, margins, and matter health scores."
+    >
+      <PracticeAreaBreakdown summaries={practiceAreaSummaries} />
 
-      <Card className="mb-6 border-gold-500/30 bg-gradient-to-r from-navy-900 to-navy-800 text-white">
-        <div className="flex items-start gap-4 p-6">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10">
-            <BarChart3 className="h-5 w-5 text-gold-500" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gold-500">Managing Partner View</p>
-            <p className="mt-2 text-sm text-gray-200">
-              Full matter profitability breakdown — revenue, collections, expenses,
-              margins, and outstanding balances. Sort any column to analyze performance.
-            </p>
-          </div>
-        </div>
-      </Card>
+      <AnalyticsSectionDivider />
 
       <SortableMatterProfitabilityTable
         rows={rows}
@@ -81,7 +76,8 @@ export function ReportsContent() {
         sortKey={sortKey}
         sortDirection={sortDirection}
         onSort={toggleSort}
+        healthByMatterId={healthByMatterId}
       />
-    </>
+    </AnalyticsPageShell>
   );
 }

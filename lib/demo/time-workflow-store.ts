@@ -1,9 +1,8 @@
-import { MOCK_APPROVALS } from "@/lib/admin/mock-data";
 import type { AdminApproval } from "@/lib/admin/types";
 import { DEMO_IDENTITIES } from "@/lib/roles/role-config";
 import type { UserRole } from "@/lib/types";
 import type { Matter, TimeEntry, ApprovalStatus } from "@/types/database";
-import { DEMO_MATTERS, DEMO_PROFILE, DEMO_TIME_ENTRIES } from "@/lib/attorney/demo-data";
+import { DEMO_MATTERS, DEMO_PROFILE } from "@/lib/attorney/demo-data";
 
 const STORAGE_KEY = "counselflow-demo-time-workflow-v1";
 export const TIME_WORKFLOW_EVENT = "counselflow-time-workflow-change";
@@ -58,7 +57,7 @@ type DemoTimeWorkflowState = {
 
 function emptyState(): DemoTimeWorkflowState {
   return {
-    timeEntries: DEMO_TIME_ENTRIES.map((entry) => ({ ...entry })),
+    timeEntries: [],
     approvals: [],
     payrollAccruals: [],
     journalEntries: [],
@@ -72,10 +71,7 @@ function readState(): DemoTimeWorkflowState {
     if (!raw) return emptyState();
     const parsed = JSON.parse(raw) as Partial<DemoTimeWorkflowState>;
     return {
-      timeEntries:
-        parsed.timeEntries?.length
-          ? parsed.timeEntries
-          : DEMO_TIME_ENTRIES.map((entry) => ({ ...entry })),
+      timeEntries: parsed.timeEntries ?? [],
       approvals: parsed.approvals ?? [],
       payrollAccruals: parsed.payrollAccruals ?? [],
       journalEntries: parsed.journalEntries ?? [],
@@ -114,7 +110,7 @@ function matterBillableRate(matter: Matter | undefined): number {
 }
 
 function nextApprovalId(state: DemoTimeWorkflowState) {
-  const max = [...MOCK_APPROVALS, ...state.approvals]
+  const max = state.approvals
     .map((row) => Number(row.id.replace(/\D/g, "")) || 0)
     .reduce((a, b) => Math.max(a, b), 0);
   return `apr-demo-${String(max + 1).padStart(3, "0")}`;
@@ -143,9 +139,7 @@ export function getDemoApprovals(): AdminApproval[] {
 }
 
 export function getMergedApprovals(): AdminApproval[] {
-  const demoIds = new Set(readState().approvals.map((row) => row.id));
-  const seeded = MOCK_APPROVALS.filter((row) => !demoIds.has(row.id));
-  return [...seeded, ...getDemoApprovals()];
+  return getDemoApprovals();
 }
 
 export function getPendingTimeApprovals(): AdminApproval[] {

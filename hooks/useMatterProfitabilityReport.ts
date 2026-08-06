@@ -1,8 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchMatterProfitability } from "@/lib/analytics/rpc";
-import type { MatterProfitabilityRow } from "@/lib/analytics/types";
+import { fetchMatterProfitability, fetchRiskAlerts } from "@/lib/analytics/rpc";
+import {
+  buildMatterHealthScores,
+  type MatterHealthLevel,
+} from "@/lib/analytics/matter-health";
+import { aggregateByPracticeArea } from "@/lib/analytics/practice-area";
+import type { MatterProfitabilityRow, RiskAlertRow } from "@/lib/analytics/types";
 
 export type ProfitabilitySortKey =
   | "matter_title"
@@ -36,6 +41,7 @@ function compareRows(
 
 export function useMatterProfitabilityReport() {
   const [rows, setRows] = useState<MatterProfitabilityRow[]>([]);
+  const [alerts, setAlerts] = useState<RiskAlertRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<ProfitabilitySortKey>("net_profit");
@@ -45,18 +51,26 @@ export function useMatterProfitabilityReport() {
     setLoading(true);
     setError(null);
 
-    const result = await fetchMatterProfitability();
-    if (result.error || !result.data) {
+    const [profitabilityResult, alertsResult] = await Promise.all([
+      fetchMatterProfitability(),
+      fetchRiskAlerts(),
+    ]);
+
+    if (profitabilityResult.error || !profitabilityResult.data) {
       setRows([]);
       setError(
-        result.error ??
+        profitabilityResult.error ??
           "Unable to load matter profitability. Ensure analytics RPC functions are deployed.",
       );
       setLoading(false);
       return;
     }
 
-    setRows(result.data);
+    setRows(profitabilityResult.data);
+    setAlerts(alertsResult.data ?? []);
+    if (alertsResult.error) {
+      setError(alertsResult.error);
+    }
     setLoading(false);
   }, []);
 
@@ -69,6 +83,20 @@ export function useMatterProfitabilityReport() {
       [...rows].sort((a, b) => compareRows(a, b, sortKey, sortDirection)),
     [rows, sortKey, sortDirection],
   );
+
+  const practiceAreaSummaries = useMemo(
+    () => aggregateByPracticeArea(rows),
+    [rows],
+  );
+
+  const healthByMatterId = useMemo(() => {
+    return buildMatterHealthScores(rows, alerts).reduce<
+      Record<string, MatterHealthLevel>
+    >((acc, score) => {
+      acc[score.matter_id] = score.level;
+      return acc;
+    }, {});
+  }, [rows, alerts]);
 
   const toggleSort = useCallback(
     (key: ProfitabilitySortKey) => {
@@ -85,6 +113,8 @@ export function useMatterProfitabilityReport() {
   return {
     rows: sortedRows,
     rowCount: rows.length,
+    practiceAreaSummaries,
+    healthByMatterId,
     loading,
     error,
     refresh,

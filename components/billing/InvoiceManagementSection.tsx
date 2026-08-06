@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { BillingPeriodToolbar } from "@/components/billing/BillingPeriodToolbar";
 import { InvoiceDetailsModal } from "@/components/billing/InvoiceDetailsModal";
 import { RecordPaymentModal } from "@/components/billing/RecordPaymentModal";
 import { DeleteInvoiceModal } from "@/components/billing/DeleteInvoiceModal";
 import { InvoiceStatusBadge } from "@/components/billing/invoice-status";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -33,6 +35,14 @@ import {
   refreshInvoiceCatalog,
   updateManagedInvoice,
 } from "@/lib/billing/invoice-management-store";
+import { filterInvoicesByPeriod } from "@/lib/billing/dashboard-metrics";
+import {
+  createDefaultBillingPeriod,
+  formatPeriodLabel,
+  resolvePeriodRange,
+  type BillingPeriodPreset,
+  type BillingPeriodState,
+} from "@/lib/billing/billing-period";
 import type {
   BillingMethod,
   Invoice,
@@ -99,6 +109,9 @@ export function InvoiceManagementSection({ invoices }: Props) {
   );
   const [generatedCount, setGeneratedCount] = useState(0);
   const [highlightNumber, setHighlightNumber] = useState<string | null>(null);
+  const [period, setPeriod] = useState<BillingPeriodState>(() =>
+    createDefaultBillingPeriod(),
+  );
 
   const [clientSearch, setClientSearch] = useState("");
   const [attorney, setAttorney] = useState("all");
@@ -119,6 +132,58 @@ export function InvoiceManagementSection({ invoices }: Props) {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(10);
+
+  function applyPreset(preset: BillingPeriodPreset) {
+    if (preset === "custom") {
+      setPeriod((prev) => ({
+        ...prev,
+        preset: "custom",
+        range: resolvePeriodRange("custom", new Date(), {
+          start: prev.customStart,
+          end: prev.customEnd,
+        }),
+      }));
+      setPage(1);
+      return;
+    }
+    const range = resolvePeriodRange(preset);
+    setPeriod({
+      preset,
+      range,
+      customStart: range.start,
+      customEnd: range.end,
+    });
+    setPage(1);
+  }
+
+  function applyCustomRange(start: string, end: string) {
+    const range = resolvePeriodRange("custom", new Date(), { start, end });
+    setPeriod({
+      preset: "custom",
+      range,
+      customStart: start,
+      customEnd: end,
+    });
+    setPage(1);
+  }
+
+  const activeRange = useMemo(() => {
+    if (period.preset === "custom") return period.range;
+    return resolvePeriodRange(period.preset);
+  }, [period]);
+
+  const periodLabel = useMemo(
+    () => formatPeriodLabel(period.preset, activeRange),
+    [period.preset, activeRange],
+  );
+
+  /** Period filter first (shared invoiceDate helper), then other list filters. */
+  const periodScoped = useMemo(
+    () => filterInvoicesByPeriod(catalog, activeRange),
+    [catalog, activeRange],
+  );
+
+  const outsidePeriodCount = Math.max(0, catalog.length - periodScoped.length);
 
   function refreshCatalog() {
     const all = getAllManagedInvoices();
@@ -302,13 +367,22 @@ export function InvoiceManagementSection({ invoices }: Props) {
     };
   }, [invoices]);
 
-  const data = catalog;
+  const data = periodScoped;
   const attorneys = useMemo(() => getInvoiceAttorneys(data), [data]);
 
   const filteredSorted = useMemo(() => {
     const q = clientSearch.trim().toLowerCase();
     const rows = data.filter((invoice) => {
-      if (q && !invoice.client.toLowerCase().includes(q)) return false;
+      if (q) {
+        const clientMatch = invoice.client.toLowerCase().includes(q);
+        const matterMatch = (invoice.legalMatter || "")
+          .toLowerCase()
+          .includes(q);
+        const matterIdMatch = (invoice.matterId || "")
+          .toLowerCase()
+          .includes(q);
+        if (!clientMatch && !matterMatch && !matterIdMatch) return false;
+      }
       if (attorney !== "all" && invoice.attorney !== attorney) return false;
       if (billingMethod !== "all" && invoice.billingMethod !== billingMethod) {
         return false;
@@ -441,6 +515,25 @@ export function InvoiceManagementSection({ invoices }: Props) {
         </div>
       </PageHeader>
 
+      <BillingPeriodToolbar
+        variant="panel"
+        period={period}
+        periodLabel={periodLabel}
+        invoiceCountInPeriod={periodScoped.length}
+        invoiceCountAll={catalog.length}
+        outsidePeriodCount={outsidePeriodCount}
+        onApplyPreset={applyPreset}
+        onApplyCustomRange={applyCustomRange}
+        footnote="List is limited to invoices issued in the selected period (invoice date)."
+      />
+
+      {periodScoped.length === 0 && catalog.length > 0 ? (
+        <EmptyState
+          title="No invoices found for the selected billing period."
+          description="Choose All Time or another range to browse the full catalog."
+        />
+      ) : null}
+
       {statusFilterActive ? (
         <div
           className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-navy-900/15 bg-navy-50 px-4 py-3"
@@ -462,14 +555,14 @@ export function InvoiceManagementSection({ invoices }: Props) {
       <Card className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Input
-            label="Search by client"
+            label="Search by client or matter"
             type="search"
             value={clientSearch}
             onChange={(e) => {
               setClientSearch(e.target.value);
               setPage(1);
             }}
-            placeholder="e.g. Northline"
+            placeholder="Client or matter name"
           />
           <Select
             label="Filter by attorney"

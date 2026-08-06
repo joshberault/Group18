@@ -3,6 +3,8 @@ import {
   isAccountingManagerExclusivePath,
   isAccountingManagerRoute,
 } from "@/lib/navigation/accounting-manager-nav";
+import { CLIENT_NAV_ITEMS, isClientPortalRoute } from "@/lib/navigation/client-nav";
+import { PROSPECTIVE_CLIENT_NAV_ITEMS } from "@/lib/navigation/prospective-client-nav";
 import { NAV_ITEMS, getNavItemsForRole, type NavItem, type RouteKey } from "@/lib/navigation";
 import type { UserRole } from "@/lib/types";
 import { USER_ROLE_LABELS } from "@/lib/types";
@@ -24,6 +26,7 @@ export const DEMO_IDENTITIES: Record<
   accounting_manager: { fullName: "Alex Morgan", initials: "AM" },
   firm_administrator: { fullName: "Jordan Admin", initials: "JA" },
   client: { fullName: "Cameron Client", initials: "CC" },
+  prospective_client: { fullName: "Casey Prospect", initials: "CP" },
 };
 
 export interface RoleDefinition {
@@ -53,6 +56,8 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
       "receivables",
       "accounting",
       "reports",
+      "analytics",
+      "risk_center",
     ],
     dashboardTitle: "Managing Partner Dashboard",
     dashboardDescription:
@@ -207,6 +212,15 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
       "Your matters, invoices, and trust balance summary.",
     permissions: ["access_client_portal", "view_own_matters"],
   },
+  prospective_client: {
+    displayName: USER_ROLE_LABELS.prospective_client,
+    defaultRoute: "/dashboard",
+    allowedRoutes: ["dashboard"],
+    dashboardTitle: "Consultation Request",
+    dashboardDescription:
+      "Tell us about your legal needs and request a consultation.",
+    permissions: [],
+  },
 };
 
 export function getRoleDefinition(role: UserRole): RoleDefinition {
@@ -260,8 +274,17 @@ function canAccessStandardRoute(role: UserRole, pathname: string): boolean {
 }
 
 export function canAccessRoute(role: UserRole, pathname: string): boolean {
+  if (isClientPortalRoute(pathname)) {
+    return role === "client" || role === "firm_administrator";
+  }
+
   if (role === "accounting_manager") {
     return isAccountingManagerRoute(pathname);
+  }
+
+  // Prospective Client demo is Dashboard-only (consultation request form).
+  if (role === "prospective_client") {
+    return pathname === "/dashboard" || pathname === "/dashboard/";
   }
 
   // Billing Specialist may open Client Trust Accounts from the firm Dashboard KPI.
@@ -283,6 +306,14 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
 export function getNavigationForRole(role: UserRole): NavItem[] {
   if (role === "accounting_manager") {
     return ACCOUNTING_MANAGER_NAV_ITEMS;
+  }
+
+  if (role === "client") {
+    return CLIENT_NAV_ITEMS;
+  }
+
+  if (role === "prospective_client") {
+    return PROSPECTIVE_CLIENT_NAV_ITEMS;
   }
 
   return getNavItemsForRole(role);

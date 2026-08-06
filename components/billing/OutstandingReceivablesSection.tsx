@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { BillingPeriodToolbar } from "@/components/billing/BillingPeriodToolbar";
 import { InvoiceDetailsModal } from "@/components/billing/InvoiceDetailsModal";
 import { PaymentReminderModal } from "@/components/billing/PaymentReminderModal";
 import { RecordPaymentModal } from "@/components/billing/RecordPaymentModal";
 import { InvoiceStatusBadge } from "@/components/billing/invoice-status";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -26,8 +28,6 @@ import {
   INVOICE_STATUSES,
 } from "@/lib/billing/invoice-seed";
 import {
-  getAllManagedInvoices,
-  INVOICES_UPDATED_EVENT,
   refreshInvoiceCatalog,
   updateManagedInvoice,
 } from "@/lib/billing/invoice-management-store";
@@ -39,6 +39,7 @@ import {
   type OutstandingReceivableRow,
 } from "@/lib/billing/receivables-utils";
 import type { Invoice, InvoiceStatus } from "@/lib/billing/invoice-types";
+import { useBillingPeriodMetrics } from "@/lib/billing/use-billing-period-metrics";
 import { BILLING_ROUTES } from "@/lib/billing/routes";
 import { findMatterByClientAndName } from "@/lib/client-related-matters/data";
 import { addPaymentReceivedNotification } from "@/lib/client-related-matters/notifications-store";
@@ -129,28 +130,26 @@ function compareRows(
 }
 
 export function OutstandingReceivablesSection() {
-  const [catalog, setCatalog] = useState<Invoice[]>([]);
+  const {
+    period,
+    applyPreset,
+    applyCustomRange,
+    periodLabel,
+    allInvoices,
+    invoicesInPeriod,
+    outsidePeriodCount,
+  } = useBillingPeriodMetrics();
 
-  useEffect(() => {
-    const applyCache = () => setCatalog(getAllManagedInvoices());
-    const reload = () => {
-      void refreshInvoiceCatalog().then(applyCache);
-    };
-    reload();
-    window.addEventListener(INVOICES_UPDATED_EVENT, applyCache);
-    window.addEventListener("focus", reload);
-    return () => {
-      window.removeEventListener(INVOICES_UPDATED_EVENT, applyCache);
-      window.removeEventListener("focus", reload);
-    };
-  }, []);
-
+  // Open A/R only among invoices issued in the selected billing period
   const rows = useMemo(
-    () => getOutstandingReceivables(catalog),
-    [catalog],
+    () => getOutstandingReceivables(invoicesInPeriod),
+    [invoicesInPeriod],
   );
   const summary = useMemo(() => getReceivablesSummary(rows), [rows]);
   const attorneys = useMemo(() => getInvoiceAttorneys(rows), [rows]);
+  const emptyPeriodOpenAr = invoicesInPeriod.length === 0;
+  const emptyOpenInPeriod =
+    !emptyPeriodOpenAr && rows.length === 0;
 
   const [clientSearch, setClientSearch] = useState("");
   const [attorney, setAttorney] = useState("all");
@@ -163,10 +162,18 @@ export function OutstandingReceivablesSection() {
   const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null);
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
   const [actionNote, setActionNote] = useState<string | null>(null);
+  const [highlightNumber, setHighlightNumber] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
+      const hl = params.get("highlight");
+      if (hl) {
+        setHighlightNumber(hl);
+        setClientSearch("");
+        setAttorney("all");
+        setAging("all");
+      }
       if (params.get("view") === "overdue") {
         setOverdueOnly(true);
         setStatus("all");
@@ -182,8 +189,15 @@ export function OutstandingReceivablesSection() {
   const filteredSorted = useMemo(() => {
     const q = clientSearch.trim().toLowerCase();
     const next = rows.filter((row) => {
+      if (highlightNumber && row.invoiceNumber === highlightNumber) {
+        return true;
+      }
       if (overdueOnly && !row.isOverdue) return false;
-      if (q && !row.client.toLowerCase().includes(q)) return false;
+      if (q) {
+        const clientMatch = row.client.toLowerCase().includes(q);
+        const matterMatch = (row.legalMatter || "").toLowerCase().includes(q);
+        if (!clientMatch && !matterMatch) return false;
+      }
       if (attorney !== "all" && row.attorney !== attorney) return false;
       if (status !== "all" && row.status !== status) return false;
       if (aging !== "all" && row.agingBucket !== aging) return false;
@@ -191,6 +205,10 @@ export function OutstandingReceivablesSection() {
     });
 
     return [...next].sort((a, b) => {
+      if (highlightNumber) {
+        if (a.invoiceNumber === highlightNumber) return -1;
+        if (b.invoiceNumber === highlightNumber) return 1;
+      }
       const result = compareRows(a, b, sortKey);
       return sortDir === "asc" ? result : -result;
     });
@@ -203,6 +221,7 @@ export function OutstandingReceivablesSection() {
     overdueOnly,
     sortKey,
     sortDir,
+    highlightNumber,
   ]);
 
   function handleSort(key: SortKey) {
@@ -238,7 +257,6 @@ export function OutstandingReceivablesSection() {
       reminderStatus: "Reminder Sent",
     });
     await refreshInvoiceCatalog();
-    setCatalog(getAllManagedInvoices());
     setActionNote(
       updated
         ? `Payment reminder sent for ${invoice.invoiceNumber}. Reminder count is now ${nextCount}.`
@@ -292,7 +310,6 @@ export function OutstandingReceivablesSection() {
       });
     }
     await refreshInvoiceCatalog();
-    setCatalog(getAllManagedInvoices());
     setActionNote(
       updated
         ? `Payment of ${formatCurrency(amount)} recorded for ${invoice.invoiceNumber}.`
@@ -361,6 +378,18 @@ export function OutstandingReceivablesSection() {
         </div>
       </PageHeader>
 
+      <BillingPeriodToolbar
+        variant="panel"
+        period={period}
+        periodLabel={periodLabel}
+        invoiceCountInPeriod={invoicesInPeriod.length}
+        invoiceCountAll={allInvoices.length}
+        outsidePeriodCount={outsidePeriodCount}
+        onApplyPreset={applyPreset}
+        onApplyCustomRange={applyCustomRange}
+        footnote="Open A/R is limited to invoices issued in the selected period."
+      />
+
       {overdueOnly ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <span>
@@ -380,6 +409,18 @@ export function OutstandingReceivablesSection() {
             Show all receivables
           </Button>
         </div>
+      ) : null}
+
+      {emptyPeriodOpenAr ? (
+        <EmptyState
+          title="No invoices found for the selected billing period."
+          description="Adjust the billing period to see open receivables."
+        />
+      ) : emptyOpenInPeriod ? (
+        <EmptyState
+          title="No open receivables for this period."
+          description="Invoices issued in this period have no remaining balance, or none match the open A/R statuses."
+        />
       ) : null}
 
       <section
@@ -428,7 +469,7 @@ export function OutstandingReceivablesSection() {
       <Card className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Input
-            label="Search by client"
+            label="Search by client or matter"
             type="search"
             value={clientSearch}
             onChange={(e) => setClientSearch(e.target.value)}
@@ -519,7 +560,11 @@ export function OutstandingReceivablesSection() {
               filteredSorted.map((row) => (
                 <TableRow
                   key={row.id}
-                  className={cn(row.isOverdue && "bg-red-50/40")}
+                  className={cn(
+                    row.isOverdue && "bg-red-50/40",
+                    highlightNumber === row.invoiceNumber &&
+                      "ring-2 ring-inset ring-navy-900 bg-gold-100/40",
+                  )}
                 >
                   <TableCell className="font-semibold">
                     {row.invoiceNumber}

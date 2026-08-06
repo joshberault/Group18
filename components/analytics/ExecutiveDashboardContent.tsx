@@ -8,9 +8,14 @@ import {
   Percent,
   TrendingUp,
 } from "lucide-react";
+import {
+  AnalyticsPageShell,
+  AnalyticsSectionDivider,
+} from "@/components/analytics/AnalyticsPageShell";
+import { MatterHealthSummary } from "@/components/analytics/MatterHealthSummary";
 import { MonthlyCollectionsChart } from "@/components/analytics/MonthlyCollectionsChart";
 import { MatterProfitabilityTable } from "@/components/analytics/MatterProfitabilityTable";
-import { Card } from "@/components/ui/Card";
+import { analyticsGridGap } from "@/components/analytics/analytics-styles";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KPICard } from "@/components/ui/KPICard";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -19,7 +24,8 @@ import { useExecutiveDashboard } from "@/hooks/useExecutiveDashboard";
 import { formatCurrency } from "@/lib/utils/cn";
 
 export function ExecutiveDashboardContent() {
-  const { data, loading, error, refresh } = useExecutiveDashboard();
+  const { data, matterHealthScores, loading, error, refresh } =
+    useExecutiveDashboard();
 
   if (loading) {
     return (
@@ -61,83 +67,92 @@ export function ExecutiveDashboardContent() {
   }
 
   const { kpis, monthlyCollections, matterProfitability } = data;
+  const healthByMatterId = Object.fromEntries(
+    matterHealthScores.map((score) => [score.matter_id, score.level]),
+  );
 
   return (
-    <>
-      <PageHeader
-        title="Executive Dashboard"
-        description="Live KPIs from invoices, payments, expenses, and trust accounts"
-      />
-
-      <Card className="mb-6 border-gold-500/30 bg-gradient-to-r from-navy-900 to-navy-800 text-white">
-        <div className="p-6">
-          <p className="text-sm font-medium text-gold-500">Managing Partner View</p>
-          <p className="mt-2 text-sm text-gray-200">
-            Contract-to-cash analytics powered by Supabase — billed revenue, collections,
-            profitability, trust balances, and risk indicators.
-          </p>
-        </div>
-      </Card>
-
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <AnalyticsPageShell
+      title="Executive Dashboard"
+      description="Live KPIs from invoices, payments, expenses, and trust accounts"
+      icon={TrendingUp}
+      bannerText="Contract-to-cash analytics with matter health scoring — profitability, collections, trust balances, and risk in one view."
+    >
+      <div className={`grid ${analyticsGridGap} sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6`}>
         <KPICard
           title="Billed Revenue"
           value={formatCurrency(kpis.total_billed_revenue)}
           subtitle="Issued invoices (total amount)"
           icon={DollarSign}
+          className="p-4"
         />
         <KPICard
           title="Collected Revenue"
           value={formatCurrency(kpis.total_collected_revenue)}
           subtitle="Cash applied to invoices"
           icon={TrendingUp}
+          className="p-4"
         />
         <KPICard
           title="Avg Profitability"
           value={formatCurrency(kpis.avg_matter_profitability)}
           subtitle="Average net profit per matter"
           icon={TrendingUp}
+          className="p-4"
         />
         <KPICard
           title="Collection Rate"
           value={`${kpis.collection_rate_pct.toFixed(1)}%`}
           subtitle="Collected ÷ billed"
           icon={Percent}
+          className="p-4"
         />
         <KPICard
           title="Trust Balance"
           value={formatCurrency(kpis.current_trust_balance)}
           subtitle="Firm-wide client trust funds"
           icon={Landmark}
+          className="p-4"
         />
         <KPICard
           title="Unbilled Time"
           value={formatCurrency(kpis.unbilled_time_value)}
           subtitle="Pending billable hours at matter rates"
           icon={Clock}
+          className="p-4"
         />
       </div>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+      <div className={`grid ${analyticsGridGap} sm:grid-cols-2`}>
         <KPICard
           title="Outstanding A/R"
           value={formatCurrency(kpis.outstanding_ar)}
           subtitle="Balance due on issued invoices"
           icon={DollarSign}
+          className="p-4"
         />
         <KPICard
           title="Overdue Invoices"
           value={String(kpis.overdue_invoice_count)}
           subtitle="Past due with balance outstanding"
           icon={AlertTriangle}
+          className="p-4"
         />
       </div>
 
-      <div className="mb-6">
-        <MonthlyCollectionsChart data={monthlyCollections} />
-      </div>
+      <AnalyticsSectionDivider />
 
-      <MatterProfitabilityTable rows={matterProfitability} variant="executive" />
-    </>
+      <MatterHealthSummary scores={matterHealthScores} />
+
+      <AnalyticsSectionDivider />
+
+      <MonthlyCollectionsChart data={monthlyCollections} />
+
+      <MatterProfitabilityTable
+        rows={matterProfitability}
+        variant="executive"
+        healthByMatterId={healthByMatterId}
+      />
+    </AnalyticsPageShell>
   );
 }

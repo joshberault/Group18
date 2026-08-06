@@ -1,6 +1,8 @@
 /** Roles allowed to access analytics dashboards */
 export const ANALYTICS_ROLES = ["managing_partner"] as const;
 
+export type RiskSeverity = "high" | "medium" | "low";
+
 export type ExecutiveDashboardKpis = {
   total_billed_revenue: number;
   total_collected_revenue: number;

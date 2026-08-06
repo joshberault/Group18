@@ -17,6 +17,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Ca
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { CASE_TYPE_LABELS } from "@/lib/client-portal/case-task-lists";
 import type { TaskOwner } from "@/lib/client-portal/case-task-lists";
+import { recordClientBadgeEvent } from "@/lib/client-portal/badges";
 import {
   areAllClientInvoicesPaid,
   getPortalBillingModel,
@@ -62,6 +63,10 @@ export function CaseStatus() {
   const { role } = useDemoRole();
   const { selectedCases, isMultipleCases } = useCaseSelection();
   const roleCanCheckOffTasks = role === "attorney" || role === "paralegal";
+
+  useEffect(() => {
+    recordClientBadgeEvent("case_status_viewed");
+  }, []);
 
   const [selectedCaseId, setSelectedCaseId] = useState(
     selectedCases[0]?.id ?? "",
