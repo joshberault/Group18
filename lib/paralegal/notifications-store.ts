@@ -154,3 +154,20 @@ export function addParalegalRequestReceivedNotification(input: {
     actionHref: "/matters",
   });
 }
+
+export function addParalegalConsultationRequestNotification(input: {
+  sentBy: string;
+  matterName: string;
+  matterNumber: string;
+}) {
+  persistNotification({
+    id: `paralegal-consultation-${Date.now()}`,
+    title: "New consultation request",
+    message: `${input.sentBy} submitted a consultation request marked “Other.” Review intake details and route as needed.`,
+    createdAt: new Date().toISOString(),
+    type: "request_received",
+    matterNumber: input.matterNumber,
+    actionLabel: "Open requests",
+    actionHref: "/matters",
+  });
+}

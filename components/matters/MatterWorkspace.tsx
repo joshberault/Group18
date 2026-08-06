@@ -954,6 +954,7 @@ function RequestsPanel({
   requests: MatterRequest[];
   requestedBy: string;
 }) {
+  const { identity, selectedRole } = useDemoRole();
   const [view, setView] = useState<RequestView>("home");
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [details, setDetails] = useState("");
@@ -971,10 +972,37 @@ function RequestsPanel({
     [matter.clientName, matter.attorneyName],
   );
 
-  const visible = requests.filter((item) => item.matterId === matter.id);
+  const assigneeLabel =
+    selectedRole === "attorney"
+      ? `${identity.fullName} — Attorney`
+      : selectedRole === "paralegal"
+        ? `${identity.fullName} — Paralegal`
+        : null;
+
+  const consultationAssigned = useMemo(() => {
+    if (!assigneeLabel) return [] as MatterRequest[];
+    return requests.filter(
+      (item) =>
+        item.requestType === "Consultation request" &&
+        item.assignedTo === assigneeLabel,
+    );
+  }, [assigneeLabel, requests]);
+
+  const visible = useMemo(() => {
+    const matterScoped = requests.filter((item) => item.matterId === matter.id);
+    const byId = new Map<string, MatterRequest>();
+    for (const item of [...consultationAssigned, ...matterScoped]) {
+      byId.set(item.id, item);
+    }
+    return [...byId.values()];
+  }, [consultationAssigned, matter.id, requests]);
+
   const openRequests = visible.filter((item) => item.status !== "completed");
   const fulfilledRequests = visible.filter(
     (item) => item.status === "completed",
+  );
+  const openConsultations = openRequests.filter(
+    (item) => item.requestType === "Consultation request",
   );
   const activeRequest =
     visible.find((item) => item.id === activeRequestId) ?? null;
@@ -1097,6 +1125,47 @@ function RequestsPanel({
           <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">
             {confirmation}
           </p>
+        )}
+        {openConsultations.length > 0 && (
+          <Card className="mb-4 border-gold-500/40">
+            <CardHeader>
+              <CardTitle>Consultation requests</CardTitle>
+              <CardDescription>
+                New prospective-client intake assigned to you.
+              </CardDescription>
+            </CardHeader>
+            <ul className="space-y-3">
+              {openConsultations.map((request) => (
+                <li key={request.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveRequestId(request.id);
+                      setDetails("");
+                      setSentTo(request.requestedBy);
+                      setError(null);
+                      setConfirmation(null);
+                      setView("fulfill");
+                    }}
+                    className="flex w-full items-start justify-between gap-4 rounded-xl border border-navy-900/15 bg-surface px-4 py-4 text-left transition-colors hover:border-navy-700/40"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-navy-900">
+                        {request.subject}
+                      </span>
+                      <span className="mt-1 block text-xs text-muted">
+                        From {request.requestedBy} · {request.createdAt}
+                      </span>
+                      <span className="mt-2 block whitespace-pre-wrap text-sm text-navy-900">
+                        {request.details}
+                      </span>
+                    </span>
+                    <Badge variant="warning">new</Badge>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Card>
         )}
         <Card>
           <CardHeader>
@@ -1278,7 +1347,10 @@ function RequestsPanel({
           <CardHeader>
             <CardTitle>Fulfill a request</CardTitle>
             <CardDescription>
-              Choose an open request for Case # {matter.matterNumber}.
+              Choose an open request for Case # {matter.matterNumber}
+              {assigneeLabel
+                ? ", including consultation intake assigned to you."
+                : "."}
             </CardDescription>
           </CardHeader>
           {openRequests.length === 0 ? (

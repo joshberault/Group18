@@ -26,6 +26,7 @@ import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { JobApplicationsPanel } from "@/components/admin/JobApplicationsPanel";
 import { ParalegalDashboard } from "@/components/dashboard/ParalegalDashboard";
 import { AttorneyDashboard } from "@/components/dashboard/AttorneyDashboard";
+import { ProspectiveClientDashboard } from "@/components/dashboard/ProspectiveClientDashboard";
 import { AccountingManagerDashboard } from "@/components/accounting-manager/dashboard/AccountingManagerDashboard";
 import { PendingTimeApprovalsPanel } from "@/components/time/PendingTimeApprovalsPanel";
 import { BillingPeriodToolbar } from "@/components/billing/BillingPeriodToolbar";
@@ -396,6 +397,10 @@ export function DashboardContent() {
 
   if (role === "accounting_manager") {
     return <AccountingManagerDashboard />;
+  }
+
+  if (role === "prospective_client") {
+    return <ProspectiveClientDashboard />;
   }
 
   const isManagingPartner = role === "managing_partner";

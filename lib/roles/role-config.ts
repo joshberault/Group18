@@ -4,6 +4,7 @@ import {
   isAccountingManagerRoute,
 } from "@/lib/navigation/accounting-manager-nav";
 import { CLIENT_NAV_ITEMS } from "@/lib/navigation/client-nav";
+import { PROSPECTIVE_CLIENT_NAV_ITEMS } from "@/lib/navigation/prospective-client-nav";
 import { NAV_ITEMS, getNavItemsForRole, type NavItem, type RouteKey } from "@/lib/navigation";
 import type { UserRole } from "@/lib/types";
 import { USER_ROLE_LABELS } from "@/lib/types";
@@ -25,6 +26,7 @@ export const DEMO_IDENTITIES: Record<
   accounting_manager: { fullName: "Alex Morgan", initials: "AM" },
   firm_administrator: { fullName: "Jordan Admin", initials: "JA" },
   client: { fullName: "Cameron Client", initials: "CC" },
+  prospective_client: { fullName: "Casey Prospect", initials: "CP" },
 };
 
 export interface RoleDefinition {
@@ -203,12 +205,21 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   client: {
     displayName: USER_ROLE_LABELS.client,
-    defaultRoute: "/client-portal",
+    defaultRoute: "/client-portal/account-summary",
     allowedRoutes: ["client_portal"],
     dashboardTitle: "Client Portal",
     dashboardDescription:
       "Your matters, invoices, and trust balance summary.",
     permissions: ["access_client_portal", "view_own_matters"],
+  },
+  prospective_client: {
+    displayName: USER_ROLE_LABELS.prospective_client,
+    defaultRoute: "/dashboard",
+    allowedRoutes: ["dashboard"],
+    dashboardTitle: "Consultation Request",
+    dashboardDescription:
+      "Tell us about your legal needs and request a consultation.",
+    permissions: [],
   },
 };
 
@@ -229,18 +240,33 @@ export function hasPermission(role: UserRole, permission: Permission): boolean {
 }
 
 export function pathnameToRouteKey(pathname: string): RouteKey | null {
-  const match = NAV_ITEMS.find(
+  if (pathname === "/client-portal" || pathname.startsWith("/client-portal/")) {
+    return "client_portal";
+  }
+
+  const match = NAV_ITEMS.filter(
     (item) =>
       pathname === item.href || pathname.startsWith(`${item.href}/`),
-  );
+  ).sort((a, b) => b.href.length - a.href.length)[0];
   return match?.routeKey ?? null;
 }
 
 function canAccessStandardRoute(role: UserRole, pathname: string): boolean {
-  const matchingItem = NAV_ITEMS.find(
+  // Client portal hub + feature pages: clients use sidebar tabs; staff still
+  // open features from the Client Portal hub card grid.
+  if (pathname === "/client-portal" || pathname.startsWith("/client-portal/")) {
+    return (
+      role === "client" ||
+      role === "managing_partner" ||
+      role === "firm_administrator"
+    );
+  }
+
+  // Prefer the longest matching href when several NAV_ITEMS could match.
+  const matchingItem = NAV_ITEMS.filter(
     (item) =>
       pathname === item.href || pathname.startsWith(`${item.href}/`),
-  );
+  ).sort((a, b) => b.href.length - a.href.length)[0];
 
   if (matchingItem) {
     return matchingItem.roles?.includes(role) ?? false;
@@ -267,6 +293,11 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
     return isAccountingManagerRoute(pathname);
   }
 
+  // Prospective Client demo is Dashboard-only (consultation request form).
+  if (role === "prospective_client") {
+    return pathname === "/dashboard" || pathname === "/dashboard/";
+  }
+
   // Billing Specialist may open Client Trust Accounts from the firm Dashboard KPI.
   if (
     role === "billing_specialist" &&
@@ -290,6 +321,10 @@ export function getNavigationForRole(role: UserRole): NavItem[] {
 
   if (role === "client") {
     return CLIENT_NAV_ITEMS;
+  }
+
+  if (role === "prospective_client") {
+    return PROSPECTIVE_CLIENT_NAV_ITEMS;
   }
 
   return getNavItemsForRole(role);

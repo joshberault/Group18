@@ -30,6 +30,7 @@ import {
   addParalegalRequestReceivedNotification,
 } from "@/lib/paralegal/notifications-store";
 import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvider";
+import { recordClientBadgeEvent } from "@/lib/client-portal/badges";
 import { cn } from "@/lib/utils/cn";
 
 type RequestOptionId =
@@ -322,6 +323,10 @@ export function Requests() {
       }
     }
 
+    recordClientBadgeEvent("request_submitted");
+    if (selectedOption === "documentation") {
+      recordClientBadgeEvent("all_docs_submitted");
+    }
     setStep("submitted");
   }
 

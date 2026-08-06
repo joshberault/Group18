@@ -21,6 +21,7 @@ import {
   clientDocuments,
   documentTypeOptions,
 } from "@/lib/mock-data/client-portal";
+import { recordClientBadgeEvent } from "@/lib/client-portal/badges";
 import { cn } from "@/lib/utils/cn";
 
 interface UploadedDocument {
@@ -186,7 +187,19 @@ export function UploadDocuments() {
       caseNumber: uploadCaseNumber,
     }));
 
-    setDocuments((current) => [...uploaded, ...current]);
+    setDocuments((current) => {
+      const next = [...uploaded, ...current];
+      recordClientBadgeEvent("document_uploaded");
+      const uniqueTypes = new Set(
+        next
+          .filter((doc) => !doc.markedForDeletion)
+          .map((doc) => doc.documentType),
+      );
+      if (uniqueTypes.size >= Math.min(3, documentTypeOptions.length - 1)) {
+        recordClientBadgeEvent("all_docs_submitted");
+      }
+      return next;
+    });
     setPendingFiles([]);
     setDocumentType("");
     setOtherDocumentType("");

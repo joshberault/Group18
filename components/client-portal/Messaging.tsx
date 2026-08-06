@@ -26,6 +26,7 @@ import {
   savePortalMessage,
   type PortalStoredMessage,
 } from "@/lib/client-portal/message-audit-store";
+import { recordClientBadgeEvent } from "@/lib/client-portal/badges";
 import { addAttorneyMessageReceivedNotification } from "@/lib/attorney/notifications-store";
 import { addParalegalMessageReceivedNotification } from "@/lib/paralegal/notifications-store";
 import { cn } from "@/lib/utils/cn";
@@ -239,6 +240,8 @@ export function Messaging() {
       recipientNames: selectedRecipientOptions.map((option) => option.label),
       matterTitles: relatedCases.map((engagedCase) => engagedCase.title),
     });
+
+    recordClientBadgeEvent("message_sent");
 
     setError(null);
     setStatusMessage(null);

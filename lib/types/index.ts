@@ -6,6 +6,7 @@ export const USER_ROLES = [
   "accounting_manager",
   "firm_administrator",
   "client",
+  "prospective_client",
 ] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
@@ -18,6 +19,7 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
   accounting_manager: "Accounting Manager",
   firm_administrator: "Firm Administrator",
   client: "Client",
+  prospective_client: "Prospective Client",
 };
 
 export interface UserProfile {
