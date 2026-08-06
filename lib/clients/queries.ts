@@ -47,6 +47,97 @@ function formToPayload(values: ClientFormValues) {
   };
 }
 
+type MatterAssignmentRow = {
+  matter_id: string;
+  role_on_matter: string | null;
+  profile: { full_name: string | null } | { full_name: string | null }[] | null;
+};
+
+function profileName(profile: MatterAssignmentRow["profile"]): string {
+  if (!profile) return "";
+  const row = Array.isArray(profile) ? profile[0] : profile;
+  return row?.full_name?.trim() ?? "";
+}
+
+function leadAttorneyByMatter(
+  assignments: MatterAssignmentRow[],
+): Map<string, string> {
+  const attorneyByMatter = new Map<string, string>();
+
+  for (const assignment of assignments) {
+    const matterId = assignment.matter_id;
+    const name = profileName(assignment.profile);
+    if (!matterId || !name) continue;
+
+    const role = (assignment.role_on_matter ?? "").toLowerCase();
+    const existing = attorneyByMatter.get(matterId);
+    if (
+      !existing ||
+      role === "lead_attorney" ||
+      role === "responsible_attorney"
+    ) {
+      attorneyByMatter.set(matterId, name);
+    }
+  }
+
+  return attorneyByMatter;
+}
+
+async function attachAssignedAttorneys(
+  supabase: NonNullable<ReturnType<typeof createClientSafe>>,
+  clients: FirmClient[],
+): Promise<FirmClient[]> {
+  if (clients.length === 0) return clients;
+
+  const clientIds = clients.map((client) => client.id);
+  const { data: matters, error: mattersError } = await supabase
+    .from("matters")
+    .select("id, client_id, created_at")
+    .in("client_id", clientIds)
+    .order("created_at", { ascending: false });
+
+  if (mattersError || !matters?.length) {
+    return clients.map((client) => ({
+      ...client,
+      assigned_attorney_name: null,
+    }));
+  }
+
+  const matterIds = matters.map((matter) => matter.id as string);
+  const { data: assignments, error: assignError } = await supabase
+    .from("matter_assignments")
+    .select("matter_id, role_on_matter, profile:profiles(full_name)")
+    .in("matter_id", matterIds);
+
+  if (assignError) {
+    return clients.map((client) => ({
+      ...client,
+      assigned_attorney_name: null,
+    }));
+  }
+
+  const attorneyByMatter = leadAttorneyByMatter(
+    (assignments ?? []) as MatterAssignmentRow[],
+  );
+
+  const namesByClient = new Map<string, string[]>();
+  for (const matter of matters) {
+    const clientId = matter.client_id as string;
+    const attorneyName = attorneyByMatter.get(matter.id as string);
+    if (!attorneyName) continue;
+    const names = namesByClient.get(clientId) ?? [];
+    if (!names.includes(attorneyName)) {
+      names.push(attorneyName);
+    }
+    namesByClient.set(clientId, names);
+  }
+
+  return clients.map((client) => ({
+    ...client,
+    assigned_attorney_name: namesByClient.get(client.id)?.join(", ") ?? null,
+  }));
+}
+
 export async function fetchClients(): Promise<{
   data: FirmClient[];
   error: string | null;
@@ -69,7 +160,9 @@ export async function fetchClients(): Promise<{
     return { data: [], error: error.message };
   }
 
-  return { data: (data ?? []) as FirmClient[], error: null };
+  const clients = (data ?? []) as FirmClient[];
+  const enriched = await attachAssignedAttorneys(supabase, clients);
+  return { data: enriched, error: null };
 }
 
 export async function fetchClientById(id: string): Promise<{
