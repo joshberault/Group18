@@ -28,7 +28,7 @@ type CaseContract = {
 } | null;
 
 export function CaseInformation() {
-  const { selectedCases, isAllCases, matchesCase } = useCaseSelection();
+  const { selectedCases, isMultipleCases, matchesCase } = useCaseSelection();
   const contractInputRef = useRef<HTMLInputElement>(null);
   const [contract, setContract] = useState<CaseContract>(
     initialCaseInformation.contract,
@@ -38,16 +38,16 @@ export function CaseInformation() {
   const primaryCase = selectedCases[0];
   const matter = primaryCase
     ? {
-        caseNumber: isAllCases
+        caseNumber: isMultipleCases
           ? selectedCases.map((item) => item.caseNumber).join(", ")
           : primaryCase.caseNumber,
-        title: isAllCases
+        title: isMultipleCases
           ? `${selectedCases.length} active matters`
           : primaryCase.title,
-        practiceArea: isAllCases
+        practiceArea: isMultipleCases
           ? "Multiple practice areas"
           : CASE_TYPE_LABELS[primaryCase.caseType],
-        openDate: isAllCases
+        openDate: isMultipleCases
           ? selectedCases.map((item) => item.openDate).join(", ")
           : primaryCase.openDate,
         status: primaryCase.status,
@@ -91,10 +91,10 @@ export function CaseInformation() {
         <div className="flex flex-col gap-4 p-1 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-sm font-medium text-gold-500">
-              {isAllCases ? "Matter names" : "Matter name"}
+              {isMultipleCases ? "Matter names" : "Matter name"}
             </p>
             <p className="mt-1 text-2xl font-semibold tracking-tight">
-              {isAllCases
+              {isMultipleCases
                 ? selectedCases.map((item) => item.title).join(", ")
                 : selectedCases[0]?.title}
             </p>
@@ -103,7 +103,7 @@ export function CaseInformation() {
               {matter.practiceArea} · Opened {matter.openDate}
             </p>
           </div>
-          {!isAllCases && <StatusBadge status={matter.status} />}
+          {!isMultipleCases && <StatusBadge status={matter.status} />}
         </div>
       </Card>
 
@@ -113,8 +113,8 @@ export function CaseInformation() {
             <div>
               <CardTitle>Case type(s)</CardTitle>
               <CardDescription>
-                {isAllCases
-                  ? "Types of cases this client is currently engaged in."
+                {isMultipleCases
+                  ? "Types of cases for the selected matters."
                   : "Case type for the selected matter."}
               </CardDescription>
             </div>

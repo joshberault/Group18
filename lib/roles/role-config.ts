@@ -185,8 +185,8 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   client: {
     displayName: USER_ROLE_LABELS.client,
-    defaultRoute: "/client-portal",
-    allowedRoutes: ["client_portal"],
+    defaultRoute: "/client-portal/account-summary",
+    allowedRoutes: ["client_portal", "dashboard"],
     dashboardTitle: "Client Portal",
     dashboardDescription:
       "Your matters, invoices, and trust balance summary.",
@@ -211,18 +211,29 @@ export function hasPermission(role: UserRole, permission: Permission): boolean {
 }
 
 export function pathnameToRouteKey(pathname: string): RouteKey | null {
-  const match = NAV_ITEMS.find(
+  const match = NAV_ITEMS.filter(
     (item) =>
       pathname === item.href || pathname.startsWith(`${item.href}/`),
-  );
+  ).sort((a, b) => b.href.length - a.href.length)[0];
   return match?.routeKey ?? null;
 }
 
 function canAccessStandardRoute(role: UserRole, pathname: string): boolean {
-  const matchingItem = NAV_ITEMS.find(
+  // Portal hub + feature pages: clients use sidebar tabs; staff still open
+  // features from the Client Portal hub card grid.
+  if (pathname === "/client-portal" || pathname.startsWith("/client-portal/")) {
+    return (
+      role === "client" ||
+      role === "managing_partner" ||
+      role === "firm_administrator"
+    );
+  }
+
+  // Prefer the longest matching href when several NAV_ITEMS could match.
+  const matchingItem = NAV_ITEMS.filter(
     (item) =>
       pathname === item.href || pathname.startsWith(`${item.href}/`),
-  );
+  ).sort((a, b) => b.href.length - a.href.length)[0];
 
   if (matchingItem) {
     return matchingItem.roles?.includes(role) ?? false;

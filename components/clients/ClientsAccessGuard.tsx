@@ -27,8 +27,8 @@ export function ClientsAccessGuard({
           moduleLabel="Restricted"
         />
         <div className="flex justify-center">
-          <Link href="/client-portal">
-            <Button>Go to Client Portal</Button>
+          <Link href="/client-portal/account-summary">
+            <Button>Go to Account Summary</Button>
           </Link>
         </div>
       </div>
