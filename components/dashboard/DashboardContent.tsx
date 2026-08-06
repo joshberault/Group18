@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -28,6 +28,7 @@ import { ParalegalDashboard } from "@/components/dashboard/ParalegalDashboard";
 import { AttorneyDashboard } from "@/components/dashboard/AttorneyDashboard";
 import { AccountingManagerDashboard } from "@/components/accounting-manager/dashboard/AccountingManagerDashboard";
 import { PendingTimeApprovalsPanel } from "@/components/time/PendingTimeApprovalsPanel";
+import { BillingPeriodToolbar } from "@/components/billing/BillingPeriodToolbar";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { KPICard } from "@/components/ui/KPICard";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -48,19 +49,11 @@ import {
   ROLE_WELCOME_MESSAGES,
 } from "@/lib/mock-data/dashboard";
 import {
-  getCollectionsThisMonthTotal,
-  getFullyPaidInvoices,
   getMonthlyCollectionsFromPaidInvoices,
 } from "@/lib/billing/collections-utils";
 import { formatBillingOperationsSummary } from "@/lib/billing/operations-summary";
+import { useBillingPeriodMetrics } from "@/lib/billing/use-billing-period-metrics";
 import {
-  getManagedInvoicesSnapshot,
-  getServerInvoicesSnapshot,
-  subscribeInvoiceCatalog,
-} from "@/lib/billing/invoice-management-store";
-import { buildInvoiceStatusSummary } from "@/lib/billing/invoice-status-summary";
-import {
-  getOutstandingArTotal,
   getTrustFundsHeldDisplay,
   resolveUnbilledApprovedHours,
   fetchActiveOpenMattersCount,
@@ -188,11 +181,20 @@ export function DashboardContent() {
   /** Live firm KPIs from invoice catalog + firm-kpis (Billing Specialist & Firm Admin). */
   const usesLiveFirmKpis = isBillingSpecialist || isFirmAdministrator;
 
-  const invoices = useSyncExternalStore(
-    subscribeInvoiceCatalog,
-    getManagedInvoicesSnapshot,
-    getServerInvoicesSnapshot,
-  );
+  const {
+    period,
+    applyPreset,
+    applyCustomRange,
+    periodLabel,
+    allInvoices,
+    invoicesInPeriod,
+    metrics: periodMetrics,
+    statusSummary: periodStatusSummary,
+    outsidePeriodCount,
+  } = useBillingPeriodMetrics();
+
+  // Full catalog for non-period live panels (activity / profitability); period for invoice KPIs
+  const invoices = allInvoices;
 
   const [activeMattersCount, setActiveMattersCount] = useState<number | null>(
     null,
@@ -232,23 +234,21 @@ export function DashboardContent() {
   }, [usesLiveFirmKpis]);
 
   const paidMonthlyCollections = useMemo(
-    () => getMonthlyCollectionsFromPaidInvoices(invoices, 6),
-    [invoices],
+    () => getMonthlyCollectionsFromPaidInvoices(invoicesInPeriod, 6),
+    [invoicesInPeriod],
   );
 
-  const collectionsThisMonth = useMemo(
-    () => getCollectionsThisMonthTotal(getFullyPaidInvoices(invoices)),
-    [invoices],
-  );
+  const collectionsThisMonth = usesLiveFirmKpis
+    ? periodMetrics.summary.collectionsThisMonth
+    : dashboardKpis.monthlyCollections;
 
-  const outstandingAr = useMemo(
-    () => getOutstandingArTotal(invoices),
-    [invoices],
-  );
+  const outstandingAr = usesLiveFirmKpis
+    ? periodMetrics.summary.outstandingReceivable
+    : dashboardKpis.outstandingAR;
 
   const overdueMetrics = useMemo(
-    () => getOverdueInvoiceMetrics(invoices),
-    [invoices],
+    () => getOverdueInvoiceMetrics(invoicesInPeriod),
+    [invoicesInPeriod],
   );
 
   const trustDisplay = getTrustFundsHeldDisplay();
@@ -257,16 +257,14 @@ export function DashboardContent() {
     ? paidMonthlyCollections
     : monthlyCollectionsChart;
 
-  const monthlyCollectionsKpiValue = usesLiveFirmKpis
-    ? collectionsThisMonth
-    : dashboardKpis.monthlyCollections;
+  const monthlyCollectionsKpiValue = collectionsThisMonth;
 
   const monthlyCollectionsSubtitle = usesLiveFirmKpis
-    ? "From fully paid invoices (this month)"
+    ? `Collections for ${periodLabel}`
     : "Collected this month";
 
   const chartDescription = usesLiveFirmKpis
-    ? "Last 6 months of collections from fully paid invoices in the billing catalog"
+    ? `Monthly collections from invoices issued in ${periodLabel}`
     : "Mock trend data for dashboard visualization";
 
   const billingOperationsSummaryText = useMemo(
@@ -274,10 +272,7 @@ export function DashboardContent() {
     [invoices],
   );
 
-  const liveInvoiceStatusSummary = useMemo(
-    () => buildInvoiceStatusSummary(invoices),
-    [invoices],
-  );
+  const liveInvoiceStatusSummary = periodStatusSummary;
 
   const [deadlines, setDeadlines] = useState<UpcomingDeadlineRow[]>([]);
   const [deadlinesLoading, setDeadlinesLoading] = useState(true);
@@ -375,7 +370,7 @@ export function DashboardContent() {
     : formatCurrency(dashboardKpis.outstandingAR);
 
   const outstandingArSubtitle = usesLiveFirmKpis
-    ? "From AR on open invoices"
+    ? `Open A/R for invoices issued ${periodLabel}`
     : "Accounts receivable balance";
 
   const trustFundsValue = usesLiveFirmKpis
@@ -442,6 +437,21 @@ export function DashboardContent() {
           ) : null}
         </div>
       </Card>
+
+      {usesLiveFirmKpis ? (
+        <BillingPeriodToolbar
+          className="mb-6"
+          variant="panel"
+          period={period}
+          periodLabel={periodLabel}
+          invoiceCountInPeriod={invoicesInPeriod.length}
+          invoiceCountAll={allInvoices.length}
+          outsidePeriodCount={outsidePeriodCount}
+          onApplyPreset={applyPreset}
+          onApplyCustomRange={applyCustomRange}
+          footnote="Invoice KPIs (A/R, collections, overdue, status, chart) use this period. Active matters, unbilled hours, and trust are firm-wide."
+        />
+      ) : null}
 
       {role === "firm_administrator" && (
         <div className="mb-6">
@@ -744,8 +754,9 @@ export function DashboardContent() {
             <CardHeader>
               <CardTitle>Invoice Status Summary</CardTitle>
               <CardDescription>
-                Live counts and amounts from Invoice Management — click a row to
-                open that status
+                {usesLiveFirmKpis
+                  ? `Counts and amounts for invoices issued in ${periodLabel}`
+                  : "Live counts and amounts from Invoice Management — click a row to open that status"}
               </CardDescription>
             </CardHeader>
             <Table>
