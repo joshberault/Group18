@@ -47,7 +47,6 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
       "clients",
       "matters",
       "attorney_hub",
-      "time",
       "tasks",
       "calendar",
       "notes",
@@ -282,6 +281,19 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
   if (
     role === "client" &&
     (pathname === "/dashboard" || pathname.startsWith("/dashboard/"))
+  ) {
+    return false;
+  }
+
+  // Managing Partner does not use the Time & Expenses module.
+  if (
+    role === "managing_partner" &&
+    (pathname === "/attorney/time" ||
+      pathname.startsWith("/attorney/time/") ||
+      pathname === "/attorney/expenses" ||
+      pathname.startsWith("/attorney/expenses/") ||
+      pathname === "/time" ||
+      pathname.startsWith("/time/"))
   ) {
     return false;
   }

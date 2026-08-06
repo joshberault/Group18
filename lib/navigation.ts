@@ -141,7 +141,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/attorney/time",
     icon: Clock,
     description: "Attorney time and billable expenses",
-    roles: [...ATTORNEY_TEAM, "billing_specialist"],
+    roles: ["attorney", "paralegal", "billing_specialist"],
   },
   {
     routeKey: "tasks",
