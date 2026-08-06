@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { Suspense } from "react";
 import { AccountingManagerMattersView } from "@/components/accounting-manager/matters/AccountingManagerMattersView";
-import { RoleRestrictedModule } from "@/components/layout/RoleRestrictedModule";
+import { BillingSpecialistMattersView } from "@/components/matters/BillingSpecialistMattersView";
+import { FirmAdministratorMattersView } from "@/components/matters/FirmAdministratorMattersView";
+import { ManagingPartnerMattersView } from "@/components/matters/ManagingPartnerMattersView";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { MatterWorkspace } from "@/components/matters/MatterWorkspace";
 import { Badge } from "@/components/ui/Badge";
@@ -11,11 +14,23 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PARALEGAL_ASSIGNED_MATTERS } from "@/lib/paralegal/demo-data";
 
-export function MattersPageClient() {
+function MattersPageContent() {
   const { selectedRole } = useDemoRole();
 
   if (selectedRole === "accounting_manager") {
     return <AccountingManagerMattersView />;
+  }
+
+  if (selectedRole === "managing_partner") {
+    return <ManagingPartnerMattersView />;
+  }
+
+  if (selectedRole === "billing_specialist") {
+    return <BillingSpecialistMattersView />;
+  }
+
+  if (selectedRole === "firm_administrator") {
+    return <FirmAdministratorMattersView />;
   }
 
   if (selectedRole === "paralegal") {
@@ -114,12 +129,13 @@ export function MattersPageClient() {
     );
   }
 
+  return null;
+}
+
+export function MattersPageClient() {
   return (
-    <RoleRestrictedModule
-      href="/matters"
-      title="Matters"
-      description="Track legal matters, engagement terms, responsible attorneys, and matter lifecycle status."
-      iconName="briefcase"
-    />
+    <Suspense fallback={<p className="p-6 text-sm text-muted">Loading matters…</p>}>
+      <MattersPageContent />
+    </Suspense>
   );
 }
