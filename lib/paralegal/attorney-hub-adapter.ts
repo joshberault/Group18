@@ -3,9 +3,8 @@ import { DEMO_PROFILE } from "@/lib/attorney/demo-data";
 import {
   DEMO_PARALEGAL,
   PARALEGAL_ASSIGNED_MATTERS,
-  PARALEGAL_TASKS,
-  PARALEGAL_TIME_ENTRIES,
 } from "@/lib/paralegal/demo-data";
+import { getParalegalWorkflow } from "@/lib/paralegal/workflow-store";
 
 /** Adapt Parker Legal demo seed into Attorney Hub component shapes. */
 export function getParalegalHubMatters(): Matter[] {
@@ -19,7 +18,8 @@ export function getParalegalHubMatters(): Matter[] {
     fixed_fee_amount: null,
     retainer_amount: null,
     retainer_balance: null,
-    expense_terms: m.status === "on_hold" ? "Matter on hold — conflict review" : null,
+    expense_terms:
+      m.status === "on_hold" ? "Matter on hold — conflict review" : null,
     client: {
       id: m.clientId,
       name: m.clientName,
@@ -32,7 +32,8 @@ export function getParalegalHubMatters(): Matter[] {
 }
 
 export function getParalegalHubTasks(): Task[] {
-  return PARALEGAL_TASKS.map((t) => ({
+  const { tasks } = getParalegalWorkflow();
+  return tasks.map((t) => ({
     id: t.id,
     matter_id: t.matterId,
     title: t.title,
@@ -49,22 +50,25 @@ export function getParalegalHubTasks(): Task[] {
 }
 
 export function getParalegalHubTimeEntries(): TimeEntry[] {
-  return PARALEGAL_TIME_ENTRIES.filter((e) => e.hours > 0).map((e) => ({
-    id: e.id,
-    matter_id: e.matterId,
-    profile_id: DEMO_PARALEGAL.id,
-    entry_date: e.entryDate,
-    hours: e.hours,
-    description: e.description,
-    is_billable: e.billable,
-    status:
-      e.status === "approved" || e.status === "invoiced"
-        ? "approved"
-        : e.status === "rejected"
-          ? "rejected"
-          : "pending",
-    matter: { title: e.matterTitle },
-  }));
+  const { timeEntries } = getParalegalWorkflow();
+  return timeEntries
+    .filter((e) => e.hours > 0)
+    .map((e) => ({
+      id: e.id,
+      matter_id: e.matterId,
+      profile_id: DEMO_PARALEGAL.id,
+      entry_date: e.entryDate,
+      hours: e.hours,
+      description: e.description,
+      is_billable: e.billable,
+      status:
+        e.status === "approved" || e.status === "invoiced"
+          ? "approved"
+          : e.status === "rejected"
+            ? "rejected"
+            : "pending",
+      matter: { title: e.matterTitle },
+    }));
 }
 
 export function getParalegalHubProfile() {

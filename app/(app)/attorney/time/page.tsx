@@ -1,28 +1,33 @@
 "use client";
 
+import { Suspense } from "react";
 import { TimeEntriesPageClient } from "./TimeEntriesPageClient";
+import { ParalegalTimeView } from "@/components/paralegal/ParalegalTimeView";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { LoadingState } from "@/components/ui/LoadingState";
 import {
   DEMO_MATTERS,
   DEMO_PROFILE,
   DEMO_TIME_ENTRIES,
 } from "@/lib/attorney/demo-data";
-import {
-  getParalegalHubMatters,
-  getParalegalHubProfile,
-  getParalegalHubTimeEntries,
-} from "@/lib/paralegal/attorney-hub-adapter";
 
 export default function AttorneyTimePage() {
   const { role } = useDemoRole();
-  const isParalegal = role === "paralegal";
+
+  if (role === "paralegal") {
+    return (
+      <Suspense fallback={<LoadingState message="Loading time entries…" />}>
+        <ParalegalTimeView />
+      </Suspense>
+    );
+  }
 
   return (
     <TimeEntriesPageClient
-      profileId={isParalegal ? getParalegalHubProfile().id : DEMO_PROFILE.id}
-      initialMatters={isParalegal ? getParalegalHubMatters() : DEMO_MATTERS}
-      initialEntries={isParalegal ? getParalegalHubTimeEntries() : DEMO_TIME_ENTRIES}
-      previewMode={isParalegal}
+      profileId={DEMO_PROFILE.id}
+      initialMatters={DEMO_MATTERS}
+      initialEntries={DEMO_TIME_ENTRIES}
+      previewMode
     />
   );
 }

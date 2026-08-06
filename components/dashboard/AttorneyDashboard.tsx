@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   Briefcase,
@@ -10,8 +11,10 @@ import {
   Clock,
   Flag,
   Inbox,
+  Receipt,
   Scale,
   StickyNote,
+  UserPlus,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { KPICard } from "@/components/ui/KPICard";
@@ -50,6 +53,7 @@ import {
   getAttorneyReviewMatterHref,
   getAttorneyReviewRelatedWorkHref,
   getAttorneySummaryCounts,
+  getAttorneyTimeExpenseReminders,
   getUpcomingAttorneyDeadlines,
 } from "@/lib/attorney/dashboard-data";
 
@@ -130,8 +134,10 @@ function urgencyBadge(iso: string) {
 }
 
 export function AttorneyDashboard() {
+  const searchParams = useSearchParams();
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const counts = getAttorneySummaryCounts();
+  const timeReminders = getAttorneyTimeExpenseReminders();
   const updatedAt = useMemo(() => new Date().toLocaleString(), []);
   const matters = getAttorneyMatters();
   const clients = useMemo(() => {
@@ -160,6 +166,13 @@ export function AttorneyDashboard() {
     () => getAttorneyAlerts().filter((a) => matchesAlertFilters(a, filters, matters)),
     [filters, matters],
   );
+
+  useEffect(() => {
+    const focus = searchParams.get("focus");
+    if (focus === "reviews" || focus === "issue") {
+      document.getElementById("review-inbox")?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [searchParams]);
 
   const summaryCards = [
     {
@@ -244,11 +257,6 @@ export function AttorneyDashboard() {
               <CheckSquare className="h-4 w-4" /> Review Assigned Tasks
             </Button>
           </Link>
-          <Link href="#review-inbox">
-            <Button variant="secondary">
-              <Inbox className="h-4 w-4" /> Open Review Inbox
-            </Button>
-          </Link>
           <Link href="/attorney/time">
             <Button variant="secondary">
               <Clock className="h-4 w-4" /> Log Time
@@ -267,6 +275,16 @@ export function AttorneyDashboard() {
           <Link href="/attorney/notes">
             <Button variant="secondary">
               <StickyNote className="h-4 w-4" /> Case Notes
+            </Button>
+          </Link>
+          <Link href="/clients/new">
+            <Button variant="secondary">
+              <UserPlus className="h-4 w-4" /> Add Client
+            </Button>
+          </Link>
+          <Link href="/clients">
+            <Button variant="secondary">
+              <Briefcase className="h-4 w-4" /> Manage Clients
             </Button>
           </Link>
         </div>
@@ -329,13 +347,12 @@ export function AttorneyDashboard() {
         </div>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <div id="review-inbox">
+      <div id="review-inbox">
         <Card>
           <CardHeader>
             <CardTitle>Review inbox</CardTitle>
             <CardDescription>
-              Work submitted by the paralegal for your decision. Approve, return, or request clarification in Attorney Hub.
+              Work submitted by the paralegal for your decision. Approve, return, or request clarification from the related matter.
             </CardDescription>
           </CardHeader>
           <ul className="space-y-3">
@@ -386,7 +403,71 @@ export function AttorneyDashboard() {
             )}
           </ul>
         </Card>
-        </div>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Time &amp; expense reminders</CardTitle>
+            <CardDescription>
+              Track billable work on your matters and review team submissions. You cannot approve your own write-downs or edit invoiced entries.
+            </CardDescription>
+          </CardHeader>
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            <div className="rounded-lg bg-gray-50 p-3">
+              <dt className="text-xs font-semibold uppercase text-muted">Time on my matters today</dt>
+              <dd className="mt-1 text-lg font-semibold text-navy-900">
+                {timeReminders.hoursToday.toFixed(1)} hrs
+              </dd>
+            </div>
+            <div className="rounded-lg bg-gray-50 p-3">
+              <dt className="text-xs font-semibold uppercase text-muted">Entries awaiting review</dt>
+              <dd className="mt-1 text-lg font-semibold text-navy-900">
+                {timeReminders.pendingReview.length}
+              </dd>
+            </div>
+            <div className="rounded-lg bg-gray-50 p-3">
+              <dt className="text-xs font-semibold uppercase text-muted">My draft entries</dt>
+              <dd className="mt-1 text-lg font-semibold text-navy-900">
+                {timeReminders.drafts.length}
+              </dd>
+            </div>
+            <div className="rounded-lg bg-gray-50 p-3">
+              <dt className="text-xs font-semibold uppercase text-muted">Expenses needing attention</dt>
+              <dd className="mt-1 text-lg font-semibold text-navy-900">
+                {timeReminders.expensesNeedingReview.length}
+              </dd>
+            </div>
+          </dl>
+          {timeReminders.rejected[0] && (
+            <p className="mt-3 text-sm text-red-800">
+              Latest rejection: {timeReminders.rejected[0].rejectionReason}
+            </p>
+          )}
+          {timeReminders.billingCutoff && (
+            <p className="mt-2 text-sm text-muted">
+              Billing cutoff: {dueLabel(timeReminders.billingCutoff.dueAt)} —{" "}
+              {timeReminders.billingCutoff.requiredAction}
+            </p>
+          )}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/attorney/time">
+              <Button size="sm">
+                <Clock className="h-3.5 w-3.5" /> Log Time
+              </Button>
+            </Link>
+            <Link href="/attorney/time">
+              <Button size="sm" variant="secondary">
+                Review Time Entries
+              </Button>
+            </Link>
+            <Link href="/attorney/expenses">
+              <Button size="sm" variant="secondary">
+                <Receipt className="h-3.5 w-3.5" /> Add Expense
+              </Button>
+            </Link>
+          </div>
+        </Card>
 
         <Card>
           <CardHeader>

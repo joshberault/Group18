@@ -3,10 +3,6 @@ import {
   isAccountingManagerExclusivePath,
   isAccountingManagerRoute,
 } from "@/lib/navigation/accounting-manager-nav";
-import {
-  CLIENT_NAV_ITEMS,
-  isClientPortalRoute,
-} from "@/lib/navigation/client-nav";
 import { NAV_ITEMS, getNavItemsForRole, type NavItem, type RouteKey } from "@/lib/navigation";
 import type { UserRole } from "@/lib/types";
 import { USER_ROLE_LABELS } from "@/lib/types";
@@ -55,8 +51,8 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
       "billing",
       "invoices",
       "receivables",
+      "accounting",
       "reports",
-      "client_portal",
     ],
     dashboardTitle: "Managing Partner Dashboard",
     dashboardDescription:
@@ -94,6 +90,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
     permissions: [
       "view_assigned_matters",
       "view_own_matters",
+      "manage_clients",
       "enter_time",
       "manage_tasks",
       "create_invoices",
@@ -101,7 +98,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   paralegal: {
     displayName: USER_ROLE_LABELS.paralegal,
-    defaultRoute: "/attorney/dashboard",
+    defaultRoute: "/dashboard",
     allowedRoutes: [
       "dashboard",
       "attorney_hub",
@@ -133,7 +130,6 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
       "invoices",
       "receivables",
       "reports",
-      "trust_accounting",
     ],
     dashboardTitle: "Billing Operations Dashboard",
     dashboardDescription:
@@ -188,13 +184,8 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
       "dashboard",
       "clients",
       "matters",
-      "admin",
-      "billing",
-      "invoices",
-      "receivables",
-      "accounting",
+      "tasks",
       "reports",
-      "client_portal",
     ],
     dashboardTitle: "Firm Administration Dashboard",
     dashboardDescription:
@@ -209,8 +200,8 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   client: {
     displayName: USER_ROLE_LABELS.client,
-    defaultRoute: "/client-portal/account-summary",
-    allowedRoutes: ["dashboard", "client_portal"],
+    defaultRoute: "/client-portal",
+    allowedRoutes: ["client_portal"],
     dashboardTitle: "Client Portal",
     dashboardDescription:
       "Your matters, invoices, and trust balance summary.",
@@ -235,29 +226,18 @@ export function hasPermission(role: UserRole, permission: Permission): boolean {
 }
 
 export function pathnameToRouteKey(pathname: string): RouteKey | null {
-  const match = NAV_ITEMS.filter(
+  const match = NAV_ITEMS.find(
     (item) =>
       pathname === item.href || pathname.startsWith(`${item.href}/`),
-  ).sort((a, b) => b.href.length - a.href.length)[0];
+  );
   return match?.routeKey ?? null;
 }
 
 function canAccessStandardRoute(role: UserRole, pathname: string): boolean {
-  // Portal hub + feature pages: clients use sidebar tabs; staff still open
-  // features from the Client Portal hub card grid.
-  if (pathname === "/client-portal" || pathname.startsWith("/client-portal/")) {
-    return (
-      role === "client" ||
-      role === "managing_partner" ||
-      role === "firm_administrator"
-    );
-  }
-
-  // Prefer the longest matching href when several NAV_ITEMS could match.
-  const matchingItem = NAV_ITEMS.filter(
+  const matchingItem = NAV_ITEMS.find(
     (item) =>
       pathname === item.href || pathname.startsWith(`${item.href}/`),
-  ).sort((a, b) => b.href.length - a.href.length)[0];
+  );
 
   if (matchingItem) {
     return matchingItem.roles?.includes(role) ?? false;
@@ -284,13 +264,6 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
     return isAccountingManagerRoute(pathname);
   }
 
-  if (role === "client") {
-    return (
-      pathname === "/dashboard" ||
-      isClientPortalRoute(pathname)
-    );
-  }
-
   // Billing Specialist may open Client Trust Accounts from the firm Dashboard KPI.
   if (
     role === "billing_specialist" &&
@@ -304,21 +277,12 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
     return false;
   }
 
-  // Firm administrator accounting summary only — not AM-exclusive sub-routes.
-  if (role === "firm_administrator" && pathname.startsWith("/accounting/")) {
-    return pathname === "/accounting/trust";
-  }
-
   return canAccessStandardRoute(role, pathname);
 }
 
 export function getNavigationForRole(role: UserRole): NavItem[] {
   if (role === "accounting_manager") {
     return ACCOUNTING_MANAGER_NAV_ITEMS;
-  }
-
-  if (role === "client") {
-    return CLIENT_NAV_ITEMS;
   }
 
   return getNavItemsForRole(role);
