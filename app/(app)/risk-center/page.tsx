@@ -1,11 +1,11 @@
 import { DemoRoleGuard } from "@/components/auth/DemoRoleGuard";
-import { ReportsContent } from "@/components/analytics/ReportsContent";
+import { RiskCenterContent } from "@/components/analytics/RiskCenterContent";
 import { ANALYTICS_ROLES } from "@/lib/analytics/types";
 
-export default function ReportsPage() {
+export default function RiskCenterPage() {
   return (
     <DemoRoleGuard allowedRoles={[...ANALYTICS_ROLES]}>
-      <ReportsContent />
+      <RiskCenterContent />
     </DemoRoleGuard>
   );
 }
