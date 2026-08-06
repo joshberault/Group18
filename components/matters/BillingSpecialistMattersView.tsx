@@ -229,23 +229,53 @@ export function BillingSpecialistMattersView() {
                   </Badge>
                 </TableCell>
                 <TableCell>{row.nextBillingDate}</TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+                <TableCell className="align-middle">
+                  <div
+                    className={
+                      row.hasInvoices
+                        ? "grid w-[14.5rem] grid-cols-2 gap-1.5"
+                        : "flex w-[14.5rem] flex-col items-center gap-1.5"
+                    }
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      size="sm"
+                      type="button"
+                      className={
+                        row.hasInvoices
+                          ? "w-full justify-center whitespace-nowrap"
+                          : "min-w-[7.5rem] justify-center whitespace-nowrap"
+                      }
+                      onClick={() => goCreateInvoice(row)}
+                    >
+                      Create Invoice
+                    </Button>
                     {row.hasInvoices ? (
-                      <Link href={viewInvoicesPath(row)}>
-                        <Button size="sm" variant="secondary" type="button">
+                      <Link
+                        href={viewInvoicesPath(row)}
+                        className="block min-w-0"
+                      >
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          type="button"
+                          className="w-full justify-center whitespace-nowrap"
+                        >
                           View Invoice
                         </Button>
                       </Link>
                     ) : null}
                     <Button
                       size="sm"
+                      variant="ghost"
                       type="button"
-                      onClick={() => goCreateInvoice(row)}
+                      className={
+                        row.hasInvoices
+                          ? "col-span-2 w-full justify-center"
+                          : "w-full max-w-[14.5rem] justify-center"
+                      }
+                      onClick={() => setSelected(row)}
                     >
-                      Create Invoice
-                    </Button>
-                    <Button size="sm" variant="ghost" type="button" onClick={() => setSelected(row)}>
                       Details
                     </Button>
                   </div>
@@ -279,18 +309,52 @@ export function BillingSpecialistMattersView() {
                 manual invoice; already-billed lines will not reappear as selectable WIP.
               </p>
             ) : null}
-            <div className="flex flex-wrap gap-2">
+            <div
+              className={
+                selected.hasInvoices
+                  ? "grid grid-cols-2 gap-2 sm:grid-cols-3"
+                  : "flex flex-col items-center gap-2 sm:flex-row sm:justify-center"
+              }
+            >
+              <Button
+                size="sm"
+                type="button"
+                className={
+                  selected.hasInvoices
+                    ? "w-full justify-center whitespace-nowrap"
+                    : "min-w-[7.5rem] justify-center whitespace-nowrap sm:w-auto"
+                }
+                onClick={() => goCreateInvoice(selected)}
+              >
+                Create Invoice
+              </Button>
               {selected.hasInvoices ? (
-                <Link href={viewInvoicesPath(selected)}>
-                  <Button size="sm" variant="secondary" type="button">
+                <Link href={viewInvoicesPath(selected)} className="block min-w-0">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    type="button"
+                    className="w-full justify-center whitespace-nowrap"
+                  >
                     View Invoice
                   </Button>
                 </Link>
               ) : null}
-              <Button size="sm" type="button" onClick={() => goCreateInvoice(selected)}>
-                Create Invoice
-              </Button>
-              <Button size="sm" variant="secondary" type="button" onClick={() => router.push(`/billing?matter=${encodeURIComponent(selected.matterNumber)}`)}>
+              <Button
+                size="sm"
+                variant="secondary"
+                type="button"
+                className={
+                  selected.hasInvoices
+                    ? "w-full justify-center whitespace-nowrap"
+                    : "min-w-[7.5rem] justify-center whitespace-nowrap sm:w-auto"
+                }
+                onClick={() =>
+                  router.push(
+                    `/billing?matter=${encodeURIComponent(selected.matterNumber)}`,
+                  )
+                }
+              >
                 Open Billing
               </Button>
             </div>

@@ -125,7 +125,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   billing_specialist: {
     displayName: USER_ROLE_LABELS.billing_specialist,
-    defaultRoute: "/dashboard",
+    defaultRoute: "/billing",
     allowedRoutes: [
       "dashboard",
       "clients",
