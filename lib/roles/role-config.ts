@@ -3,6 +3,7 @@ import {
   isAccountingManagerExclusivePath,
   isAccountingManagerRoute,
 } from "@/lib/navigation/accounting-manager-nav";
+import { CLIENT_NAV_ITEMS } from "@/lib/navigation/client-nav";
 import { NAV_ITEMS, getNavItemsForRole, type NavItem, type RouteKey } from "@/lib/navigation";
 import type { UserRole } from "@/lib/types";
 import { USER_ROLE_LABELS } from "@/lib/types";
@@ -53,6 +54,8 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
       "receivables",
       "accounting",
       "reports",
+      "analytics",
+      "risk_center",
     ],
     dashboardTitle: "Managing Partner Dashboard",
     dashboardDescription:
@@ -283,6 +286,10 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
 export function getNavigationForRole(role: UserRole): NavItem[] {
   if (role === "accounting_manager") {
     return ACCOUNTING_MANAGER_NAV_ITEMS;
+  }
+
+  if (role === "client") {
+    return CLIENT_NAV_ITEMS;
   }
 
   return getNavItemsForRole(role);

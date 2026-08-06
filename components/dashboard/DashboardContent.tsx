@@ -130,6 +130,7 @@ function DashboardKpiCard({
   trend,
   href,
   interactive,
+  variant = "default",
 }: {
   title: string;
   value: string;
@@ -138,6 +139,7 @@ function DashboardKpiCard({
   trend?: string;
   href?: string;
   interactive: boolean;
+  variant?: "default" | "success";
 }) {
   const card = (
     <KPICard
@@ -146,6 +148,7 @@ function DashboardKpiCard({
       subtitle={subtitle}
       icon={icon}
       trend={trend}
+      variant={variant}
       className={interactive ? "transition-shadow hover:shadow-md" : undefined}
     />
   );
@@ -479,6 +482,7 @@ export function DashboardContent() {
           icon={Briefcase}
           href={firmKpiHref("activeMatters")}
           interactive={kpiInteractive}
+          variant="success"
         />
         <DashboardKpiCard
           title="Unbilled Time"

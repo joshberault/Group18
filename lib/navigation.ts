@@ -16,13 +16,38 @@ import {
 } from "lucide-react";
 import type { UserRole } from "@/lib/types";
 
+export type RouteKey =
+  | "dashboard"
+  | "clients"
+  | "matters"
+  | "attorney_hub"
+  | "time"
+  | "tasks"
+  | "calendar"
+  | "notes"
+  | "billing"
+  | "invoices"
+  | "receivables"
+  | "accounting"
+  | "reports"
+  | "analytics"
+  | "risk_center"
+  | "client_portal"
+  | "trust_accounting"
+  | "revenue_ledger"
+  | "banking"
+  | "accounts_payable"
+  | "audit_log"
+  | "administration";
+
 export interface NavItem {
+  routeKey: RouteKey;
   label: string;
   href: string;
   icon: LucideIcon;
   description?: string;
-  /** Demo roles that can see this nav item */
-  roles: UserRole[];
+  /** Demo roles that can see this nav item (standard sidebar only) */
+  roles?: UserRole[];
 }
 
 const ALL_ROLES: UserRole[] = [
@@ -48,6 +73,7 @@ const BILLING_TEAM: UserRole[] = [
  */
 export const NAV_ITEMS: NavItem[] = [
   {
+    routeKey: "dashboard",
     label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
@@ -55,6 +81,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ALL_ROLES,
   },
   {
+    routeKey: "analytics",
     label: "Executive Analytics",
     href: "/dashboard/analytics",
     icon: TrendingUp,
@@ -62,6 +89,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["managing_partner"],
   },
   {
+    routeKey: "clients",
     label: "Clients",
     href: "/clients",
     icon: Users,
@@ -69,6 +97,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: STAFF,
   },
   {
+    routeKey: "matters",
     label: "Matters",
     href: "/matters",
     icon: Briefcase,
@@ -76,6 +105,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: STAFF,
   },
   {
+    routeKey: "administration",
     label: "Admin/Staff Information",
     href: "/admin",
     icon: UserCog,
@@ -84,6 +114,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["firm_administrator"],
   },
   {
+    routeKey: "attorney_hub",
     label: "Attorney Hub",
     href: "/attorney/dashboard",
     icon: Briefcase,
@@ -91,6 +122,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ATTORNEY_TEAM,
   },
   {
+    routeKey: "time",
     label: "Time & Expenses",
     href: "/attorney/time",
     icon: Clock,
@@ -98,6 +130,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: [...ATTORNEY_TEAM, "billing_specialist"],
   },
   {
+    routeKey: "tasks",
     label: "Tasks & Deadlines",
     href: "/attorney/tasks",
     icon: ListTodo,
@@ -105,6 +138,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ATTORNEY_TEAM,
   },
   {
+    routeKey: "billing",
     label: "Billing",
     href: "/billing",
     icon: Receipt,
@@ -112,6 +146,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: BILLING_TEAM,
   },
   {
+    routeKey: "invoices",
     label: "Invoices & Collections",
     href: "/invoices",
     icon: FileText,
@@ -119,6 +154,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: BILLING_TEAM,
   },
   {
+    routeKey: "accounting",
     label: "Accounting",
     href: "/accounting",
     icon: Calculator,
@@ -126,6 +162,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: BILLING_TEAM,
   },
   {
+    routeKey: "reports",
     label: "Reports",
     href: "/reports",
     icon: BarChart3,
@@ -133,6 +170,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["managing_partner"],
   },
   {
+    routeKey: "risk_center",
     label: "Risk Center",
     href: "/risk-center",
     icon: ShieldAlert,
@@ -140,6 +178,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["managing_partner"],
   },
   {
+    routeKey: "client_portal",
     label: "Client Portal",
     href: "/client-portal",
     icon: UserCircle,
@@ -147,6 +186,10 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["client", "managing_partner", "firm_administrator"],
   },
 ];
+
+export function getNavItemsForRole(role: UserRole): NavItem[] {
+  return NAV_ITEMS.filter((item) => item.roles?.includes(role) ?? false);
+}
 
 export function getNavRoles(href: string): UserRole[] {
   const item = NAV_ITEMS.find((nav) => nav.href === href);
