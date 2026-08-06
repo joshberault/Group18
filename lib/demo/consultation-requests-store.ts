@@ -51,7 +51,7 @@ export type ConsultationRequestPayload = {
   legalServices: ConsultationLegalServiceId[];
   otherLegalServiceDetails?: string;
   availability: ConsultationAvailability[];
-  additionalInfo?: string;
+  additionalInfo: string;
 };
 
 export type ConsultationRequestRecord = ConsultationRequestPayload & {
@@ -142,12 +142,8 @@ export function formatConsultationDetails(
     `Preferred contact: ${contactLabel}`,
     `Legal services: ${services}`,
     `Availability:\n${availability}`,
-    payload.additionalInfo?.trim()
-      ? `Additional information: ${payload.additionalInfo.trim()}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
+    `Additional information: ${payload.additionalInfo.trim()}`,
+  ].join("\n");
 }
 
 export function resolveConsultationMatter(
