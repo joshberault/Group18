@@ -31,14 +31,7 @@ import {
   uniquePracticeAreas,
   workloadBoardClassificationLabel,
 } from "@/lib/admin/calculations";
-import {
-  ADMIN_REFERENCE_DATE,
-  ADMIN_UI_FLAGS,
-  MOCK_ASSIGNMENTS,
-  MOCK_EMPLOYEES,
-  MOCK_PRODUCTIVITY,
-  MOCK_VACATIONS,
-} from "@/lib/admin/mock-data";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 import type {
   AdminWorkloadBoardRow,
   EmploymentStatus,
@@ -63,7 +56,7 @@ function statusLabel(status: EmploymentStatus) {
 }
 
 export function WorkloadBoard() {
-  const [hasError, setHasError] = useState(ADMIN_UI_FLAGS.forceError);
+  const { data, loading, error, refresh } = useAdminData();
   const [nameFilter, setNameFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [practiceFilter, setPracticeFilter] = useState("all");
@@ -80,33 +73,28 @@ export function WorkloadBoard() {
   const [sortKey, setSortKey] = useState<WorkloadBoardSortKey>("workload_high");
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  /**
-   * Workload recalculates from mock assignment + leave data on this page.
-   * Assignment edits on /admin/assignments use separate local state and are not
-   * shared here until Supabase (or shared client store) is wired.
-   */
   const rows = useMemo(
     () =>
       buildWorkloadBoardRows(
-        MOCK_EMPLOYEES,
-        MOCK_ASSIGNMENTS,
-        MOCK_VACATIONS,
-        ADMIN_REFERENCE_DATE,
+        data?.employees ?? [],
+        data?.assignments ?? [],
+        data?.vacations ?? [],
+        data?.referenceDate ?? "",
       ),
-    [],
+    [data],
   );
 
   const roleOptions = useMemo(
     () =>
-      [...new Set(MOCK_EMPLOYEES.map((e) => e.roleLabel))].sort((a, b) =>
+      [...new Set((data?.employees ?? []).map((e) => e.roleLabel))].sort((a, b) =>
         a.localeCompare(b),
       ),
-    [],
+    [data?.employees],
   );
 
   const practiceOptions = useMemo(
-    () => uniquePracticeAreas(MOCK_EMPLOYEES),
-    [],
+    () => uniquePracticeAreas(data?.employees ?? []),
+    [data?.employees],
   );
 
   const filtered = useMemo(() => {
@@ -166,26 +154,24 @@ export function WorkloadBoard() {
     setSortKey("workload_high");
   }
 
-  if (ADMIN_UI_FLAGS.forceLoading) {
+  if (loading) {
     return <LoadingState message="Loading workload board..." />;
   }
 
-  if (hasError) {
+  if (error || !data) {
     return (
       <Card className="border-red-200 bg-red-50" padding="lg">
         <CardHeader>
           <CardTitle className="text-red-800">Unable to load workload</CardTitle>
           <CardDescription className="text-red-700">
-            Local mock workload data could not be loaded.
+            {error ?? "Live firm data could not be loaded."}
           </CardDescription>
         </CardHeader>
         <Button
           variant="secondary"
-          onClick={() => {
-            setHasError(false);
-          }}
+          onClick={() => void refresh()}
         >
-          Retry with mock data
+          Retry
         </Button>
       </Card>
     );
@@ -194,11 +180,11 @@ export function WorkloadBoard() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Mock data:</strong>{" "}
+        <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
         Workload % = open estimated assignment hours ÷ weekly capacity. Actual
         hours are shown separately and are not mixed into the percentage.
         Assignment changes on the Assignments page use separate local state and
-        will persist here after Supabase integration.
+        is based on the current Supabase dataset.
       </div>
 
       <Card padding="md">
@@ -208,7 +194,7 @@ export function WorkloadBoard() {
             <CardDescription>
               Available &lt;60% · Balanced 60–89% · Near Capacity 90–100% · Over
               Capacity &gt;100% · Unavailable = inactive or current approved
-              leave. Reference date {ADMIN_REFERENCE_DATE}.
+              leave. Reference date {data.referenceDate}.
             </CardDescription>
           </div>
           <Select
@@ -464,7 +450,7 @@ export function WorkloadBoard() {
         )}
       </Card>
 
-      <ProductivityMetrics metrics={MOCK_PRODUCTIVITY} />
+      <ProductivityMetrics metrics={data.productivity} />
 
       <p className="text-xs text-muted">
         Assignment links include <code>employeeId</code> (and{" "}

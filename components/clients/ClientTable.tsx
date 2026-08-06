@@ -29,6 +29,7 @@ export function ClientTable({ clients, permissions }: ClientTableProps) {
         <TableRow>
           <TableHead>Client #</TableHead>
           <TableHead>Name</TableHead>
+          <TableHead>Assigned attorney</TableHead>
           <TableHead>Type</TableHead>
           <TableHead>Primary contact</TableHead>
           <TableHead>Email</TableHead>
@@ -44,6 +45,7 @@ export function ClientTable({ clients, permissions }: ClientTableProps) {
           <TableRow key={client.id}>
             <TableCell className="font-medium">{client.client_number}</TableCell>
             <TableCell>{displayClientName(client)}</TableCell>
+            <TableCell>{client.assigned_attorney_name || "—"}</TableCell>
             <TableCell>{CLIENT_TYPE_LABELS[client.client_type]}</TableCell>
             <TableCell>{client.primary_contact_name || "—"}</TableCell>
             <TableCell>{client.email || "—"}</TableCell>

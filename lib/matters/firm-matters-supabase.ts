@@ -48,6 +48,9 @@ export type SharedFirmMatter = {
   billedToDate: number;
   collectedToDate: number;
   lastInvoiceDate: string | null;
+  /** Non-cancelled invoices in shared catalog for this matter (`matter_id`). */
+  invoiceCount: number;
+  hasInvoices: boolean;
 };
 
 export type FirmMattersResult = {
@@ -175,11 +178,17 @@ function findInvoiceDateAndTotals(
   matterId: string,
   matterTitle: string,
   invoices: Invoice[],
-): { lastInvoice: string | null; billed: number; collected: number } {
+): {
+  lastInvoice: string | null;
+  billed: number;
+  collected: number;
+  invoiceCount: number;
+} {
   const titleKey = matterTitle.trim().toLowerCase();
   let best: string | null = null;
   let billed = 0;
   let collected = 0;
+  let invoiceCount = 0;
   for (const inv of invoices) {
     if (inv.status === "Cancelled") continue;
     const byId = inv.matterId && inv.matterId === matterId;
@@ -187,6 +196,7 @@ function findInvoiceDateAndTotals(
       Boolean(titleKey) &&
       (inv.legalMatter || "").trim().toLowerCase() === titleKey;
     if (!byId && !byTitle) continue;
+    invoiceCount += 1;
     billed += Number(inv.totalAmount) || 0;
     collected += Number(inv.amountPaid) || 0;
     const date = (inv.invoiceDate || "").slice(0, 10);
@@ -196,6 +206,7 @@ function findInvoiceDateAndTotals(
     lastInvoice: best,
     billed: roundMoney(billed),
     collected: roundMoney(collected),
+    invoiceCount,
   };
 }
 
@@ -454,7 +465,12 @@ export async function fetchSharedFirmMatters(
       const openDate = (m.created_at || "").slice(0, 10) || "—";
       const invoiceMeta = includeWip
         ? findInvoiceDateAndTotals(id, title, invoices)
-        : { lastInvoice: null, billed: 0, collected: 0 };
+        : {
+            lastInvoice: null,
+            billed: 0,
+            collected: 0,
+            invoiceCount: 0,
+          };
 
       return {
         id,
@@ -487,6 +503,8 @@ export async function fetchSharedFirmMatters(
         office: officeFromClient(clientEmbed),
         unbilledWip: roundMoney(unbilledTimeByMatter.get(id) ?? 0),
         unbilledExpenses: roundMoney(unbilledExpenseByMatter.get(id) ?? 0),
+        invoiceCount: invoiceMeta.invoiceCount,
+        hasInvoices: invoiceMeta.invoiceCount > 0,
         billedToDate: invoiceMeta.billed,
         collectedToDate: invoiceMeta.collected,
         lastInvoiceDate: invoiceMeta.lastInvoice,

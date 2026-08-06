@@ -14,6 +14,7 @@ import type {
 } from "@/lib/billing/generate-invoice-types";
 import { toIsoDate } from "@/lib/billing/billing-period";
 import { fetchClientRetainerBalance } from "@/lib/billing/retainer";
+import { createClientSafe } from "@/lib/supabase/client";
 
 export type CatalogSource = "counselflow" | "empty";
 
@@ -56,6 +57,48 @@ function currentBillingPeriod(): string {
   return `${y}-${m}`;
 }
 
+/** Lead / first assigned attorney names from matter_assignments + profiles. */
+async function loadAttorneyNamesByMatter(
+  matterIds: string[],
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (matterIds.length === 0) return map;
+  const supabase = createClientSafe();
+  if (!supabase) return map;
+  try {
+    const { data } = await supabase
+      .from("matter_assignments")
+      .select("matter_id, role_on_matter, profile:profiles(full_name)")
+      .in("matter_id", matterIds);
+    type Row = {
+      matter_id?: string;
+      role_on_matter?: string | null;
+      profile?:
+        | { full_name?: string | null }
+        | { full_name?: string | null }[]
+        | null;
+    };
+    for (const row of (data ?? []) as Row[]) {
+      const mid = row.matter_id ? String(row.matter_id) : "";
+      if (!mid) continue;
+      const prof = row.profile;
+      const name = Array.isArray(prof)
+        ? (prof[0]?.full_name || "").trim()
+        : (prof?.full_name || "").trim();
+      if (!name) continue;
+      const role = (row.role_on_matter || "").toLowerCase();
+      const prefer =
+        role === "lead_attorney" || role === "responsible_attorney";
+      if (prefer || !map.has(mid)) {
+        map.set(mid, name);
+      }
+    }
+  } catch {
+    /* leave map empty */
+  }
+  return map;
+}
+
 /** Map a firm CRM client into the Generate Invoice client shape. */
 export function mapFirmClientToGenerate(client: FirmClient): GenerateClient {
   return {
@@ -92,6 +135,7 @@ export async function enrichClientWithRetainerBalance(
 export function mapRelatedMatterToGenerate(
   matter: RelatedMatterSummary,
   firmClientId: string,
+  responsibleAttorney?: string | null,
 ): GenerateMatter {
   const short = matter.id.replace(/-/g, "").slice(0, 8).toUpperCase();
   return {
@@ -99,7 +143,8 @@ export function mapRelatedMatterToGenerate(
     clientId: firmClientId,
     matterName: matter.title || "Untitled matter",
     matterNumber: `NV-M-${short}`,
-    responsibleAttorney: "Assigned counsel",
+    responsibleAttorney:
+      (responsibleAttorney || "").trim() || "Assigned counsel",
     status: mapMatterStatus(matter.status),
     billingPeriod: currentBillingPeriod(),
     timeEntries: [],
@@ -152,7 +197,7 @@ export async function loadBillingClients(): Promise<BillingClientCatalog> {
 /**
  * Load matters for the selected firm client from CounselFlow matters (by client_id).
  * Excludes archived. Prefers open; includes closed so demos with closed-only
- * matters remain billable.
+ * matters remain billable. Attorney names come from matter_assignments + profiles.
  */
 export async function loadBillingMattersForClient(
   firmClientId: string,
@@ -206,8 +251,18 @@ export async function loadBillingMattersForClient(
     ? null
     : "No open matters for this client. Closed matters are listed so you can still create an invoice.";
 
+  const attorneyByMatter = await loadAttorneyNamesByMatter(
+    sorted.map((m) => m.id),
+  );
+
   return {
-    matters: sorted.map((m) => mapRelatedMatterToGenerate(m, firmClientId)),
+    matters: sorted.map((m) =>
+      mapRelatedMatterToGenerate(
+        m,
+        firmClientId,
+        attorneyByMatter.get(m.id) ?? null,
+      ),
+    ),
     source: "counselflow",
     message,
   };

@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, FileUser } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { Modal } from "@/components/ui/Modal";
 import {
   Table,
@@ -15,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/Table";
-import { MOCK_JOB_APPLICATIONS } from "@/lib/admin/job-applications-data";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 import type {
   AdminJobApplication,
   JobApplicationStatus,
@@ -30,13 +31,16 @@ function applicationStatusBadge(status: JobApplicationStatus) {
 
 /** Pending career applications / interviews for Firm Administrator review. */
 export function JobApplicationsPanel({ className }: { className?: string }) {
-  const [applications, setApplications] = useState<AdminJobApplication[]>(() =>
-    MOCK_JOB_APPLICATIONS.map((row) => ({ ...row })),
-  );
+  const { data, loading, error, refresh } = useAdminData();
+  const [applications, setApplications] = useState<AdminJobApplication[]>([]);
   const [selectedApplicationId, setSelectedApplicationId] = useState<
     string | null
   >(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (data) setApplications(data.jobApplications.map((row) => ({ ...row })));
+  }, [data]);
 
   const openApplications = useMemo(
     () =>
@@ -63,12 +67,30 @@ export function JobApplicationsPanel({ className }: { className?: string }) {
     setApplications((prev) =>
       prev.map((row) => (row.id === id ? { ...row, status } : row)),
     );
-    setMessage(`${label} (local demo state only).`);
+    setMessage(`${label} (local page state only).`);
     setSelectedApplicationId(null);
   }
 
   return (
     <div className={className}>
+      {loading ? (
+        <LoadingState message="Loading job applications..." />
+      ) : error || !data ? (
+        <Card className="border-red-200 bg-red-50" padding="lg">
+          <CardHeader>
+            <CardTitle className="text-red-800">
+              Unable to load job applications
+            </CardTitle>
+            <CardDescription className="text-red-700">
+              {error ?? "Live firm data could not be loaded."}
+            </CardDescription>
+          </CardHeader>
+          <Button variant="secondary" onClick={() => void refresh()}>
+            Retry
+          </Button>
+        </Card>
+      ) : (
+        <>
       {message && (
         <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
           {message}
@@ -176,7 +198,7 @@ export function JobApplicationsPanel({ className }: { className?: string }) {
             ? `Application — ${selectedApplication.applicantName}`
             : "Application"
         }
-        description="Local demo review only. Hiring decisions are not written to Supabase yet."
+        description="Hiring decisions update local page state only."
         className="max-w-lg"
       >
         {selectedApplication && (
@@ -270,6 +292,8 @@ export function JobApplicationsPanel({ className }: { className?: string }) {
           </div>
         )}
       </Modal>
+        </>
+      )}
     </div>
   );
 }

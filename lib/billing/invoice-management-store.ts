@@ -525,11 +525,22 @@ export function getInvoicedExpenseIds(): Set<string> {
 export function getInvoiceAttorneysFromCatalog(
   invoices: Invoice[] = getAllManagedInvoices(),
 ): string[] {
+  const placeholders = new Set([
+    "",
+    "assigned counsel",
+    "unassigned",
+    "—",
+    "-",
+    "n/a",
+  ]);
   return Array.from(
     new Set(
       invoices
         .map((i) => i.attorney?.trim())
-        .filter((name): name is string => Boolean(name)),
+        .filter(
+          (name): name is string =>
+            Boolean(name) && !placeholders.has(name!.toLowerCase()),
+        ),
     ),
-  ).sort();
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }

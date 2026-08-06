@@ -12,6 +12,8 @@ import {
 /** Same shape as shared-matters BillingMatterRow — live data, not amMatters. */
 export type BillingSpecialistMatterRow = {
   id: string;
+  /** Firm client UUID (clients.id) when known. */
+  clientId: string | null;
   matterNumber: string;
   matterName: string;
   client: string;
@@ -25,6 +27,9 @@ export type BillingSpecialistMatterRow = {
   billingHold: boolean;
   lastInvoice: string;
   nextBillingDate: string;
+  /** Non-cancelled invoices for this matter in the shared catalog. */
+  invoiceCount: number;
+  hasInvoices: boolean;
   /** Optional drawer extras from matter row */
   hourlyRate: number | null;
   retainerBalance: number | null;
@@ -52,6 +57,7 @@ function toBillingRow(m: SharedFirmMatter): BillingSpecialistMatterRow {
 
   return {
     id: m.id,
+    clientId: m.clientId,
     matterNumber: m.matterNumber,
     matterName: m.title,
     client: m.clientName,
@@ -65,6 +71,8 @@ function toBillingRow(m: SharedFirmMatter): BillingSpecialistMatterRow {
     billingHold: m.conflictFlag,
     lastInvoice: m.lastInvoiceDate ?? "—",
     nextBillingDate: "—",
+    invoiceCount: m.invoiceCount,
+    hasInvoices: m.hasInvoices,
     hourlyRate: m.hourlyRate,
     retainerBalance: m.retainerBalance ?? m.retainerAmount,
   };

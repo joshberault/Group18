@@ -233,6 +233,7 @@ export function getNavRoles(href: string): UserRole[] {
 /**
  * Role-aware nav: attorneys get "My Dashboard" instead of firm dashboard;
  * duplicate Attorney Hub link is hidden for attorney/paralegal.
+ * Billing Specialist: Dashboard → Billing Dashboard at /billing; hide separate Billing.
  */
 export function getNavItemsForRole(role: UserRole): NavItem[] {
   return NAV_ITEMS.filter((item) => canAccessNavItem(role, item.roles ?? []))
@@ -257,6 +258,20 @@ export function getNavItemsForRole(role: UserRole): NavItem[] {
           href: "/client-portal",
           description: "Your matters and invoices",
         };
+      }
+      // Billing Specialist operational home is the Billing module (not firm Dashboard).
+      if (role === "billing_specialist" && item.href === "/dashboard") {
+        return {
+          ...item,
+          routeKey: "billing" as RouteKey,
+          label: "Billing Dashboard",
+          href: "/billing",
+          description: "Billing workflows and rate management",
+        };
+      }
+      // Remove duplicate "Billing" once Dashboard is the billing entry point.
+      if (role === "billing_specialist" && item.href === "/billing") {
+        return null;
       }
       return item;
     })

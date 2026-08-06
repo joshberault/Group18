@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -26,14 +26,8 @@ import {
   getVacationStatusLabel,
   uniquePracticeAreas,
 } from "@/lib/admin/calculations";
-import {
-  ADMIN_REFERENCE_DATE,
-  ADMIN_UI_FLAGS,
-  MOCK_ASSIGNMENTS,
-  MOCK_EMPLOYEES,
-  MOCK_MATTERS,
-  MOCK_VACATIONS,
-} from "@/lib/admin/mock-data";
+import { ADMIN_REFERENCE_DATE } from "@/lib/admin/mock-data";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 import type {
   AdminAssignment,
   AdminEmployee,
@@ -87,15 +81,18 @@ const ROLE_OPTIONS = [
   "Of Counsel",
 ];
 
-function emptyForm(): AssignmentFormState {
+function emptyForm(
+  matters: AdminMatter[] = [],
+  referenceDate = ADMIN_REFERENCE_DATE,
+): AssignmentFormState {
   return {
-    matterId: MOCK_MATTERS.find((m) => m.status === "open")?.id ?? "",
+    matterId: matters.find((m) => m.status === "open")?.id ?? "",
     employeeId: "",
     roleOnMatter: "Lead Counsel",
     priority: "medium",
     status: "active",
-    assignedDate: ADMIN_REFERENCE_DATE,
-    startDate: ADMIN_REFERENCE_DATE,
+    assignedDate: referenceDate,
+    startDate: referenceDate,
     dueDate: "2026-08-20",
     estimatedHours: "20",
     managerInstructions: "",
@@ -154,9 +151,8 @@ function workloadImpactLabel(
 }
 
 export function AssignmentsPanel() {
-  const [assignments, setAssignments] = useState<AdminAssignment[]>(() =>
-    MOCK_ASSIGNMENTS.map((row) => ({ ...row })),
-  );
+  const { data, loading, error, refresh } = useAdminData();
+  const [assignments, setAssignments] = useState<AdminAssignment[]>([]);
   const [searchMatter, setSearchMatter] = useState("");
   const [searchEmployee, setSearchEmployee] = useState("");
   const [practiceFilter, setPracticeFilter] = useState("all");
@@ -174,12 +170,15 @@ export function AssignmentsPanel() {
   const [form, setForm] = useState<AssignmentFormState>(emptyForm);
   const [errors, setErrors] = useState<FormErrors>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [hasError, setHasError] = useState(ADMIN_UI_FLAGS.forceError);
   const [pendingSave, setPendingSave] = useState<AdminAssignment | null>(null);
 
+  useEffect(() => {
+    if (data) setAssignments(data.assignments.map((row) => ({ ...row })));
+  }, [data]);
+
   const practiceAreas = useMemo(
-    () => uniquePracticeAreas(MOCK_EMPLOYEES),
-    [],
+    () => uniquePracticeAreas(data?.employees ?? []),
+    [data?.employees],
   );
 
   const selected = useMemo(
@@ -188,13 +187,13 @@ export function AssignmentsPanel() {
   );
 
   const selectedMatter = useMemo(
-    () => MOCK_MATTERS.find((m) => m.id === form.matterId),
-    [form.matterId],
+    () => data?.matters.find((m) => m.id === form.matterId),
+    [data?.matters, form.matterId],
   );
 
   const selectedEmployee = useMemo(
-    () => MOCK_EMPLOYEES.find((e) => e.id === form.employeeId),
-    [form.employeeId],
+    () => data?.employees.find((e) => e.id === form.employeeId),
+    [data?.employees, form.employeeId],
   );
 
   const impactPreview = useMemo(() => {
@@ -210,7 +209,7 @@ export function AssignmentsPanel() {
       priorEstimatedHours: priorEst,
       startDate: form.startDate,
       dueDate: form.dueDate,
-      vacations: MOCK_VACATIONS,
+      vacations: data?.vacations ?? [],
     });
     const projectedAssigned = Math.max(
       0,
@@ -218,8 +217,8 @@ export function AssignmentsPanel() {
     );
     const vacationStatus = getVacationStatusLabel(
       selectedEmployee,
-      MOCK_VACATIONS,
-      ADMIN_REFERENCE_DATE,
+      data?.vacations ?? [],
+      data?.referenceDate ?? ADMIN_REFERENCE_DATE,
     );
     return {
       weeklyCapacity: selectedEmployee.weeklyCapacityHours,
@@ -303,7 +302,7 @@ export function AssignmentsPanel() {
   function openCreate() {
     setSelectedId(null);
     setPendingSave(null);
-    setForm(emptyForm());
+    setForm(emptyForm(data?.matters, data?.referenceDate));
     setErrors({});
     setModalMode("create");
   }
@@ -399,7 +398,7 @@ export function AssignmentsPanel() {
       next.estimatedHours = "Estimated hours must be greater than zero.";
     }
 
-    const employee = MOCK_EMPLOYEES.find((e) => e.id === form.employeeId);
+    const employee = data?.employees.find((e) => e.id === form.employeeId);
     if (employee && employee.status === "inactive") {
       next.employeeId = "Inactive employees cannot be assigned.";
     }
@@ -416,8 +415,8 @@ export function AssignmentsPanel() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
-    const matter = MOCK_MATTERS.find((m) => m.id === form.matterId);
-    const employee = MOCK_EMPLOYEES.find((e) => e.id === form.employeeId);
+    const matter = data?.matters.find((m) => m.id === form.matterId);
+    const employee = data?.employees.find((e) => e.id === form.employeeId);
     if (!matter || !employee) {
       setErrors({ form: "Matter and employee are required." });
       return;
@@ -471,7 +470,7 @@ export function AssignmentsPanel() {
       priorEstimatedHours: priorEst,
       startDate: form.startDate,
       dueDate: form.dueDate,
-      vacations: MOCK_VACATIONS,
+      vacations: data?.vacations ?? [],
     });
 
     const pending = buildAssignmentFromForm(
@@ -541,8 +540,8 @@ export function AssignmentsPanel() {
     const merged = { ...form, ...flags };
     setForm(merged);
 
-    const matter = MOCK_MATTERS.find((m) => m.id === pendingSave.matterId);
-    const employee = MOCK_EMPLOYEES.find((e) => e.id === pendingSave.employeeId);
+    const matter = data?.matters.find((m) => m.id === pendingSave.matterId);
+    const employee = data?.employees.find((e) => e.id === pendingSave.employeeId);
     if (!matter || !employee) {
       setErrors({ form: "Matter and employee are required." });
       return;
@@ -584,7 +583,7 @@ export function AssignmentsPanel() {
       priorEstimatedHours: priorEst,
       startDate: pendingSave.startDate,
       dueDate: pendingSave.dueDate,
-      vacations: MOCK_VACATIONS,
+      vacations: data?.vacations ?? [],
     });
 
     if (
@@ -633,13 +632,15 @@ export function AssignmentsPanel() {
           ? {
               ...item,
               status: "completed",
-              completedDate: ADMIN_REFERENCE_DATE,
+              completedDate: data?.referenceDate ?? ADMIN_REFERENCE_DATE,
               actualHours: item.actualHours ?? item.estimatedHours,
             }
           : item,
       ),
     );
-    setSuccessMessage(`Marked ${row.matterLabel} complete on ${ADMIN_REFERENCE_DATE}.`);
+    setSuccessMessage(
+      `Marked ${row.matterLabel} complete on ${data?.referenceDate ?? ADMIN_REFERENCE_DATE}.`,
+    );
   }
 
   function confirmCancel() {
@@ -663,11 +664,11 @@ export function AssignmentsPanel() {
     closeModal();
   }
 
-  if (ADMIN_UI_FLAGS.forceLoading) {
+  if (loading) {
     return <LoadingState message="Loading assignments..." />;
   }
 
-  if (hasError) {
+  if (error || !data) {
     return (
       <Card className="border-red-200 bg-red-50" padding="lg">
         <CardHeader>
@@ -675,17 +676,14 @@ export function AssignmentsPanel() {
             Unable to load assignments
           </CardTitle>
           <CardDescription className="text-red-700">
-            Local mock assignment data could not be loaded.
+            {error ?? "Live firm data could not be loaded."}
           </CardDescription>
         </CardHeader>
         <Button
           variant="secondary"
-          onClick={() => {
-            setHasError(false);
-            setAssignments(MOCK_ASSIGNMENTS.map((row) => ({ ...row })));
-          }}
+          onClick={() => void refresh()}
         >
-          Retry with mock data
+          Retry
         </Button>
       </Card>
     );
@@ -699,8 +697,8 @@ export function AssignmentsPanel() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Mock data:</strong>{" "}
-        Assignments use existing admin mock employees/matters. Estimated hours
+        <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
+        Assignments use current Supabase employees and matters. Estimated hours
         (planned) are distinct from actual hours (worked). Changes update local
         page state only.
       </div>
@@ -830,7 +828,7 @@ export function AssignmentsPanel() {
             </TableHeader>
             <TableBody>
               {filtered.map((row) => {
-                const employee = MOCK_EMPLOYEES.find(
+                const employee = data.employees.find(
                   (e) => e.id === row.employeeId,
                 );
                 const rowConflicts = employee
@@ -840,7 +838,7 @@ export function AssignmentsPanel() {
                       priorEstimatedHours: 0,
                       startDate: row.startDate,
                       dueDate: row.dueDate,
-                      vacations: MOCK_VACATIONS,
+                      vacations: data.vacations,
                     })
                   : null;
                 const rowWorkload = employee
@@ -971,7 +969,7 @@ export function AssignmentsPanel() {
         isOpen={modalMode === "view" && !!selected}
         onClose={closeModal}
         title="Assignment details"
-        description="Work assignment detail from local mock data."
+        description="Work assignment detail from live firm data."
         className="max-w-2xl"
       >
         {selected && (
@@ -1047,7 +1045,7 @@ export function AssignmentsPanel() {
               value={form.matterId}
               error={errors.matterId}
               onChange={(e) => updateField("matterId", e.target.value)}
-              options={MOCK_MATTERS.map((m) => ({
+              options={data.matters.map((m) => ({
                 value: m.id,
                 label: `${m.matterLabel} (${m.status})`,
               }))}
@@ -1059,7 +1057,7 @@ export function AssignmentsPanel() {
               onChange={(e) => updateField("employeeId", e.target.value)}
               options={[
                 { value: "", label: "Select employee" },
-                ...MOCK_EMPLOYEES.map((e) => ({
+                ...data.employees.map((e) => ({
                   value: e.id,
                   label: `${e.fullName} (${e.status})`,
                 })),
