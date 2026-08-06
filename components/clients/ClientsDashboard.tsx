@@ -87,7 +87,7 @@ export function ClientsDashboard() {
           description={
             role === "paralegal"
               ? "Assigned clients only — update approved contact fields; conflict clearing and status changes are restricted."
-              : "Create, search, and maintain client records. Identify conflict risks before legal work begins."
+              : "Search and maintain client records. Identify conflict risks before legal work begins."
           }
         >
           {permissions.canCreate && (

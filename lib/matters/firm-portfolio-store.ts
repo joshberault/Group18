@@ -48,13 +48,36 @@ function writePatches(patches: Record<string, MatterPatch>) {
   window.dispatchEvent(new Event(FIRM_PORTFOLIO_UPDATE_EVENT));
 }
 
-export function getFirmPortfolioMatters(): FirmPortfolioMatter[] {
-  const seed = buildFirmPortfolioSeed();
+/** Merge localStorage partner edits onto any base portfolio (Supabase or seed). */
+export function applyFirmPortfolioPatches(
+  base: FirmPortfolioMatter[],
+): FirmPortfolioMatter[] {
   const patches = readPatches();
-  return seed.map((matter) => {
+  return base.map((matter) => {
     const patch = patches[matter.id];
     return patch ? { ...matter, ...patch } : matter;
   });
+}
+
+export function getFirmPortfolioMatters(): FirmPortfolioMatter[] {
+  return applyFirmPortfolioPatches(buildFirmPortfolioSeed());
+}
+
+/** Live base portfolio for Managing Partner /matters (set by the view from Supabase). */
+let liveBasePortfolio: FirmPortfolioMatter[] | null = null;
+
+export function setFirmPortfolioBase(
+  base: FirmPortfolioMatter[] | null,
+): void {
+  liveBasePortfolio = base;
+}
+
+export function getFirmPortfolioBaseOrSeed(): FirmPortfolioMatter[] {
+  return liveBasePortfolio ?? buildFirmPortfolioSeed();
+}
+
+export function getLiveFirmPortfolioMatters(): FirmPortfolioMatter[] {
+  return applyFirmPortfolioPatches(getFirmPortfolioBaseOrSeed());
 }
 
 export function updateFirmPortfolioMatter(
@@ -64,7 +87,7 @@ export function updateFirmPortfolioMatter(
   const patches = readPatches();
   patches[id] = { ...(patches[id] ?? {}), ...patch };
   writePatches(patches);
-  return getFirmPortfolioMatters();
+  return getLiveFirmPortfolioMatters();
 }
 
 export function setMatterLifecycle(
@@ -133,5 +156,5 @@ export function resetFirmPortfolioMatters(): FirmPortfolioMatter[] {
     localStorage.removeItem(FIRM_PORTFOLIO_STORAGE_KEY);
     window.dispatchEvent(new Event(FIRM_PORTFOLIO_UPDATE_EVENT));
   }
-  return getFirmPortfolioMatters();
+  return getLiveFirmPortfolioMatters();
 }

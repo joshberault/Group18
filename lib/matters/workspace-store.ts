@@ -336,6 +336,32 @@ export function getMatterStatuses(): MatterCaseStatus[] {
   });
 }
 
+/**
+ * Ensure a case-status seed exists for Supabase matter IDs (not only demo matters).
+ * Merges into localStorage overrides so Case Status works firm-wide.
+ */
+export function ensureMatterCaseStatus(
+  matterId: string,
+  caseType: CaseTypeId,
+  meta: {
+    phase: string;
+    nextDeadline: string;
+    summary: string;
+    completedCount: number;
+  },
+): MatterCaseStatus {
+  const existing = getMatterStatuses().find((s) => s.matterId === matterId);
+  if (existing) return existing;
+
+  const stored = readArray<MatterCaseStatus>(STATUS_KEY);
+  const storedHit = stored.find((s) => s.matterId === matterId);
+  if (storedHit) return storedHit;
+
+  const created = buildStatusFromCaseType(matterId, caseType, meta);
+  persist(STATUS_KEY, [created, ...stored]);
+  return created;
+}
+
 export function saveMatterStatus(status: MatterCaseStatus) {
   const stored = readArray<MatterCaseStatus>(STATUS_KEY);
   persist(STATUS_KEY, [

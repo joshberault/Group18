@@ -118,6 +118,7 @@ export interface BillingMatterRow {
   nextBillingDate: string;
 }
 
+/** @deprecated Billing Specialist Matters uses fetchBillingSpecialistMatterRows (lib/billing/billing-specialist-matters). */
 export function getBillingSpecialistMatterRows(): BillingMatterRow[] {
   return sharedMatters.map((m, index) => ({
     id: m.id,

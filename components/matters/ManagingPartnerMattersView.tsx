@@ -42,12 +42,17 @@ import {
 import {
   assignResponsibleAttorney,
   FIRM_PORTFOLIO_UPDATE_EVENT,
-  getFirmPortfolioMatters,
+  getLiveFirmPortfolioMatters,
   markPartnerReviewed,
   resetFirmPortfolioMatters,
+  setFirmPortfolioBase,
   setMatterFeeTerms,
   setMatterLifecycle,
 } from "@/lib/matters/firm-portfolio-store";
+import {
+  fetchSharedFirmMatters,
+  toFirmPortfolioMatter,
+} from "@/lib/matters/firm-matters-supabase";
 import { cn } from "@/lib/utils/cn";
 
 interface MatterFilters {
@@ -93,6 +98,8 @@ function conflictBadgeVariant(
 export function ManagingPartnerMattersView() {
   const searchParams = useSearchParams();
   const [matters, setMatters] = useState<FirmPortfolioMatter[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<MatterFilters>(defaultFilters);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -105,11 +112,27 @@ export function ManagingPartnerMattersView() {
   });
 
   const refresh = useCallback(() => {
-    setMatters(getFirmPortfolioMatters());
+    setMatters(getLiveFirmPortfolioMatters());
   }, []);
 
   useEffect(() => {
-    refresh();
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      const result = await fetchSharedFirmMatters({ includeWip: true });
+      if (cancelled) return;
+      const mapped = result.matters.map(toFirmPortfolioMatter);
+      setFirmPortfolioBase(mapped);
+      setError(result.error);
+      setMatters(getLiveFirmPortfolioMatters());
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const onUpdate = () => refresh();
     window.addEventListener(FIRM_PORTFOLIO_UPDATE_EVENT, onUpdate);
     window.addEventListener("storage", onUpdate);
@@ -338,12 +361,19 @@ export function ManagingPartnerMattersView() {
           onClick={() => {
             setMatters(resetFirmPortfolioMatters());
             setFilters(defaultFilters);
-            showToast("Demo matter register reset to seed data.");
+            showToast("Partner session edits cleared; Supabase base matters restored.");
           }}
         >
-          Reset demo data
+          Reset session edits
         </Button>
       </PageHeader>
+
+      {error ? (
+        <p className="mb-4 text-sm text-red-700">{error}</p>
+      ) : null}
+      {loading ? (
+        <p className="mb-4 text-sm text-muted">Loading firm matters from CounselFlow…</p>
+      ) : null}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {kpis.map((kpi) => (
@@ -531,10 +561,20 @@ export function ManagingPartnerMattersView() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredMatters.length === 0 ? (
+            {!loading && filteredMatters.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="py-10 text-center text-muted">
-                  No matters match the current filters.
+                  {error
+                    ? "Matters could not be loaded."
+                    : matters.length === 0
+                      ? "No matters found in CounselFlow."
+                      : "No matters match the current filters."}
+                </TableCell>
+              </TableRow>
+            ) : loading ? (
+              <TableRow>
+                <TableCell colSpan={9} className="py-10 text-center text-muted">
+                  Loading…
                 </TableCell>
               </TableRow>
             ) : (

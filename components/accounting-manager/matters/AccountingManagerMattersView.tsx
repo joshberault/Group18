@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -10,12 +10,12 @@ import {
   Search,
   TrendingUp,
 } from "lucide-react";
-import {
-  AM_ATTORNEYS,
-  amMatters,
-  type AmMatterEntity,
-} from "@/lib/mock-data/accounting-manager/entities";
+import type { AmMatterEntity } from "@/lib/mock-data/accounting-manager/entities";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
+import {
+  fetchSharedFirmMatters,
+  toAccountingManagerMatter,
+} from "@/lib/matters/firm-matters-supabase";
 import { invoicesHref } from "@/lib/billing/routes";
 import { formatCurrency } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/Badge";
@@ -67,17 +67,6 @@ const defaultFilters: MatterFilters = {
   kpiFilter: "",
 };
 
-const PRACTICE_AREAS = [
-  "Real Estate",
-  "Employment",
-  "Healthcare",
-  "Corporate",
-  "Construction",
-  "Intellectual Property",
-  "Environmental",
-  "Regulatory",
-] as const;
-
 function financialStatusKey(status: AmMatterEntity["financialStatus"]) {
   return status.toLowerCase().replace(/\s+/g, "_");
 }
@@ -90,7 +79,9 @@ export function AccountingManagerMattersView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlFilter = searchParams.get("filter");
-  const [matters, setMatters] = useState(amMatters);
+  const [matters, setMatters] = useState<AmMatterEntity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<MatterFilters>(() => ({
     ...defaultFilters,
     financialStatus:
@@ -107,6 +98,33 @@ export function AccountingManagerMattersView() {
     null,
   );
   const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      const result = await fetchSharedFirmMatters({ includeWip: true });
+      if (cancelled) return;
+      setMatters(result.matters.map(toAccountingManagerMatter));
+      setError(result.error);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const attorneyOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const m of matters) {
+      if (m.attorney && m.attorney !== "—") names.add(m.attorney);
+    }
+    return Array.from(names).sort();
+  }, [matters]);
+
+  const practiceAreaOptions = useMemo(() => {
+    return Array.from(new Set(matters.map((m) => m.practiceArea))).sort();
+  }, [matters]);
 
   const kpis = useMemo(() => {
     const openMatters = matters.filter((m) => m.matterStatus === "Open");
@@ -125,28 +143,28 @@ export function AccountingManagerMattersView() {
       {
         id: "open",
         title: "Open Matters",
-        value: String(openMatters.length),
+        value: loading ? "…" : String(openMatters.length),
         subtitle: `${matters.length} total matters`,
         kpiFilter: "open",
       },
       {
         id: "wip",
         title: "Unbilled WIP",
-        value: formatCurrency(unbilledWip),
+        value: loading ? "…" : formatCurrency(unbilledWip),
         subtitle: "Across all matters",
         kpiFilter: "has_wip",
       },
       {
         id: "expenses",
         title: "Unbilled Expenses",
-        value: formatCurrency(unbilledExpenses),
+        value: loading ? "…" : formatCurrency(unbilledExpenses),
         subtitle: "Pending invoice inclusion",
         kpiFilter: "has_expenses",
       },
       {
         id: "holds",
         title: "Billing Holds",
-        value: String(billingHolds),
+        value: loading ? "…" : String(billingHolds),
         subtitle: "Matters blocked from billing",
         kpiFilter: "billing_hold",
         warning: billingHolds > 0,
@@ -154,7 +172,7 @@ export function AccountingManagerMattersView() {
       {
         id: "over-budget",
         title: "Over Budget",
-        value: String(overBudget),
+        value: loading ? "…" : String(overBudget),
         subtitle: "Matters exceeding budget",
         kpiFilter: "over_budget",
         warning: overBudget > 0,
@@ -162,12 +180,12 @@ export function AccountingManagerMattersView() {
       {
         id: "trust",
         title: "Matter Trust",
-        value: formatCurrency(trustTotal),
+        value: loading ? "…" : formatCurrency(trustTotal),
         subtitle: "Trust allocated to matters",
         kpiFilter: "has_trust",
       },
     ];
-  }, [matters]);
+  }, [matters, loading]);
 
   const filteredMatters = useMemo(() => {
     let list = [...matters];
@@ -308,12 +326,20 @@ export function AccountingManagerMattersView() {
             <TrendingUp className="h-4 w-4" />
             Budget Report
           </Button>
-          <Button variant="secondary" onClick={handleExport}>
+          <Button
+            variant="secondary"
+            onClick={handleExport}
+            disabled={loading || matters.length === 0}
+          >
             <FileDown className="h-4 w-4" />
             Export CSV
           </Button>
         </div>
       </PageHeader>
+
+      {error ? (
+        <p className="mb-4 text-sm text-red-700">{error}</p>
+      ) : null}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {kpis.map((kpi) => (
@@ -343,7 +369,9 @@ export function AccountingManagerMattersView() {
         <CardHeader>
           <CardTitle>Filters</CardTitle>
           <CardDescription>
-            {filteredMatters.length} of {matters.length} matters shown
+            {loading
+              ? "Loading matters…"
+              : `${filteredMatters.length} of ${matters.length} matters shown`}
           </CardDescription>
         </CardHeader>
         <div className="grid gap-4 px-6 pb-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -366,7 +394,7 @@ export function AccountingManagerMattersView() {
             }
             options={[
               { value: "all", label: "All attorneys" },
-              ...AM_ATTORNEYS.map((a) => ({ value: a, label: a })),
+              ...attorneyOptions.map((a) => ({ value: a, label: a })),
             ]}
           />
           <Select
@@ -380,7 +408,7 @@ export function AccountingManagerMattersView() {
             }
             options={[
               { value: "all", label: "All practice areas" },
-              ...PRACTICE_AREAS.map((p) => ({ value: p, label: p })),
+              ...practiceAreaOptions.map((p) => ({ value: p, label: p })),
             ]}
           />
           <Select
@@ -535,7 +563,15 @@ export function AccountingManagerMattersView() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredMatters.map((matter) => (
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={16} className="text-center text-muted">
+                  Loading matters from CounselFlow…
+                </TableCell>
+              </TableRow>
+            ) : null}
+            {!loading &&
+              filteredMatters.map((matter) => (
               <TableRow
                 key={matter.id}
                 onClick={() => setSelectedMatter(matter)}
@@ -575,10 +611,14 @@ export function AccountingManagerMattersView() {
                 </TableCell>
               </TableRow>
             ))}
-            {filteredMatters.length === 0 && (
+            {!loading && filteredMatters.length === 0 && (
               <TableRow>
                 <TableCell colSpan={16} className="text-center text-muted">
-                  No matters match the current filters.
+                  {error
+                    ? "Matters could not be loaded."
+                    : matters.length === 0
+                      ? "No matters found. Add matters in CounselFlow, then return here."
+                      : "No matters match the current filters."}
                 </TableCell>
               </TableRow>
             )}
