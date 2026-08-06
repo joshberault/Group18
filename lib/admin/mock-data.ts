@@ -52,12 +52,6 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     description: "Internal employee directory",
   },
   {
-    key: "matters",
-    label: "Matters",
-    href: "/admin/matters",
-    description: "Matter status, engagements, and staffing coverage",
-  },
-  {
     key: "assignments",
     label: "Assignments",
     href: "/admin/assignments",
