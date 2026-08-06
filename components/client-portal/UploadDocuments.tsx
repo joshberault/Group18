@@ -177,7 +177,7 @@ export function UploadDocuments() {
     const uploadedBy = identity.fullName;
     const uploadCaseNumber =
       selectedCases[0]?.caseNumber ?? clientDocuments[0]?.caseNumber ?? "N/A";
-    const uploaded = pendingFiles.map((file, index) => ({
+    const uploaded: UploadedDocument[] = pendingFiles.map((file, index) => ({
       id: `doc-${Date.now()}-${index}`,
       name: file.name,
       uploadedAt,
@@ -185,6 +185,7 @@ export function UploadDocuments() {
       sizeLabel: formatFileSize(file.size),
       documentType: typeLabel,
       caseNumber: uploadCaseNumber,
+      markedForDeletion: false,
     }));
 
     setDocuments((current) => {
