@@ -90,7 +90,6 @@ export function FirmAdministratorMattersView() {
         description="Operational matter administration — staffing, engagement status, and setup exceptions."
       >
         <div className="flex gap-2">
-          <Link href="/admin/matters"><Button variant="secondary">Admin Matters Panel</Button></Link>
           <Button variant="secondary" onClick={exportCsv} disabled={loading || rows.length === 0}>
             <FileDown className="mr-2 h-4 w-4" />
             Export
