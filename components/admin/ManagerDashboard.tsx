@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -11,6 +11,7 @@ import {
   Gauge,
   UserMinus,
 } from "lucide-react";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { JobApplicationsPanel } from "@/components/admin/JobApplicationsPanel";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -26,7 +27,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/Table";
-import { useDemoTimeWorkflow } from "@/hooks/useDemoTimeWorkflow";
 import {
   buildAttentionItems,
   buildRecentAdminActivity,
@@ -40,11 +40,6 @@ import {
   getPendingApprovalsSorted,
   isApprovalAgingOverdue,
 } from "@/lib/admin/calculations";
-import {
-  ADMIN_REFERENCE_DATE,
-  ADMIN_UI_FLAGS,
-  getAdminDashboardDataset,
-} from "@/lib/admin/mock-data";
 import type { AttentionPriority } from "@/lib/admin/types";
 
 function priorityBadge(priority: AttentionPriority | "urgent" | "normal") {
@@ -61,40 +56,47 @@ function coverageBadge(status: string) {
 }
 
 export function ManagerDashboard() {
-  const [hasError, setHasError] = useState(ADMIN_UI_FLAGS.forceError);
-  const { mergedApprovals } = useDemoTimeWorkflow();
-  const dataset = useMemo(() => getAdminDashboardDataset(), []);
-  const summary = dataset.summary;
+  const { data, loading, error, refresh } = useAdminData();
+
+  const dataset = data;
+  const summary = dataset?.summary;
+
   const overdueAssignments = useMemo(
     () =>
-      getOverdueAssignments(dataset.assignments, dataset.referenceDate).filter(
-        (a) =>
-          a.status === "active" ||
-          a.status === "pending" ||
-          a.status === "overdue",
-      ),
-    [dataset.assignments, dataset.referenceDate],
+      dataset
+        ? getOverdueAssignments(dataset.assignments, dataset.referenceDate).filter(
+            (a) =>
+              a.status === "active" ||
+              a.status === "pending" ||
+              a.status === "overdue",
+          )
+        : [],
+    [dataset],
   );
 
   const attentionItems = useMemo(
     () =>
-      buildAttentionItems({
-        employees: dataset.employees,
-        assignments: dataset.assignments,
-        approvals: dataset.approvals,
-        unassignedMatters: dataset.unassignedMatters,
-        vacations: dataset.vacations,
-        referenceDate: dataset.referenceDate,
-        limit: 8,
-      }),
+      dataset
+        ? buildAttentionItems({
+            employees: dataset.employees,
+            assignments: dataset.assignments,
+            approvals: dataset.approvals,
+            unassignedMatters: dataset.unassignedMatters,
+            vacations: dataset.vacations,
+            referenceDate: dataset.referenceDate,
+            limit: 8,
+          })
+        : [],
     [dataset],
   );
 
   const pendingApprovalsPreview = useMemo(() => {
-    return getPendingApprovalsSorted(mergedApprovals).slice(0, 5);
-  }, [mergedApprovals]);
+    if (!dataset) return [];
+    return getPendingApprovalsSorted(dataset.approvals).slice(0, 5);
+  }, [dataset]);
 
   const workloadAlerts = useMemo(() => {
+    if (!dataset) return [];
     return dataset.employees
       .map((employee) => {
         const pct = calculateWorkloadPercentage(
@@ -131,49 +133,54 @@ export function ManagerDashboard() {
         return rank(a.status) - rank(b.status) || b.pct - a.pct;
       })
       .slice(0, 5);
-  }, [dataset.assignments, dataset.employees]);
+  }, [dataset]);
 
   const availableAttorneys = useMemo(() => {
+    if (!dataset) return [];
     return getAttorneysAvailableForAssignment(dataset.employees).slice(0, 5);
-  }, [dataset.employees]);
+  }, [dataset]);
 
   const upcomingLeave = useMemo(
     () =>
-      buildUpcomingLeaveCoverage({
-        vacations: dataset.vacations,
-        employees: dataset.employees,
-        assignments: dataset.assignments,
-        approvals: dataset.approvals,
-        referenceDate: dataset.referenceDate,
-      }).slice(0, 5),
+      dataset
+        ? buildUpcomingLeaveCoverage({
+            vacations: dataset.vacations,
+            employees: dataset.employees,
+            assignments: dataset.assignments,
+            approvals: dataset.approvals,
+            referenceDate: dataset.referenceDate,
+          }).slice(0, 5)
+        : [],
     [dataset],
   );
 
   const recentActivity = useMemo(
     () =>
-      buildRecentAdminActivity({
-        approvals: dataset.approvals,
-        assignments: dataset.assignments,
-        limit: 5,
-      }),
-    [dataset.approvals, dataset.assignments],
+      dataset
+        ? buildRecentAdminActivity({
+            approvals: dataset.approvals,
+            assignments: dataset.assignments,
+            limit: 5,
+          })
+        : [],
+    [dataset],
   );
 
-  if (ADMIN_UI_FLAGS.forceLoading) {
+  if (loading) {
     return <LoadingState message="Loading Firm Administrator dashboard..." />;
   }
 
-  if (hasError || ADMIN_UI_FLAGS.forceError) {
+  if (error || !dataset || !summary) {
     return (
       <Card className="border-red-200 bg-red-50" padding="lg">
         <CardHeader>
           <CardTitle className="text-red-800">Unable to load dashboard</CardTitle>
           <CardDescription className="text-red-700">
-            The Firm Administrator Dashboard could not load demo data.
+            {error || "The Firm Administrator Dashboard could not load firm data."}
           </CardDescription>
         </CardHeader>
-        <Button variant="secondary" onClick={() => setHasError(false)}>
-          Retry with demo data
+        <Button variant="secondary" onClick={() => void refresh()}>
+          Retry
         </Button>
       </Card>
     );
@@ -182,11 +189,11 @@ export function ManagerDashboard() {
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Demo data:</strong> Firm
-        Administrator daily action center. Counts use existing admin mock
-        employees, assignments, approvals, leave, matters, and career
-        applications. Reference date {ADMIN_REFERENCE_DATE}. Estimated assigned
-        hours are not mixed with actual hours worked.
+        <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
+        Staffing overview from shared Supabase tables (profiles, matters,
+        assignments, time entries, expenses, leave, and job applications).
+        Reference date {dataset.referenceDate}. Estimated assigned hours are not
+        mixed with actual hours worked.
       </div>
 
       <JobApplicationsPanel />
@@ -564,7 +571,7 @@ export function ManagerDashboard() {
           <CardHeader>
             <CardTitle>Upcoming Leave and Coverage</CardTitle>
             <CardDescription>
-              Approved leave beginning after {ADMIN_REFERENCE_DATE}. Flags
+              Approved leave beginning after {dataset.referenceDate}. Flags
               missing coverage, deadline conflicts, and over-capacity backups.
             </CardDescription>
           </CardHeader>

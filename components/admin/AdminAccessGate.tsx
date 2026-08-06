@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
+import { AdminDataProvider } from "@/components/admin/AdminDataProvider";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -15,7 +16,7 @@ export function AdminAccessGate({ children }: { children: React.ReactNode }) {
   const { role, setRole } = useDemoRole();
 
   if (role === "firm_administrator") {
-    return <>{children}</>;
+    return <AdminDataProvider>{children}</AdminDataProvider>;
   }
 
   return (
