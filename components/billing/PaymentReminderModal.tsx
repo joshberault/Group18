@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import type { Invoice } from "@/lib/billing/invoice-types";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
 
 type Props = {
   invoice: Invoice;
@@ -31,8 +33,7 @@ function formatDate(iso: string): string {
 export function PaymentReminderModal({ invoice, onClose, onSend }: Props) {
   const [sent, setSent] = useState(false);
 
-  const recipient =
-    invoice.clientInfo?.email || "billing@client.example";
+  const recipient = invoice.clientInfo?.email || "billing@client.example";
   const subject = `Payment Reminder – Invoice ${invoice.invoiceNumber}`;
   const amountDue = invoice.remainingBalance || invoice.totalAmount;
   const clientName = invoice.clientInfo?.name || invoice.client;
@@ -56,80 +57,53 @@ Billing Department`;
   }
 
   return (
-    <div
-      className="inv-modal-backdrop"
-      role="presentation"
-      onClick={onClose}
+    <Modal
+      isOpen
+      onClose={onClose}
+      title="Send Payment Reminder"
+      description={invoice.invoiceNumber}
+      className="max-w-xl"
     >
-      <div
-        className="inv-modal inv-modal--reminder"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="reminder-modal-title"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="inv-modal__header">
-          <div>
-            <p className="inv-modal__kicker">{invoice.invoiceNumber}</p>
-            <h2 id="reminder-modal-title">Send Payment Reminder</h2>
-          </div>
-          <button type="button" className="inv-modal__close" onClick={onClose}>
-            Close
-          </button>
-        </header>
-
-        <div className="inv-modal__body">
-          {sent ? (
-            <div className="ar-reminder-success" role="status">
-              Reminder successfully sent to <strong>{recipient}</strong> for
-              invoice <strong>{invoice.invoiceNumber}</strong> (simulated).
+      {sent ? (
+        <div className="space-y-4">
+          <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+            Reminder successfully sent to <strong>{recipient}</strong> for
+            invoice <strong>{invoice.invoiceNumber}</strong> (simulated).
+          </p>
+          <Button onClick={onClose}>Done</Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <dl className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs font-medium uppercase text-muted">
+                Recipient
+              </dt>
+              <dd className="text-sm text-navy-900">{recipient}</dd>
             </div>
-          ) : (
-            <>
-              <dl className="ar-reminder-meta">
-                <div>
-                  <dt>Recipient</dt>
-                  <dd>{recipient}</dd>
-                </div>
-                <div>
-                  <dt>Subject</dt>
-                  <dd>{subject}</dd>
-                </div>
-              </dl>
-
-              <section className="ar-reminder-preview">
-                <h3>Message Preview</h3>
-                <pre className="ar-reminder-preview__body">{body}</pre>
-              </section>
-            </>
-          )}
-
-          <div className="ar-reminder-actions">
-            {sent ? (
-              <button
-                type="button"
-                className="dashboard__create-btn"
-                onClick={onClose}
-              >
-                Done
-              </button>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="dashboard__create-btn"
-                  onClick={handleSend}
-                >
-                  Send Reminder
-                </button>
-                <button type="button" className="gi-btn" onClick={onClose}>
-                  Cancel
-                </button>
-              </>
-            )}
+            <div>
+              <dt className="text-xs font-medium uppercase text-muted">
+                Subject
+              </dt>
+              <dd className="text-sm text-navy-900">{subject}</dd>
+            </div>
+          </dl>
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-navy-900">
+              Message Preview
+            </h3>
+            <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-navy-900">
+              {body}
+            </pre>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleSend}>Send Reminder</Button>
+            <Button variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   );
 }

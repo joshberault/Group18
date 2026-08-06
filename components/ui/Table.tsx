@@ -24,11 +24,8 @@ export function TableRow({
   children,
   className,
   onClick,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  onClick?: () => void;
-}) {
+  ...props
+}: React.ComponentPropsWithoutRef<"tr">) {
   return (
     <tr
       className={cn(
@@ -37,6 +34,7 @@ export function TableRow({
         className,
       )}
       onClick={onClick}
+      {...props}
     >
       {children}
     </tr>

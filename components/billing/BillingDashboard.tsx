@@ -2,9 +2,18 @@
 
 import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
+import {
+  AlertTriangle,
+  CircleDollarSign,
+  FilePlus2,
+  FileText,
+  Wallet,
+} from "lucide-react";
 import { MetricCard } from "@/components/billing/MetricCard";
 import { RevenueByAttorney } from "@/components/billing/RevenueByAttorney";
 import { RevenueByClient } from "@/components/billing/RevenueByClient";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Card } from "@/components/ui/Card";
 import {
   createDefaultBillingPeriod,
   formatPeriodLabel,
@@ -49,15 +58,12 @@ export function BillingDashboard({ data }: Props) {
     createDefaultBillingPeriod(),
   );
 
-  // Live catalog (seed + browser-stored generated invoices).
-  // Polls + events keep this in sync after Generate Invoice.
   const allInvoices = useSyncExternalStore(
     subscribeInvoiceCatalog,
     getManagedInvoicesSnapshot,
     getServerInvoicesSnapshot,
   );
 
-  // Re-resolve non-custom presets each time catalog refreshes so ranges stay current
   const activeRange = useMemo(() => {
     if (period.preset === "custom") return period.range;
     return resolvePeriodRange(period.preset);
@@ -121,101 +127,91 @@ export function BillingDashboard({ data }: Props) {
   }
 
   return (
-    <div className="dashboard">
-      <header className="dashboard__hero">
-        <div className="dashboard__brand-block">
-          <p className="dashboard__firm">North & Vale LLP</p>
-          <h1 className="dashboard__title">Billing Dashboard</h1>
-          <p className="dashboard__lede">
-            Firm-wide receivables, collections, and revenue attribution for{" "}
-            {periodLabel}.
-          </p>
-        </div>
-        <div className="dashboard__actions">
-          <Link
-            href={BILLING_ROUTES.generateInvoice}
-            className="dashboard__create-btn"
-          >
-            Create Invoice
-          </Link>
-          <p className="dashboard__source" role="status">
-            Data source:{" "}
-            <span>
-              {source === "supabase" ? "Supabase" : "Placeholder (demo)"}
-            </span>
-          </p>
-        </div>
-      </header>
-
-      <section
-        className="billing-period"
-        aria-labelledby="billing-period-heading"
+    <div>
+      <PageHeader
+        title="Billing Dashboard"
+        description={`Receivables, collections, and revenue for ${periodLabel}.`}
       >
-        <div className="billing-period__intro">
-          <h2 id="billing-period-heading" className="billing-period__title">
-            Billing Period
-          </h2>
-          <p className="billing-period__status" role="status">
+        <Link
+          href={BILLING_ROUTES.generateInvoice}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-navy-900 px-4 text-sm font-medium text-white transition-colors hover:bg-navy-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-900 focus-visible:ring-offset-2"
+        >
+          <FilePlus2 className="h-4 w-4" />
+          Create Invoice
+        </Link>
+      </PageHeader>
+
+      <Card className="mb-6 border-gold-500/30 bg-gradient-to-r from-navy-900 to-navy-800 text-white">
+        <div className="p-6">
+          <p className="text-sm font-medium text-gold-500">Billing period</p>
+          <p className="mt-2 text-sm text-gray-200">
             Showing {formatInteger(totalInvoices)} of{" "}
             {formatInteger(allInvoices.length)} invoices for {periodLabel}
             {outsidePeriodCount > 0
               ? ` (${formatInteger(outsidePeriodCount)} outside this period)`
               : ""}
+            . Data source:{" "}
+            {source === "supabase" ? "Supabase" : "demo / placeholder"}.
           </p>
-        </div>
-        <div
-          className="billing-period__presets"
-          role="group"
-          aria-label="Billing period quick filters"
-        >
-          {PERIOD_PRESET_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              className={
-                period.preset === opt.id
-                  ? "billing-period__chip billing-period__chip--active"
-                  : "billing-period__chip"
-              }
-              aria-pressed={period.preset === opt.id}
-              onClick={() => applyPreset(opt.id)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-        {period.preset === "custom" ? (
-          <div className="billing-period__custom">
-            <label className="billing-period__date-field">
-              <span>Start date</span>
-              <input
-                type="date"
-                value={period.customStart}
-                onChange={(e) =>
-                  applyCustomRange(e.target.value, period.customEnd)
-                }
-              />
-            </label>
-            <label className="billing-period__date-field">
-              <span>End date</span>
-              <input
-                type="date"
-                value={period.customEnd}
-                onChange={(e) =>
-                  applyCustomRange(period.customStart, e.target.value)
-                }
-              />
-            </label>
+          <div
+            className="mt-4 flex flex-wrap gap-2"
+            role="group"
+            aria-label="Billing period quick filters"
+          >
+            {PERIOD_PRESET_OPTIONS.map((opt) => {
+              const active = period.preset === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => applyPreset(opt.id)}
+                  className={
+                    active
+                      ? "inline-flex h-9 items-center justify-center rounded-lg bg-gold-500 px-3 text-sm font-semibold text-navy-950 shadow-sm hover:bg-gold-400"
+                      : "inline-flex h-9 items-center justify-center rounded-lg border border-white/40 bg-white px-3 text-sm font-semibold text-navy-900 shadow-sm hover:bg-gold-100"
+                  }
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
-        ) : null}
-      </section>
+          {period.preset === "custom" ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1.5 text-sm font-medium text-gray-200">
+                Start date
+                <input
+                  type="date"
+                  value={period.customStart}
+                  onChange={(e) =>
+                    applyCustomRange(e.target.value, period.customEnd)
+                  }
+                  className="h-10 rounded-lg border border-navy-700 bg-navy-950 px-3 text-sm text-white focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/30"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm font-medium text-gray-200">
+                End date
+                <input
+                  type="date"
+                  value={period.customEnd}
+                  onChange={(e) =>
+                    applyCustomRange(period.customStart, e.target.value)
+                  }
+                  className="h-10 rounded-lg border border-navy-700 bg-navy-950 px-3 text-sm text-white focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/30"
+                />
+              </label>
+            </div>
+          ) : null}
+        </div>
+      </Card>
 
       <section
-        className="metrics-grid"
+        className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
         aria-label="Key billing metrics"
       >
         <MetricCard
-          eyebrow="Invoice Management"
+          eyebrow="Invoices"
           label="Total invoices"
           value={formatInteger(totalInvoices)}
           detail={
@@ -223,42 +219,42 @@ export function BillingDashboard({ data }: Props) {
               ? `${formatInteger(allInvoices.length)} in full catalog`
               : undefined
           }
-          actionLabel="View invoices"
+          icon={FileText}
+          actionLabel="View Invoices"
           actionHref={BILLING_ROUTES.invoices}
-          actionStyle="button"
         />
         <MetricCard
-          eyebrow="Accounts Receivable Management"
+          eyebrow="Receivables"
           label="Total outstanding"
           value={formatCurrency(outstandingReceivable)}
           tone="attention"
+          icon={CircleDollarSign}
           actionLabel="View Accounts"
           actionHref={BILLING_ROUTES.receivables}
-          actionStyle="button"
         />
         <MetricCard
-          eyebrow="Collections Management"
+          eyebrow="Collections"
           label="Collections in period"
           value={formatCurrency(collectionsInPeriod)}
           tone="positive"
+          icon={Wallet}
           actionLabel="View completed"
           actionHref={invoicesHref({ view: "completed" })}
-          actionStyle="button"
         />
         <MetricCard
-          eyebrow="Overdue Invoice Management"
+          eyebrow="Overdue"
           label="Total overdue"
           value={formatInteger(overdueInvoices)}
           tone={overdueInvoices > 0 ? "attention" : "default"}
+          icon={AlertTriangle}
           actionLabel="View Overdue"
           actionHref={receivablesHref({ view: "overdue" })}
-          actionStyle="button"
         />
       </section>
 
-      <div className="dashboard__columns">
-        <RevenueByAttorney rows={revenueByAttorney} />
-        <RevenueByClient rows={revenueByClient} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <RevenueByAttorney rows={revenueByAttorney} linkMode="report" />
+        <RevenueByClient rows={revenueByClient} linkMode="report" />
       </div>
     </div>
   );
