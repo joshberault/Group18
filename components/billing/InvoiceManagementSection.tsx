@@ -61,6 +61,7 @@ type SortKey =
   | "invoiceNumber"
   | "client"
   | "legalMatter"
+  | "attorney"
   | "billingMethod"
   | "invoiceDate"
   | "dueDate"
@@ -415,12 +416,15 @@ export function InvoiceManagementSection({ invoices }: Props) {
   }, [searchParams]);
 
   const data = periodScoped;
-  const attorneys = useMemo(() => getInvoiceAttorneys(data), [data]);
+  // Attorney options from full catalog so period + filters stay available
+  const attorneys = useMemo(() => getInvoiceAttorneys(catalog), [catalog]);
 
   const filteredSorted = useMemo(() => {
     const q = clientSearch.trim().toLowerCase();
     const matterId = matterIdFilter?.trim().toLowerCase() || null;
     const matterLabel = (matterFilterLabel || "").trim().toLowerCase();
+    const attorneyKey =
+      attorney !== "all" ? attorney.trim().toLowerCase() : null;
     const rows = data.filter((invoice) => {
       if (matterId) {
         const invMatterId = (invoice.matterId || "").trim().toLowerCase();
@@ -444,9 +448,18 @@ export function InvoiceManagementSection({ invoices }: Props) {
         const matterIdMatch = (invoice.matterId || "")
           .toLowerCase()
           .includes(q);
-        if (!clientMatch && !matterMatch && !matterIdMatch) return false;
+        const attorneyMatch = (invoice.attorney || "")
+          .toLowerCase()
+          .includes(q);
+        if (!clientMatch && !matterMatch && !matterIdMatch && !attorneyMatch)
+          return false;
       }
-      if (attorney !== "all" && invoice.attorney !== attorney) return false;
+      if (
+        attorneyKey &&
+        (invoice.attorney || "").trim().toLowerCase() !== attorneyKey
+      ) {
+        return false;
+      }
       if (billingMethod !== "all" && invoice.billingMethod !== billingMethod) {
         return false;
       }
@@ -512,6 +525,7 @@ export function InvoiceManagementSection({ invoices }: Props) {
         key === "invoiceNumber" ||
           key === "client" ||
           key === "legalMatter" ||
+          key === "attorney" ||
           key === "billingMethod" ||
           key === "status"
           ? "asc"
@@ -695,6 +709,12 @@ export function InvoiceManagementSection({ invoices }: Props) {
             options={[
               { value: "all", label: "All attorneys" },
               ...attorneys.map((name) => ({ value: name, label: name })),
+              ...(attorney !== "all" &&
+              !attorneys.some(
+                (n) => n.toLowerCase() === attorney.toLowerCase(),
+              )
+                ? [{ value: attorney, label: attorney }]
+                : []),
             ]}
           />
           <Select
@@ -785,6 +805,7 @@ export function InvoiceManagementSection({ invoices }: Props) {
                   ["invoiceNumber", "Invoice #"],
                   ["client", "Client"],
                   ["legalMatter", "Legal Matter"],
+                  ["attorney", "Attorney"],
                   ["billingMethod", "Method"],
                   ["invoiceDate", "Invoice Date"],
                   ["dueDate", "Due Date"],
@@ -811,7 +832,7 @@ export function InvoiceManagementSection({ invoices }: Props) {
           <TableBody>
             {pageRows.length === 0 ? (
               <TableRow>
-                <TableCell className="text-muted">
+                <TableCell colSpan={12} className="text-muted">
                   No invoices match your filters.
                 </TableCell>
               </TableRow>
@@ -828,7 +849,8 @@ export function InvoiceManagementSection({ invoices }: Props) {
                     {invoice.invoiceNumber}
                   </TableCell>
                   <TableCell>{invoice.client}</TableCell>
-                  <TableCell>{invoice.legalMatter}</TableCell>
+                  <TableCell>{invoice.legalMatter || "—"}</TableCell>
+                  <TableCell>{invoice.attorney?.trim() || "—"}</TableCell>
                   <TableCell>{invoice.billingMethod}</TableCell>
                   <TableCell>{formatDate(invoice.invoiceDate)}</TableCell>
                   <TableCell>{formatDate(invoice.dueDate)}</TableCell>

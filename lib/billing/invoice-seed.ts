@@ -1298,11 +1298,22 @@ export const INVOICE_STATUSES = [
 
 /** Prefer pass-through live catalog; empty default (never seed). */
 export function getInvoiceAttorneys(invoices: Invoice[] = []): string[] {
+  const placeholders = new Set([
+    "",
+    "assigned counsel",
+    "unassigned",
+    "—",
+    "-",
+    "n/a",
+  ]);
   return Array.from(
     new Set(
       invoices
         .map((i) => i.attorney?.trim())
-        .filter((name): name is string => Boolean(name)),
+        .filter(
+          (name): name is string =>
+            Boolean(name) && !placeholders.has(name!.toLowerCase()),
+        ),
     ),
-  ).sort();
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }
