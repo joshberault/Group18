@@ -74,8 +74,8 @@ export function getClientPermissions(role: UserRole): ClientPermissions {
     case "paralegal":
       return {
         canAccessModule: true,
-        // TEMP: view all until paralegal matter assignments are available.
-        canViewAllClients: true,
+        // Assignment scope is applied in ClientsDashboard via Parker Legal demo seed matching.
+        canViewAllClients: false,
         enforceAssignmentFilter: false,
         canCreate: false,
         canEditContact: true,
@@ -83,7 +83,7 @@ export function getClientPermissions(role: UserRole): ClientPermissions {
         canEditConflict: false,
         canClearConflict: false,
         canViewInternalNotes: false,
-        canViewConflictNotes: false,
+        canViewConflictNotes: true,
         canDelete: false,
       };
     case "billing_specialist":

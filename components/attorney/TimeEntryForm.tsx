@@ -2,41 +2,112 @@
 
 import { useState } from "react";
 import { useAttorneyData } from "@/components/attorney/AttorneyDataProvider";
-import { todayIsoDate } from "@/lib/attorney/dates";
+import { createClientSafe } from "@/lib/supabase/client";
+import {
+  profileIdForRole,
+  submitDemoTimeEntry,
+  submitterNameForRole,
+} from "@/lib/demo/time-workflow-store";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import type { TimeEntry } from "@/types/database";
+import type { UserRole } from "@/lib/types";
+import type { Matter, TimeEntry } from "@/types/database";
 
 type Props = {
-  onCreated?: () => void;
+  matters: Matter[];
+  profileId: string;
+  submitterRole?: UserRole;
+  onCreated: () => void;
+  previewMode?: boolean;
 };
 
-export function TimeEntryForm({ onCreated }: Props) {
-  const { matters, profileId, addTimeEntry } = useAttorneyData();
+export function TimeEntryForm({
+  matters,
+  profileId,
+  submitterRole = "attorney",
+  onCreated,
+  previewMode = false,
+}: Props) {
   const [matterId, setMatterId] = useState(matters[0]?.id ?? "");
-  const [entryDate, setEntryDate] = useState(todayIsoDate());
+  const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
   const [hours, setHours] = useState("1.0");
   const [description, setDescription] = useState("");
   const [isBillable, setIsBillable] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
+    setSuccess(null);
 
-    addTimeEntry({
+    const parsedHours = Number(hours);
+    if (!Number.isFinite(parsedHours) || parsedHours <= 0) {
+      setError("Hours must be greater than zero.");
+      return;
+    }
+
+    if (!description.trim()) {
+      setError("Description is required.");
+      return;
+    }
+
+    if (previewMode) {
+      setLoading(true);
+      submitDemoTimeEntry({
+        profileId: profileIdForRole(submitterRole) || profileId,
+        submitterName: submitterNameForRole(submitterRole),
+        submitterRole,
+        matterId,
+        entryDate,
+        hours: parsedHours,
+        description: description.trim(),
+        isBillable,
+      });
+      setLoading(false);
+      setDescription("");
+      setHours("1.0");
+      setSuccess(
+        "Time entry submitted for manager approval. Switch to Managing Partner or Firm Administrator to review.",
+      );
+      onCreated();
+      return;
+    }
+
+    setLoading(true);
+
+    const supabase = createClientSafe();
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      setLoading(false);
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("time_entries").insert({
       matter_id: matterId,
       profile_id: profileId,
       entry_date: entryDate,
-      hours: Number(hours),
-      description,
+      hours: parsedHours,
+      description: description.trim(),
       is_billable: isBillable,
+      status: "pending",
     });
+
+    setLoading(false);
+
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
 
     setDescription("");
     setHours("1.0");
-    onCreated?.();
+    setSuccess("Time entry submitted for manager approval.");
+    onCreated();
   }
 
   return (
@@ -86,8 +157,10 @@ export function TimeEntryForm({ onCreated }: Props) {
             />
           </div>
         </div>
-        <Button type="submit" disabled={matters.length === 0}>
-          Submit for Manager Approval
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        {success && <p className="text-sm text-green-700">{success}</p>}
+        <Button type="submit" disabled={loading || matters.length === 0}>
+          {loading ? "Submitting..." : "Submit for Manager Approval"}
         </Button>
       </form>
     </Card>

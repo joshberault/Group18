@@ -53,7 +53,7 @@ export const ACCOUNTING_MANAGER_NAV_ITEMS: NavItem[] = [
   },
   {
     routeKey: "invoices",
-    label: "Invoices",
+    label: "Invoices & Collections",
     href: "/invoices",
     icon: Receipt,
     description:

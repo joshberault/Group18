@@ -1,12 +1,6 @@
-import { RoleRestrictedModule } from "@/components/layout/RoleRestrictedModule";
+import { ReportsPageClient } from "./ReportsPageClient";
 
+/** Firm analytics, financial reports, and operational dashboards. */
 export default function ReportsPage() {
-  return (
-    <RoleRestrictedModule
-      href="/reports"
-      title="Reports"
-      description="Profitability, utilization, collections, and operational analytics across the firm."
-      iconName="reports"
-    />
-  );
+  return <ReportsPageClient />;
 }

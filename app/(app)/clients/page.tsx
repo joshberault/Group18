@@ -1,7 +1,6 @@
-"use client";
+import { ClientsPageClient } from "./ClientsPageClient";
 
-import { ClientsDashboard } from "@/components/clients/ClientsDashboard";
-
+/** Firm-wide client directory and financial overview. */
 export default function ClientsPage() {
-  return <ClientsDashboard />;
+  return <ClientsPageClient />;
 }

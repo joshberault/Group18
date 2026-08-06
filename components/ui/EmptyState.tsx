@@ -13,7 +13,7 @@ interface EmptyStateProps {
 export function EmptyState({
   title,
   description,
-  moduleLabel = "Ready for feature development",
+  moduleLabel,
   icon,
   className,
 }: EmptyStateProps) {
@@ -29,7 +29,9 @@ export function EmptyState({
       </div>
       <h2 className="text-lg font-semibold text-navy-900">{title}</h2>
       <p className="mt-2 max-w-md text-sm text-muted">{description}</p>
-      <Badge variant="gold" className="mt-4">{moduleLabel}</Badge>
+      {moduleLabel ? (
+        <Badge variant="gold" className="mt-4">{moduleLabel}</Badge>
+      ) : null}
     </div>
   );
 }

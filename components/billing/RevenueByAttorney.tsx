@@ -1,8 +1,15 @@
 import Link from "next/link";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
+import {
+  invoicesHref,
+  revenueByAttorneyHref,
+} from "@/lib/billing/routes";
 import type { RevenueByAttorney as AttorneyRevenue } from "@/lib/billing/types";
 
 type Props = {
   rows: AttorneyRevenue[];
+  /** Link each row to the full report when true (default: invoices filter). */
+  linkMode?: "invoices" | "report";
 };
 
 function formatCurrency(value: number): string {
@@ -13,57 +20,64 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function attorneyInvoicesHref(attorneyName: string): string {
-  return `/invoices?attorney=${encodeURIComponent(attorneyName)}`;
-}
-
-export function RevenueByAttorney({ rows }: Props) {
+export function RevenueByAttorney({
+  rows,
+  linkMode = "invoices",
+}: Props) {
   const max = Math.max(...rows.map((row) => row.revenue), 1);
 
   return (
-    <section className="panel" aria-labelledby="revenue-attorney-heading">
-      <header className="panel__header">
-        <h2 id="revenue-attorney-heading">Revenue by Attorney</h2>
-        <p>
-          Billed amounts attributed to each matter owner. Select an attorney to
-          view their invoices.
-        </p>
-      </header>
+    <Card padding="md">
+      <CardHeader>
+        <CardTitle>Revenue by Attorney</CardTitle>
+        <CardDescription>
+          Billed amounts attributed to each matter owner. Select an attorney
+          for detail.
+        </CardDescription>
+      </CardHeader>
 
-      <ul className="rank-list">
-        {rows.map((row) => {
-          const width = Math.round((row.revenue / max) * 100);
-          return (
-            <li key={row.attorneyId} className="rank-list__item">
-              <div className="rank-list__meta">
-                <Link
-                  href={attorneyInvoicesHref(row.attorneyName)}
-                  className="rank-list__name data-table__client-link"
-                  title={`View invoices for ${row.attorneyName}`}
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted">No attorney revenue in this period.</p>
+      ) : (
+        <ul className="space-y-4">
+          {rows.map((row) => {
+            const width = Math.round((row.revenue / max) * 100);
+            const href =
+              linkMode === "report"
+                ? revenueByAttorneyHref({ attorney: row.attorneyName })
+                : invoicesHref({ attorney: row.attorneyName });
+            return (
+              <li key={row.attorneyId}>
+                <div className="mb-1 flex items-baseline justify-between gap-3">
+                  <Link
+                    href={href}
+                    className="text-sm font-semibold text-navy-900 underline-offset-2 hover:underline"
+                    title={`View details for ${row.attorneyName}`}
+                  >
+                    {row.attorneyName}
+                  </Link>
+                  <span className="text-sm font-semibold text-navy-900">
+                    {formatCurrency(row.revenue)}
+                  </span>
+                </div>
+                <div
+                  className="h-2 overflow-hidden rounded-full bg-gray-100"
+                  role="img"
+                  aria-label={`${row.attorneyName}: ${formatCurrency(row.revenue)}`}
                 >
-                  {row.attorneyName}
-                </Link>
-                <span className="rank-list__value">
-                  {formatCurrency(row.revenue)}
-                </span>
-              </div>
-              <div
-                className="rank-list__track"
-                role="img"
-                aria-label={`${row.attorneyName}: ${formatCurrency(row.revenue)}`}
-              >
-                <span
-                  className="rank-list__fill rank-list__fill--attorney"
-                  style={{ width: `${width}%` }}
-                />
-              </div>
-              <p className="rank-list__sub">
-                {row.invoiceCount} invoice{row.invoiceCount === 1 ? "" : "s"}
-              </p>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+                  <span
+                    className="block h-full rounded-full bg-navy-900"
+                    style={{ width: `${width}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-xs text-muted">
+                  {row.invoiceCount} invoice{row.invoiceCount === 1 ? "" : "s"}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
   );
 }

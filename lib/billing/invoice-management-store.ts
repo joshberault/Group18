@@ -16,87 +16,92 @@ import type {
   WriteDownLine,
 } from "@/lib/billing/generate-invoice-types";
 import { normalizeBillingDate, toIsoDate } from "@/lib/billing/billing-period";
+import {
+  allocateNextInvoiceNumberFromDb,
+  deleteInvoiceInSupabase,
+  fetchInvoicesFromSupabase,
+  upsertInvoiceInSupabase,
+} from "@/lib/billing/invoice-supabase";
 
-/** Browser storage key for invoices created in Generate Invoice workflow */
+/** @deprecated browser storage no longer holds live invoices; kept for migration/cleanup */
 export const GENERATED_INVOICES_STORAGE_KEY = "nv-billing-generated-invoices-v1";
-
-/** Invoice numbers permanently removed (seed or generated) after admin delete */
+/** @deprecated */
 export const DELETED_INVOICES_STORAGE_KEY = "nv-billing-deleted-invoices-v1";
 
-/** Same-tab notify so Invoice Management can refresh without a full reload */
+/** Same-tab notify so Invoice Management / dashboards can refresh */
 export const INVOICES_UPDATED_EVENT = "nv-invoices-updated";
 
-/** Survives SPA navigations in the same browser tab even if storage is flaky */
-const MEMORY_KEY = "__nvGeneratedInvoices";
-const DELETED_MEMORY_KEY = "__nvDeletedInvoices";
+/**
+ * When true, merge demo INVOICE_SEED into the live catalog (client-only demos).
+ * Default false — live paths use Supabase invoices only.
+ */
+export const USE_INVOICE_SEED =
+  typeof process !== "undefined" &&
+  process.env.NEXT_PUBLIC_BILLING_DEMO_SEED === "1";
 
-type PersistResult = {
+export type PersistResult = {
   ok: boolean;
   count: number;
   error?: string;
+  invoice?: Invoice;
 };
 
 function canUseDom(): boolean {
   return typeof window !== "undefined";
 }
 
-function readMemory(): Invoice[] {
-  if (!canUseDom()) return [];
-  try {
-    const bag = (window as Window & { [MEMORY_KEY]?: Invoice[] })[MEMORY_KEY];
-    return Array.isArray(bag) ? bag : [];
-  } catch {
-    return [];
+const CACHE_KEY = "__nvManagedInvoicesCache";
+const REVISION_MEMORY_KEY = "__nvBillingCatalogRev";
+const CATALOG_REVISION_KEY = "nv-billing-catalog-rev-v1";
+const LOAD_STATE_KEY = "__nvInvoiceCatalogLoad";
+
+type LoadState = {
+  inFlight: Promise<void> | null;
+  lastError: string | null;
+  lastLoadedAt: number;
+};
+
+function getCacheHolder(): { current: Invoice[] } {
+  if (!canUseDom()) return { current: [] };
+  const w = window as Window & { [CACHE_KEY]?: { current: Invoice[] } };
+  if (!w[CACHE_KEY]) w[CACHE_KEY] = { current: [] };
+  return w[CACHE_KEY]!;
+}
+
+function getLoadState(): LoadState {
+  if (!canUseDom()) {
+    return { inFlight: null, lastError: null, lastLoadedAt: 0 };
   }
-}
-
-function writeMemory(invoices: Invoice[]) {
-  if (!canUseDom()) return;
-  try {
-    (window as Window & { [MEMORY_KEY]?: Invoice[] })[MEMORY_KEY] = invoices;
-  } catch {
-    /* ignore */
+  const w = window as Window & { [LOAD_STATE_KEY]?: LoadState };
+  if (!w[LOAD_STATE_KEY]) {
+    w[LOAD_STATE_KEY] = {
+      inFlight: null,
+      lastError: null,
+      lastLoadedAt: 0,
+    };
   }
+  return w[LOAD_STATE_KEY]!;
 }
 
-function isInvoiceShape(row: unknown): row is Invoice {
-  if (!row || typeof row !== "object") return false;
-  const inv = row as Partial<Invoice> & { totalAmount?: unknown };
-  const total =
-    typeof inv.totalAmount === "number"
-      ? inv.totalAmount
-      : Number(inv.totalAmount);
-  return (
-    typeof inv.id === "string" &&
-    typeof inv.invoiceNumber === "string" &&
-    typeof inv.client === "string" &&
-    Number.isFinite(total)
-  );
-}
-
-function sanitizeList(rows: unknown): Invoice[] {
-  if (!Array.isArray(rows)) return [];
-  const out: Invoice[] = [];
-  for (const row of rows) {
-    if (!isInvoiceShape(row)) continue;
-    const raw = row as Invoice & { totalAmount: unknown };
-    const total =
-      typeof raw.totalAmount === "number"
-        ? raw.totalAmount
-        : Number(raw.totalAmount);
-    out.push({
-      ...raw,
-      totalAmount: total,
-      amountPaid: Number(raw.amountPaid) || 0,
-      remainingBalance: Number.isFinite(Number(raw.remainingBalance))
-        ? Number(raw.remainingBalance)
-        : Math.max(0, total - (Number(raw.amountPaid) || 0)),
-      invoiceDate: String(raw.invoiceDate ?? ""),
-      dueDate: String(raw.dueDate ?? ""),
-      status: raw.status,
+function mergeWithOptionalSeed(rows: Invoice[]): Invoice[] {
+  if (!USE_INVOICE_SEED) return rows;
+  const numbers = new Set(rows.map((r) => r.invoiceNumber));
+  const seed = INVOICE_SEED.filter((s) => !numbers.has(s.invoiceNumber));
+  return [...rows, ...seed].sort((a, b) => {
+    const byNumber = b.invoiceNumber.localeCompare(a.invoiceNumber, undefined, {
+      numeric: true,
     });
-  }
-  return out;
+    if (byNumber !== 0) return byNumber;
+    return b.invoiceDate.localeCompare(a.invoiceDate);
+  });
+}
+
+function writeCache(invoices: Invoice[]) {
+  getCacheHolder().current = invoices;
+}
+
+function readCache(): Invoice[] {
+  return getCacheHolder().current;
 }
 
 function notifyInvoicesUpdated() {
@@ -108,10 +113,6 @@ function notifyInvoicesUpdated() {
     /* ignore */
   }
 }
-
-/** Monotonic catalog revision (memory + storage) so UIs can detect updates */
-const CATALOG_REVISION_KEY = "nv-billing-catalog-rev-v1";
-const REVISION_MEMORY_KEY = "__nvBillingCatalogRev";
 
 function readStoredRevision(): number {
   if (!canUseDom()) return 0;
@@ -158,22 +159,64 @@ export function getInvoiceCatalogRevision(): number {
 }
 
 /**
- * Subscribe to catalog changes (same-tab event, storage, focus, visibility, poll).
- * Used by dashboard via useSyncExternalStore.
+ * Pull firm invoices from Supabase into the in-memory catalog.
+ * Safe to call often; concurrent calls share one in-flight request.
+ */
+export async function refreshInvoiceCatalog(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  const state = getLoadState();
+  if (state.inFlight) {
+    await state.inFlight;
+    return { ok: !state.lastError, error: state.lastError ?? undefined };
+  }
+
+  state.inFlight = (async () => {
+    const { data, error } = await fetchInvoicesFromSupabase();
+    if (error) {
+      state.lastError = error;
+      // Keep existing cache on soft failures so UI stays usable offline-ish
+      if (readCache().length === 0 && USE_INVOICE_SEED) {
+        writeCache(mergeWithOptionalSeed([]));
+        notifyInvoicesUpdated();
+      }
+      return;
+    }
+    state.lastError = null;
+    writeCache(mergeWithOptionalSeed(data));
+    state.lastLoadedAt = Date.now();
+    notifyInvoicesUpdated();
+  })();
+
+  try {
+    await state.inFlight;
+  } finally {
+    state.inFlight = null;
+  }
+  return { ok: !state.lastError, error: state.lastError ?? undefined };
+}
+
+/**
+ * Subscribe to catalog changes (custom event, focus, visibility, poll refresh).
+ * Used by dashboards via useSyncExternalStore.
  */
 export function subscribeInvoiceCatalog(onStoreChange: () => void): () => void {
   if (!canUseDom()) return () => {};
   const handler = () => onStoreChange();
   window.addEventListener(INVOICES_UPDATED_EVENT, handler);
-  window.addEventListener("storage", handler);
   window.addEventListener("focus", handler);
   window.addEventListener("pageshow", handler);
   document.addEventListener("visibilitychange", handler);
-  // Poll catches same-tab writes if the custom event listener was not mounted yet
-  const pollId = window.setInterval(handler, 800);
+
+  // Initial + interval firm-wide refresh (all users share one DB)
+  void refreshInvoiceCatalog();
+  const pollId = window.setInterval(() => {
+    void refreshInvoiceCatalog();
+  }, 15_000);
+
   return () => {
     window.removeEventListener(INVOICES_UPDATED_EVENT, handler);
-    window.removeEventListener("storage", handler);
     window.removeEventListener("focus", handler);
     window.removeEventListener("pageshow", handler);
     document.removeEventListener("visibilitychange", handler);
@@ -186,7 +229,6 @@ type SnapshotCache = {
   invoices: Invoice[];
 };
 
-/** Prefer a window singleton so HMR / dual bundles share cache correctly */
 function getSnapshotCacheHolder(): { current: SnapshotCache | null } {
   if (!canUseDom()) {
     return { current: null };
@@ -200,34 +242,12 @@ function getSnapshotCacheHolder(): { current: SnapshotCache | null } {
   return w.__nvBillingSnapshot;
 }
 
-/** Fingerprint local sources so we never serve a stale seed-only snapshot. */
 function catalogFingerprint(): string {
-  if (!canUseDom()) return "ssr";
-  let localLen = 0;
-  let sessionLen = 0;
-  let localRaw = "";
-  try {
-    localRaw = window.localStorage.getItem(GENERATED_INVOICES_STORAGE_KEY) ?? "";
-    localLen = localRaw.length;
-  } catch {
-    /* ignore */
-  }
-  try {
-    sessionLen = (
-      window.sessionStorage.getItem(GENERATED_INVOICES_STORAGE_KEY) ?? ""
-    ).length;
-  } catch {
-    /* ignore */
-  }
-  const mem = readMemory();
+  const rows = readCache();
   return [
     getInvoiceCatalogRevision(),
-    localLen,
-    sessionLen,
-    mem.length,
-    // Hash invoice numbers from raw local string quickly
-    (localRaw.match(/"invoiceNumber"\s*:\s*"[^"]+"/g) || []).join(","),
-    mem.map((m) => m.invoiceNumber).join(","),
+    rows.length,
+    rows.map((r) => `${r.invoiceNumber}:${r.amountPaid}:${r.status}`).join(","),
   ].join("|");
 }
 
@@ -242,282 +262,97 @@ export function getManagedInvoicesSnapshot(): Invoice[] {
   return invoices;
 }
 
+/** Stable empty reference — getServerSnapshot must not return a new [] each call */
+const EMPTY_SERVER_SNAPSHOT: Invoice[] = [];
+
+/**
+ * SSR snapshot for useSyncExternalStore.
+ * Must return a cached identity; a fresh [] each call triggers React’s infinite loop.
+ */
 export function getServerInvoicesSnapshot(): Invoice[] {
-  return INVOICE_SEED;
-}
-
-/** Invalidate external-store cache after catalog mutations */
-function invalidateSnapshotCache() {
-  getSnapshotCacheHolder().current = null;
-}
-
-function readFromLocalStorage(): Invoice[] {
-  if (!canUseDom()) return [];
-  try {
-    const raw = window.localStorage.getItem(GENERATED_INVOICES_STORAGE_KEY);
-    if (!raw) return [];
-    return sanitizeList(JSON.parse(raw) as unknown);
-  } catch {
-    return [];
-  }
-}
-
-function writeToLocalStorage(invoices: Invoice[]): string | undefined {
-  if (!canUseDom()) return "Browser storage unavailable";
-  try {
-    window.localStorage.setItem(
-      GENERATED_INVOICES_STORAGE_KEY,
-      JSON.stringify(invoices),
-    );
-    // Verify round-trip so we surface silent storage failures
-    const check = readFromLocalStorage();
-    if (!check.some((c) => invoices.some((i) => i.invoiceNumber === c.invoiceNumber))) {
-      if (invoices.length > 0 && check.length === 0) {
-        return "Could not verify stored invoices in localStorage";
-      }
-    }
-    return undefined;
-  } catch (err) {
-    return err instanceof Error ? err.message : "localStorage write failed";
-  }
-}
-
-function readFromSessionStorage(): Invoice[] {
-  if (!canUseDom()) return [];
-  try {
-    const raw = window.sessionStorage.getItem(GENERATED_INVOICES_STORAGE_KEY);
-    if (!raw) return [];
-    return sanitizeList(JSON.parse(raw) as unknown);
-  } catch {
-    return [];
-  }
-}
-
-function writeToSessionStorage(invoices: Invoice[]) {
-  if (!canUseDom()) return;
-  try {
-    window.sessionStorage.setItem(
-      GENERATED_INVOICES_STORAGE_KEY,
-      JSON.stringify(invoices),
-    );
-  } catch {
-    /* ignore */
-  }
+  // SSR has no browser cache; seed optional for SSR demos only
+  return USE_INVOICE_SEED ? INVOICE_SEED : EMPTY_SERVER_SNAPSHOT;
 }
 
 /**
- * Merge lists by invoiceNumber, preferring the first occurrence (newer first).
- */
-function mergeByNumber(...lists: Invoice[][]): Invoice[] {
-  const seen = new Set<string>();
-  const out: Invoice[] = [];
-  for (const list of lists) {
-    for (const inv of list) {
-      if (seen.has(inv.invoiceNumber)) continue;
-      seen.add(inv.invoiceNumber);
-      out.push(inv);
-    }
-  }
-  return out;
-}
-
-export function loadGeneratedInvoices(): Invoice[] {
-  return mergeByNumber(
-    readMemory(),
-    readFromLocalStorage(),
-    readFromSessionStorage(),
-  );
-}
-
-function readDeletedMemory(): string[] {
-  if (!canUseDom()) return [];
-  try {
-    const bag = (window as Window & { [DELETED_MEMORY_KEY]?: string[] })[
-      DELETED_MEMORY_KEY
-    ];
-    return Array.isArray(bag) ? bag.filter((n) => typeof n === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeDeletedMemory(numbers: string[]) {
-  if (!canUseDom()) return;
-  try {
-    (window as Window & { [DELETED_MEMORY_KEY]?: string[] })[DELETED_MEMORY_KEY] =
-      numbers;
-  } catch {
-    /* ignore */
-  }
-}
-
-function readDeletedFromStorage(): string[] {
-  if (!canUseDom()) return [];
-  const keys = [window.localStorage, window.sessionStorage];
-  const all: string[] = [];
-  for (const store of keys) {
-    try {
-      const raw = store.getItem(DELETED_INVOICES_STORAGE_KEY);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw) as unknown;
-      if (Array.isArray(parsed)) {
-        for (const n of parsed) {
-          if (typeof n === "string") all.push(n);
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  return all;
-}
-
-function writeDeletedToStorage(numbers: string[]) {
-  if (!canUseDom()) return;
-  try {
-    const raw = JSON.stringify(numbers);
-    window.localStorage.setItem(DELETED_INVOICES_STORAGE_KEY, raw);
-    window.sessionStorage.setItem(DELETED_INVOICES_STORAGE_KEY, raw);
-  } catch {
-    /* ignore */
-  }
-}
-
-/**
- * Invoice numbers soft-deleted via admin-approved delete.
- * Seed rows with these numbers are hidden; generated rows are removed.
- */
-export function loadDeletedInvoiceNumbers(): string[] {
-  return Array.from(
-    new Set([...readDeletedMemory(), ...readDeletedFromStorage()]),
-  );
-}
-
-function persistDeletedInvoiceNumber(invoiceNumber: string) {
-  const next = Array.from(
-    new Set([...loadDeletedInvoiceNumbers(), invoiceNumber]),
-  );
-  writeDeletedMemory(next);
-  writeDeletedToStorage(next);
-}
-
-/**
- * Seed invoices plus any invoices created via Generate Invoice.
- * Generated invoices appear first (newest first by number then date).
- * Admin-deleted numbers are excluded.
+ * Managed invoice catalog (sync read of last Supabase refresh).
+ * Call refreshInvoiceCatalog() / await upsert/delete for firm-wide truth.
  */
 export function getAllManagedInvoices(): Invoice[] {
-  const deleted = new Set(loadDeletedInvoiceNumbers());
-  const generated = loadGeneratedInvoices()
-    .filter((g) => !deleted.has(g.invoiceNumber))
-    .sort((a, b) => {
-      const byNumber = b.invoiceNumber.localeCompare(a.invoiceNumber, undefined, {
-        numeric: true,
-      });
-      if (byNumber !== 0) return byNumber;
-      return b.invoiceDate.localeCompare(a.invoiceDate);
-    });
-  const generatedNumbers = new Set(generated.map((g) => g.invoiceNumber));
-  const seed = INVOICE_SEED.filter(
-    (s) =>
-      !generatedNumbers.has(s.invoiceNumber) && !deleted.has(s.invoiceNumber),
-  );
-  return [...generated, ...seed];
+  return readCache();
 }
 
-/**
- * Permanently remove an invoice from the managed catalog (admin gate enforced in UI).
- * Works for generated and seed invoices via a tombstone list.
- */
-export function deleteManagedInvoice(invoiceNumber: string): PersistResult {
-  const existed = getAllManagedInvoices().some(
-    (row) => row.invoiceNumber === invoiceNumber,
-  );
-  if (!existed && !loadDeletedInvoiceNumbers().includes(invoiceNumber)) {
-    // May already be deleted, or unknown number — still ensure tombstone
-  }
+export function getInvoiceCatalogError(): string | null {
+  return getLoadState().lastError;
+}
 
-  const without = loadGeneratedInvoices().filter(
-    (row) => row.invoiceNumber !== invoiceNumber,
-  );
-  writeMemory(without);
-  writeToSessionStorage(without);
-  const error = writeToLocalStorage(without);
-  writeMemory(without);
-
-  persistDeletedInvoiceNumber(invoiceNumber);
-  invalidateSnapshotCache();
-  notifyInvoicesUpdated();
-
+export async function deleteManagedInvoice(
+  invoiceNumber: string,
+): Promise<PersistResult> {
+  const result = await deleteInvoiceInSupabase(invoiceNumber);
+  await refreshInvoiceCatalog();
   const stillVisible = getAllManagedInvoices().some(
     (row) => row.invoiceNumber === invoiceNumber,
   );
-
   return {
-    ok: !stillVisible,
+    ok: result.ok && !stillVisible,
     count: getAllManagedInvoices().length,
     error: stillVisible
-      ? error || "Invoice could not be removed from catalog"
-      : undefined,
+      ? result.error || "Invoice still visible after delete"
+      : result.error,
   };
 }
 
 export function countGeneratedInvoices(): number {
-  const deleted = new Set(loadDeletedInvoiceNumbers());
-  return loadGeneratedInvoices().filter((g) => !deleted.has(g.invoiceNumber))
-    .length;
+  return getAllManagedInvoices().length;
 }
 
-/** Upsert by invoice number; writes memory + localStorage + sessionStorage */
-export function upsertGeneratedInvoice(invoice: Invoice): PersistResult {
-  // If this number was previously admin-deleted, revive it by clearing the tombstone
-  const deleted = loadDeletedInvoiceNumbers().filter(
-    (n) => n !== invoice.invoiceNumber,
-  );
-  if (deleted.length !== loadDeletedInvoiceNumbers().length) {
-    writeDeletedMemory(deleted);
-    writeDeletedToStorage(deleted);
+/** Upsert by invoice number into shared Supabase invoices */
+export async function upsertGeneratedInvoice(
+  invoice: Invoice,
+): Promise<PersistResult> {
+  const result = await upsertInvoiceInSupabase(invoice);
+  if (result.ok && result.invoice) {
+    // Optimistic patch then authoritative refresh
+    const without = readCache().filter(
+      (row) =>
+        row.invoiceNumber !== result.invoice!.invoiceNumber &&
+        row.id !== result.invoice!.id,
+    );
+    writeCache(mergeWithOptionalSeed([result.invoice, ...without]));
+    notifyInvoicesUpdated();
   }
-
-  const without = loadGeneratedInvoices().filter(
-    (row) => row.invoiceNumber !== invoice.invoiceNumber,
-  );
-  const next = [invoice, ...without];
-  writeMemory(next);
-  writeToSessionStorage(next);
-  const error = writeToLocalStorage(next);
-  // Re-affirm memory from what we intended to store
-  writeMemory(next);
-  // Invalidate external-store snapshot cache (revision bump is inside notify)
-  invalidateSnapshotCache();
-  notifyInvoicesUpdated();
-  const verified = loadGeneratedInvoices().some(
+  await refreshInvoiceCatalog();
+  const verified = getAllManagedInvoices().some(
     (row) => row.invoiceNumber === invoice.invoiceNumber,
   );
   return {
-    ok: verified,
-    count: loadGeneratedInvoices().filter(
-      (g) => !new Set(loadDeletedInvoiceNumbers()).has(g.invoiceNumber),
-    ).length,
-    error: verified ? undefined : error || "Invoice was not found after save",
+    ok: result.ok && verified,
+    count: getAllManagedInvoices().length,
+    invoice: result.invoice,
+    error: result.ok
+      ? verified
+        ? undefined
+        : "Invoice was not found after save"
+      : result.error,
   };
 }
 
 /**
- * Merge a patch into an existing managed invoice (seed or generated)
- * and persist the full updated record so it overrides seed data.
+ * Merge a patch into an existing managed invoice and persist.
  */
-export function updateManagedInvoice(
+export async function updateManagedInvoice(
   invoiceNumber: string,
   patch: Partial<Invoice>,
-): Invoice | null {
+): Promise<Invoice | null> {
+  await refreshInvoiceCatalog();
   const found = getAllManagedInvoices().find(
     (row) => row.invoiceNumber === invoiceNumber,
   );
   if (!found) return null;
   const updated: Invoice = { ...found, ...patch };
-  upsertGeneratedInvoice(updated);
-  return updated;
+  const result = await upsertGeneratedInvoice(updated);
+  return result.invoice ?? (result.ok ? updated : null);
 }
 
 function extended(hours: number, rate: number): number {
@@ -629,6 +464,8 @@ export function buildManagedInvoiceFromGeneration(
     amountPaid,
     remainingBalance,
     status,
+    clientId: client.id,
+    matterId: matter.id,
     clientInfo: {
       name: client.name,
       contact: client.billingContact,
@@ -651,8 +488,8 @@ export function buildManagedInvoiceFromGeneration(
 }
 
 /**
- * Next sequential invoice number based on seed + generated store.
- * Continues the NV-YYYY-#### series from the highest known number.
+ * Next sequential invoice number from the managed catalog (+ DB).
+ * Sync path uses cache; prefer allocateNextInvoiceNumberAsync when possible.
  */
 export function allocateNextInvoiceNumber(year = 2026): string {
   const all = getAllManagedInvoices();
@@ -665,4 +502,37 @@ export function allocateNextInvoiceNumber(year = 2026): string {
     }
   }
   return `NV-${year}-${String(max + 1).padStart(4, "0")}`;
+}
+
+export async function allocateNextInvoiceNumberAsync(
+  year = 2026,
+): Promise<string> {
+  await refreshInvoiceCatalog();
+  return allocateNextInvoiceNumberFromDb(year, getAllManagedInvoices());
+}
+
+/**
+ * Time entry IDs already present on managed invoices (not Cancelled).
+ */
+export function getInvoicedTimeEntryIds(): Set<string> {
+  const ids = new Set<string>();
+  for (const inv of getAllManagedInvoices()) {
+    if (inv.status === "Cancelled") continue;
+    for (const te of inv.timeEntries ?? []) {
+      if (te.id) ids.add(te.id);
+    }
+  }
+  return ids;
+}
+
+/** Expense line IDs already on managed invoices (not Cancelled). */
+export function getInvoicedExpenseIds(): Set<string> {
+  const ids = new Set<string>();
+  for (const inv of getAllManagedInvoices()) {
+    if (inv.status === "Cancelled") continue;
+    for (const ex of inv.reimbursableExpenses ?? []) {
+      if (ex.id) ids.add(ex.id);
+    }
+  }
+  return ids;
 }

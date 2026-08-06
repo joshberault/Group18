@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/Table";
+import { useDemoTimeWorkflow } from "@/hooks/useDemoTimeWorkflow";
 import {
   buildAttentionItems,
   buildRecentAdminActivity,
@@ -61,6 +62,7 @@ function coverageBadge(status: string) {
 
 export function ManagerDashboard() {
   const [hasError, setHasError] = useState(ADMIN_UI_FLAGS.forceError);
+  const { mergedApprovals } = useDemoTimeWorkflow();
   const dataset = useMemo(() => getAdminDashboardDataset(), []);
   const summary = dataset.summary;
   const overdueAssignments = useMemo(
@@ -89,8 +91,8 @@ export function ManagerDashboard() {
   );
 
   const pendingApprovalsPreview = useMemo(() => {
-    return getPendingApprovalsSorted(dataset.approvals).slice(0, 5);
-  }, [dataset.approvals]);
+    return getPendingApprovalsSorted(mergedApprovals).slice(0, 5);
+  }, [mergedApprovals]);
 
   const workloadAlerts = useMemo(() => {
     return dataset.employees

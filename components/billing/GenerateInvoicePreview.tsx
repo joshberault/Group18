@@ -6,6 +6,16 @@ import type {
   UnbilledExpense,
   UnbilledTimeEntry,
 } from "@/lib/billing/generate-invoice-types";
+import { Badge } from "@/components/ui/Badge";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/Table";
 
 type Props = {
   client: GenerateClient;
@@ -59,175 +69,213 @@ export function GenerateInvoicePreview({
   const staffTime = timeEntries.filter((t) => t.role === "Staff");
 
   return (
-    <article className="gi-preview" aria-label="Invoice preview">
-      <header className="gi-preview__banner">
+    <Card className="space-y-6" aria-label="Invoice preview">
+      <div className="flex flex-col gap-4 border-b border-gray-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="gi-preview__firm">{FIRM_INFO.name}</p>
-          <p>{FIRM_INFO.address}</p>
-          <p>
+          <p className="text-base font-semibold text-navy-900">
+            {FIRM_INFO.name}
+          </p>
+          <p className="mt-1 text-sm text-muted">{FIRM_INFO.address}</p>
+          <p className="text-sm text-muted">
             {FIRM_INFO.phone} · {FIRM_INFO.email}
           </p>
         </div>
-        <div className="gi-preview__meta">
-          <p className="gi-preview__status">Status: {status}</p>
-          <p>
-            <strong>Invoice #</strong> {invoiceNumber}
+        <div className="text-sm sm:text-right">
+          <Badge variant={status === "Sent" ? "success" : "neutral"}>
+            {status}
+          </Badge>
+          <p className="mt-2 text-navy-900">
+            <span className="font-medium">Invoice #</span> {invoiceNumber}
           </p>
-          <p>
-            <strong>Invoice date</strong> {dateLabel(invoiceDate)}
+          <p className="text-muted">
+            <span className="font-medium text-navy-900">Invoice date</span>{" "}
+            {dateLabel(invoiceDate)}
           </p>
-          <p>
-            <strong>Due date</strong> {dateLabel(dueDate)}
+          <p className="text-muted">
+            <span className="font-medium text-navy-900">Due date</span>{" "}
+            {dateLabel(dueDate)}
           </p>
         </div>
-      </header>
+      </div>
 
-      <section className="gi-preview__parties">
+      <div className="grid gap-6 sm:grid-cols-2">
         <div>
-          <h3>Bill to</h3>
-          <p className="gi-preview__strong">{client.name}</p>
-          <p>{client.billingContact}</p>
-          <p>{client.address}</p>
-          <p>{client.email}</p>
-          <p>{client.phone}</p>
+          <h3 className="text-sm font-semibold text-navy-900">Bill to</h3>
+          <p className="mt-1 font-medium text-navy-900">{client.name}</p>
+          <p className="text-sm text-muted">{client.billingContact}</p>
+          <p className="text-sm text-muted">{client.address}</p>
+          <p className="text-sm text-muted">{client.email}</p>
+          <p className="text-sm text-muted">{client.phone}</p>
         </div>
         <div>
-          <h3>Matter</h3>
-          <p className="gi-preview__strong">{matter.matterName}</p>
-          <p>Matter # {matter.matterNumber}</p>
-          <p>Responsible attorney: {matter.responsibleAttorney}</p>
-          <p>Billing period: {matter.billingPeriod}</p>
+          <h3 className="text-sm font-semibold text-navy-900">Matter</h3>
+          <p className="mt-1 font-medium text-navy-900">{matter.matterName}</p>
+          <p className="text-sm text-muted">Matter # {matter.matterNumber}</p>
+          <p className="text-sm text-muted">
+            Responsible attorney: {matter.responsibleAttorney}
+          </p>
+          <p className="text-sm text-muted">
+            Billing period: {matter.billingPeriod}
+          </p>
         </div>
-      </section>
+      </div>
 
       <section>
-        <h3>Attorney time entries</h3>
+        <CardHeader className="mb-2">
+          <CardTitle>Attorney time entries</CardTitle>
+        </CardHeader>
         {attorneyTime.length === 0 ? (
-          <p className="gi-muted">None selected.</p>
+          <p className="text-sm text-muted">None selected.</p>
         ) : (
-          <table className="gi-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Attorney</th>
-                <th>Description</th>
-                <th>Hours</th>
-                <th>Rate</th>
-                <th>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Attorney</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Hours</TableHead>
+                <TableHead>Rate</TableHead>
+                <TableHead>Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {attorneyTime.map((t) => (
-                <tr key={t.id}>
-                  <td>{dateLabel(t.date)}</td>
-                  <td>{t.person}</td>
-                  <td>{t.description}</td>
-                  <td>{t.hours.toFixed(1)}</td>
-                  <td>{money(t.rate)}</td>
-                  <td>{money(t.hours * t.rate)}</td>
-                </tr>
+                <TableRow key={t.id}>
+                  <TableCell>{dateLabel(t.date)}</TableCell>
+                  <TableCell>{t.person}</TableCell>
+                  <TableCell>{t.description}</TableCell>
+                  <TableCell>{t.hours.toFixed(1)}</TableCell>
+                  <TableCell>{money(t.rate)}</TableCell>
+                  <TableCell>{money(t.hours * t.rate)}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
       </section>
 
       <section>
-        <h3>Staff time entries</h3>
+        <CardHeader className="mb-2">
+          <CardTitle>Staff time entries</CardTitle>
+        </CardHeader>
         {staffTime.length === 0 ? (
-          <p className="gi-muted">None selected.</p>
+          <p className="text-sm text-muted">None selected.</p>
         ) : (
-          <table className="gi-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Staff</th>
-                <th>Description</th>
-                <th>Hours</th>
-                <th>Rate</th>
-                <th>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Staff</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Hours</TableHead>
+                <TableHead>Rate</TableHead>
+                <TableHead>Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {staffTime.map((t) => (
-                <tr key={t.id}>
-                  <td>{dateLabel(t.date)}</td>
-                  <td>{t.person}</td>
-                  <td>{t.description}</td>
-                  <td>{t.hours.toFixed(1)}</td>
-                  <td>{money(t.rate)}</td>
-                  <td>{money(t.hours * t.rate)}</td>
-                </tr>
+                <TableRow key={t.id}>
+                  <TableCell>{dateLabel(t.date)}</TableCell>
+                  <TableCell>{t.person}</TableCell>
+                  <TableCell>{t.description}</TableCell>
+                  <TableCell>{t.hours.toFixed(1)}</TableCell>
+                  <TableCell>{money(t.rate)}</TableCell>
+                  <TableCell>{money(t.hours * t.rate)}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
       </section>
 
       <section>
-        <h3>Reimbursable expenses</h3>
+        <CardHeader className="mb-2">
+          <CardTitle>Reimbursable expenses</CardTitle>
+        </CardHeader>
         {expenses.length === 0 ? (
-          <p className="gi-muted">None selected.</p>
+          <p className="text-sm text-muted">None selected.</p>
         ) : (
-          <table className="gi-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Category</th>
-                <th>Description</th>
-                <th>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {expenses.map((e) => (
-                <tr key={e.id}>
-                  <td>{dateLabel(e.date)}</td>
-                  <td>{e.category}</td>
-                  <td>{e.description}</td>
-                  <td>{money(e.amount)}</td>
-                </tr>
+                <TableRow key={e.id}>
+                  <TableCell>{dateLabel(e.date)}</TableCell>
+                  <TableCell>{e.category}</TableCell>
+                  <TableCell>{e.description}</TableCell>
+                  <TableCell>{money(e.amount)}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
       </section>
 
       <section>
-        <h3>Adjustments</h3>
-        <ul className="gi-adj-list">
-          <li>
-            Write-downs <span>−{money(writeDownTotal)}</span>
+        <CardHeader className="mb-2">
+          <CardTitle>Adjustments</CardTitle>
+        </CardHeader>
+        <ul className="space-y-2 text-sm">
+          <li className="flex justify-between gap-4">
+            <span className="text-muted">Write-downs</span>
+            <span className="font-medium text-navy-900">
+              −{money(writeDownTotal)}
+            </span>
           </li>
-          <li>
-            Courtesy discounts <span>−{money(courtesyDiscount)}</span>
+          <li className="flex justify-between gap-4">
+            <span className="text-muted">Courtesy discounts</span>
+            <span className="font-medium text-navy-900">
+              −{money(courtesyDiscount)}
+            </span>
           </li>
-          <li>
-            Retainer applied <span>−{money(retainerApplied)}</span>
+          <li className="flex justify-between gap-4">
+            <span className="text-muted">Retainer applied</span>
+            <span className="font-medium text-navy-900">
+              −{money(retainerApplied)}
+            </span>
           </li>
         </ul>
       </section>
 
-      <section className="gi-preview__summary">
-        <h3>Financial summary</h3>
-        <dl>
-          <div>
-            <dt>Billable time total</dt>
-            <dd>{money(totals.billableTime)}</dd>
+      <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <CardHeader className="mb-3">
+          <CardTitle>Financial summary</CardTitle>
+          <CardDescription>Totals for this draft invoice</CardDescription>
+        </CardHeader>
+        <dl className="space-y-2 text-sm">
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted">Billable time total</dt>
+            <dd className="font-medium text-navy-900">
+              {money(totals.billableTime)}
+            </dd>
           </div>
-          <div>
-            <dt>Expense total</dt>
-            <dd>{money(totals.expenses)}</dd>
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted">Expense total</dt>
+            <dd className="font-medium text-navy-900">
+              {money(totals.expenses)}
+            </dd>
           </div>
-          <div>
-            <dt>Total adjustments</dt>
-            <dd>−{money(totals.totalAdjustments)}</dd>
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted">Total adjustments</dt>
+            <dd className="font-medium text-navy-900">
+              −{money(totals.totalAdjustments)}
+            </dd>
           </div>
-          <div className="gi-preview__due">
-            <dt>Total due</dt>
-            <dd>{money(totals.totalDue)}</dd>
+          <div className="flex justify-between gap-4 border-t border-gray-200 pt-2 text-base">
+            <dt className="font-semibold text-navy-900">Total due</dt>
+            <dd className="font-semibold text-navy-900">
+              {money(totals.totalDue)}
+            </dd>
           </div>
         </dl>
       </section>
-    </article>
+    </Card>
   );
 }
