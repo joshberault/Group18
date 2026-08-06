@@ -33,9 +33,9 @@ export function getFullyPaidCollectionsTotal(invoices: Invoice[]): number {
 }
 
 /**
- * Collections attributable to an inclusive date range:
- * payment history lines in range + fully paid invoices with no payment rows
- * whose invoice date falls in range.
+ * Collections attributable to an inclusive date range.
+ * Prefers payment rows (from Supabase `payments` via invoice.paymentHistory).
+ * Falls back to fully paid invoice totals when status is Paid but no payment rows.
  */
 export function getCollectionsInRange(
   invoices: Invoice[],
@@ -44,11 +44,13 @@ export function getCollectionsInRange(
   let total = 0;
 
   for (const inv of invoices) {
+    if (inv.status === "Cancelled" || inv.status === "Draft") continue;
+
     const payments = inv.paymentHistory ?? [];
     let paymentSumInRange = 0;
     for (const p of payments) {
-      if (isDateInRange(p.date, range)) {
-        paymentSumInRange += p.amount;
+      if (p.date && isDateInRange(p.date, range)) {
+        paymentSumInRange += Number(p.amount) || 0;
       }
     }
     if (paymentSumInRange > 0) {
@@ -56,9 +58,11 @@ export function getCollectionsInRange(
       continue;
     }
 
+    // Paid invoice with no payment history: attribute amount paid by invoice date
     if (isFullyPaidInvoice(inv) && payments.length === 0) {
       if (isDateInRange(inv.invoiceDate, range)) {
-        total += inv.totalAmount;
+        total +=
+          inv.amountPaid > 0 ? inv.amountPaid : Number(inv.totalAmount) || 0;
       }
     }
   }
@@ -96,17 +100,14 @@ function monthEndLocal(year: number, monthIndex: number): Date {
 }
 
 /**
- * Monthly collections series for the Billing Specialist firm dashboard.
- * Uses fully paid invoices only:
- * - payment history amounts bucketed by payment date, or
- * - invoice total bucketed by invoice date when there is no payment history.
+ * Monthly collections series from shared invoice payment history (Supabase).
+ * Buckets all payment rows by payment date across the firm catalog.
  */
 export function getMonthlyCollectionsFromPaidInvoices(
   invoices: Invoice[],
   monthCount = 6,
   asOf = new Date(),
 ): MonthlyCollectionPoint[] {
-  const paidInvoices = getFullyPaidInvoices(invoices);
   const points: MonthlyCollectionPoint[] = [];
   const y = asOf.getFullYear();
   const m = asOf.getMonth();
@@ -117,7 +118,7 @@ export function getMonthlyCollectionsFromPaidInvoices(
     const monthIndex = d.getMonth();
     const start = toIsoHelper(monthStartLocal(year, monthIndex));
     const end = toIsoHelper(monthEndLocal(year, monthIndex));
-    const amount = getCollectionsInRange(paidInvoices, { start, end });
+    const amount = getCollectionsInRange(invoices, { start, end });
     points.push({
       key: `${year}-${String(monthIndex + 1).padStart(2, "0")}`,
       month: d.toLocaleString("en-US", { month: "short" }),
