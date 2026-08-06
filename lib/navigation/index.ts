@@ -11,7 +11,6 @@ import {
   LayoutDashboard,
   ListTodo,
   Receipt,
-  Scale,
   Shield,
   ShieldAlert,
   StickyNote,
@@ -21,8 +20,6 @@ import {
   UserCircle,
   type LucideIcon,
 } from "lucide-react";
-import { ADMIN_NAV_ITEMS } from "@/lib/admin/mock-data";
-import type { AdminSectionKey } from "@/lib/admin/types";
 import type { UserRole } from "@/lib/types";
 import { canAccessNavItem } from "@/lib/auth/demo-access";
 import {
@@ -211,26 +208,54 @@ export function getNavRoles(href: string): UserRole[] {
   return item?.roles ?? [];
 }
 
-const FIRM_ADMIN_SECTION_ICONS: Partial<Record<AdminSectionKey, LucideIcon>> = {
-  attorneys: Scale,
-  employees: Users,
-  assignments: Briefcase,
-  workload: Gauge,
-  roles: Shield,
-};
-
 /** Section links nested under Manager Dashboard in the Firm Admin sidebar. */
 function getFirmAdminSectionChildren(): NavItem[] {
-  return ADMIN_NAV_ITEMS.filter((item) => item.key !== "dashboard").map(
-    (item) => ({
-      routeKey: "administration" as RouteKey,
-      label: item.label,
-      href: item.href,
-      icon: FIRM_ADMIN_SECTION_ICONS[item.key] ?? UserCog,
-      description: item.description,
-      roles: ["firm_administrator" as UserRole],
-    }),
-  );
+  const sections: Array<{
+    label: string;
+    href: string;
+    icon: LucideIcon;
+    description: string;
+  }> = [
+    {
+      label: "Attorney Management",
+      href: "/admin/attorneys",
+      icon: Briefcase,
+      description: "Attorney profiles and practice focus",
+    },
+    {
+      label: "Employee Profiles",
+      href: "/admin/employees",
+      icon: Users,
+      description: "Internal employee directory",
+    },
+    {
+      label: "Assignments",
+      href: "/admin/assignments",
+      icon: Briefcase,
+      description: "Matter and case staffing assignments",
+    },
+    {
+      label: "Workload Board",
+      href: "/admin/workload",
+      icon: Gauge,
+      description: "Capacity and internal workload",
+    },
+    {
+      label: "Role Permissions",
+      href: "/admin/roles",
+      icon: Shield,
+      description: "Admin role capability matrix",
+    },
+  ];
+
+  return sections.map((item) => ({
+    routeKey: "administration" as RouteKey,
+    label: item.label,
+    href: item.href,
+    icon: item.icon,
+    description: item.description,
+    roles: ["firm_administrator" as UserRole],
+  }));
 }
 
 /**

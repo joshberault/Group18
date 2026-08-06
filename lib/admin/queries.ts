@@ -9,7 +9,10 @@ import {
   buildProductivityMetrics,
   buildWorkloadItems,
 } from "@/lib/admin/calculations";
-import { DEMO_STAFF_ROLE_PERMISSIONS } from "@/lib/admin/demo-staff";
+import {
+  DEMO_STAFF_ROLE_PERMISSIONS,
+  getRoleStaffMeta,
+} from "@/lib/admin/demo-staff";
 import { ADMIN_REFERENCE_DATE } from "@/lib/admin/mock-data";
 import type {
   AdminApproval,
@@ -275,6 +278,19 @@ function mapEmployee(
   const hireDate = profile.created_at
     ? profile.created_at.slice(0, 10)
     : ADMIN_REFERENCE_DATE;
+  const staffMeta =
+    roleMeta.roleKey in USER_ROLE_LABELS
+      ? getRoleStaffMeta(roleMeta.roleKey as UserRole)
+      : null;
+  const practiceArea =
+    practiceAreaName && practiceAreaName !== "General"
+      ? practiceAreaName
+      : (staffMeta?.practiceArea ?? practiceAreaName ?? "General");
+  const weeklyCapacity = staffMeta?.weeklyCapacityHours ?? WEEKLY_CAPACITY;
+  const assignedHours =
+    hours.assigned > 0 ? hours.assigned : (staffMeta?.assignedHours ?? 0);
+  const actualHours =
+    hours.actual > 0 ? hours.actual : (staffMeta?.actualHoursWorked ?? 0);
 
   return {
     id: profile.id,
@@ -282,24 +298,30 @@ function mapEmployee(
     lastName,
     fullName,
     email: profile.email?.trim() || `${firstName.toLowerCase()}@firm.demo`,
-    phone: "",
-    employeeNumber: `E-${String(index + 1).padStart(4, "0")}`,
-    title: roleMeta.title,
-    department: roleMeta.department,
+    phone: staffMeta ? `(312) 555-${staffMeta.phoneExt}` : "",
+    employeeNumber:
+      staffMeta?.employeeNumber ?? `E-${String(index + 1).padStart(4, "0")}`,
+    title: staffMeta?.title ?? roleMeta.title,
+    department: staffMeta?.department ?? roleMeta.department,
     roleKey: roleMeta.roleKey,
     roleLabel: roleMeta.roleLabel,
-    practiceArea: practiceAreaName || "General",
+    practiceArea,
     status: "active" as EmploymentStatus,
     hireDate,
-    barNumber: roleMeta.isAttorney ? `BAR-${profile.id.slice(0, 6).toUpperCase()}` : "",
-    internalHourlyCostRate: roleMeta.isAttorney ? 185 : 75,
-    standardBillableRate: roleMeta.isAttorney ? 425 : 175,
-    weeklyCapacityHours: WEEKLY_CAPACITY,
-    targetBillableHours: roleMeta.isAttorney ? 35 : 30,
+    barNumber:
+      staffMeta?.barNumber ||
+      (roleMeta.isAttorney ? `BAR-${profile.id.slice(0, 6).toUpperCase()}` : ""),
+    internalHourlyCostRate:
+      staffMeta?.internalHourlyCostRate ?? (roleMeta.isAttorney ? 185 : 75),
+    standardBillableRate:
+      staffMeta?.standardBillableRate ?? (roleMeta.isAttorney ? 425 : 175),
+    weeklyCapacityHours: weeklyCapacity,
+    targetBillableHours:
+      staffMeta?.targetBillableHours ?? (roleMeta.isAttorney ? 35 : 30),
     managerId: null,
-    availableWorkHours: WEEKLY_CAPACITY,
-    assignedHours: hours.assigned,
-    actualHoursWorked: hours.actual,
+    availableWorkHours: weeklyCapacity,
+    assignedHours,
+    actualHoursWorked: actualHours,
     isAttorney: roleMeta.isAttorney,
     profileId: profile.id,
   };
