@@ -25,11 +25,14 @@ import {
   getVacationStatusLabel,
 } from "@/lib/admin/calculations";
 import {
+  DEMO_STAFF_EMPLOYEES,
+  DEMO_STAFF_ROLE_PERMISSIONS,
+  getDemoStaffEmployeeById,
+} from "@/lib/admin/demo-staff";
+import {
   ADMIN_REFERENCE_DATE,
   MOCK_APPROVALS,
   MOCK_ASSIGNMENTS,
-  MOCK_EMPLOYEES,
-  MOCK_ROLE_PERMISSIONS,
   MOCK_VACATIONS,
 } from "@/lib/admin/mock-data";
 
@@ -51,18 +54,18 @@ interface EmployeeProfileDetailProps {
 }
 
 export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps) {
-  const employee = getEmployeeById(MOCK_EMPLOYEES, employeeId);
+  const employee = getDemoStaffEmployeeById(employeeId);
 
   if (!employee) {
     return (
       <div className="space-y-4">
         <PageHeader
           title="Employee not found"
-          description="No staff profile matches this employee ID in the local mock data."
+          description="No staff profile matches this demo-role employee ID."
         />
         <EmptyState
           title="Invalid employee ID"
-          description={`“${employeeId}” is not a known employee. Return to the roster and open a valid profile.`}
+          description={`“${employeeId}” is not a known demo-role profile. Return to the roster and open a valid profile.`}
           moduleLabel="Admin · Employees"
         />
         <Link href="/admin/employees">
@@ -73,9 +76,11 @@ export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps
   }
 
   const manager = employee.managerId
-    ? getEmployeeById(MOCK_EMPLOYEES, employee.managerId)
+    ? getEmployeeById(DEMO_STAFF_EMPLOYEES, employee.managerId)
     : undefined;
-  const role = MOCK_ROLE_PERMISSIONS.find((r) => r.roleKey === employee.roleKey);
+  const role = DEMO_STAFF_ROLE_PERMISSIONS.find(
+    (r) => r.roleKey === employee.roleKey,
+  );
 
   const myAssignments = MOCK_ASSIGNMENTS.filter(
     (a) => a.employeeId === employee.id,
@@ -129,9 +134,10 @@ export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps
       </div>
 
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Mock data:</strong> This
-        profile is assembled from existing admin mock employees, assignments,
-        approvals, and vacations. It will later be replaced by Supabase queries.
+        <strong className="font-semibold text-navy-900">Demo role profile:</strong>{" "}
+        Identity and permissions come from the shared CounselFlow demo role
+        system. Assignment and approval sections show linked operational data
+        when it exists for this profile.
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

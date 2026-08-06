@@ -26,12 +26,14 @@ import {
   uniquePracticeAreas,
 } from "@/lib/admin/calculations";
 import {
+  DEMO_STAFF_EMPLOYEES,
+  DEMO_STAFF_ROLE_PERMISSIONS,
+} from "@/lib/admin/demo-staff";
+import {
   ADMIN_REFERENCE_DATE,
   ADMIN_UI_FLAGS,
   MOCK_APPROVALS,
   MOCK_ASSIGNMENTS,
-  MOCK_EMPLOYEES,
-  MOCK_ROLE_PERMISSIONS,
   MOCK_VACATIONS,
 } from "@/lib/admin/mock-data";
 import type { EmploymentStatus, WorkloadCapacityStatus } from "@/lib/admin/types";
@@ -60,12 +62,12 @@ export function EmployeeProfiles() {
   >("all");
 
   const practiceAreas = useMemo(
-    () => uniquePracticeAreas(MOCK_EMPLOYEES),
+    () => uniquePracticeAreas(DEMO_STAFF_EMPLOYEES),
     [],
   );
 
   const filtered = useMemo(() => {
-    return MOCK_EMPLOYEES.filter((employee) => {
+    return DEMO_STAFF_EMPLOYEES.filter((employee) => {
       if (
         searchName &&
         !employee.fullName.toLowerCase().includes(searchName.toLowerCase())
@@ -117,18 +119,19 @@ export function EmployeeProfiles() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Mock data:</strong>{" "}
-        Employee Profiles use existing admin mock records. Open a profile for
-        assignments, approvals, leave, and productivity. Add/edit lives under
-        Attorney Management — not duplicated here.
+        <strong className="font-semibold text-navy-900">Demo roles:</strong>{" "}
+        Employee Profiles list every CounselFlow demo role identity (Managing
+        Partner through Prospective Client). Open a profile for role details and
+        capacity. Matter assignments still use shared operational data when
+        available.
       </div>
 
       <Card padding="md">
         <CardHeader>
           <CardTitle>Employee profiles</CardTitle>
           <CardDescription>
-            Search and filter the staff roster, then open a profile for workload
-            and productivity detail.
+            Roster of all demo-role identities used across CounselFlow. Search
+            and filter, then open a profile for role and capacity detail.
           </CardDescription>
         </CardHeader>
 
@@ -145,7 +148,7 @@ export function EmployeeProfiles() {
             onChange={(e) => setRoleFilter(e.target.value)}
             options={[
               { value: "all", label: "All roles" },
-              ...MOCK_ROLE_PERMISSIONS.map((role) => ({
+              ...DEMO_STAFF_ROLE_PERMISSIONS.map((role) => ({
                 value: role.roleKey,
                 label: role.roleLabel,
               })),
