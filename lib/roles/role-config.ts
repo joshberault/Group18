@@ -44,6 +44,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
     defaultRoute: "/dashboard",
     allowedRoutes: [
       "dashboard",
+      "approvals",
       "clients",
       "matters",
       "attorney_hub",
@@ -61,7 +62,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
     ],
     dashboardTitle: "Managing Partner Dashboard",
     dashboardDescription:
-      "Firm-wide revenue, collections, and profitability at a glance.",
+      "Firm-wide revenue, collections, profitability, and approval queue.",
     permissions: [
       "view_firm_dashboard",
       "manage_clients",
@@ -184,17 +185,18 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   firm_administrator: {
     displayName: USER_ROLE_LABELS.firm_administrator,
-    defaultRoute: "/dashboard",
+    defaultRoute: "/admin",
     allowedRoutes: [
       "dashboard",
+      "administration",
       "clients",
       "matters",
       "tasks",
       "reports",
     ],
-    dashboardTitle: "Firm Administration Dashboard",
+    dashboardTitle: "Manager Dashboard",
     dashboardDescription:
-      "Operational oversight across clients, staff, and firm settings.",
+      "Staff, matters, assignments, workload, and roles.",
     permissions: [
       "manage_clients",
       "manage_matters",
@@ -293,6 +295,14 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
   // Prospective Client demo is Dashboard-only (consultation request form).
   if (role === "prospective_client") {
     return pathname === "/dashboard" || pathname === "/dashboard/";
+  }
+
+  // Approval Queue lives on the Managing Partner dashboard.
+  if (
+    pathname === "/dashboard/approvals" ||
+    pathname.startsWith("/dashboard/approvals/")
+  ) {
+    return role === "managing_partner";
   }
 
   // Billing Specialist may open Client Trust Accounts from the firm Dashboard KPI.

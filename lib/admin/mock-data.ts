@@ -58,12 +58,6 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     description: "Matter and case staffing assignments",
   },
   {
-    key: "approvals",
-    label: "Approval Queue",
-    href: "/admin/approvals",
-    description: "Pending internal approvals",
-  },
-  {
     key: "workload",
     label: "Workload Board",
     href: "/admin/workload",

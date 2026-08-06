@@ -29,8 +29,8 @@ export function AdminAccessGate({ children }: { children: React.ReactNode }) {
           Firm Administrator demo role required
         </CardTitle>
         <CardDescription className="text-navy-800">
-          Admin/Staff Information (employees, assignments, approvals, workload,
-          and roles) is available under the{" "}
+          Admin/Staff Information (employees, assignments, workload, and roles)
+          is available under the{" "}
           <strong>Firm Administrator</strong> demo role. Your current demo role
           is <strong>{USER_ROLE_LABELS[role]}</strong>.
         </CardDescription>

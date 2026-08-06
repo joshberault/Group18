@@ -150,6 +150,10 @@ function mapDbRoleToUi(role: string | null): {
     attorney: "attorney",
     paralegal: "paralegal",
     managing_partner: "managing_partner",
+    billing_specialist: "billing_specialist",
+    accounting_manager: "accounting_manager",
+    firm_administrator: "firm_administrator",
+    // Legacy DB enum aliases
     admin: "firm_administrator",
     manager: "managing_partner",
     staffer: "billing_specialist",
@@ -167,8 +171,15 @@ function mapDbRoleToUi(role: string | null): {
           ? "Legal Practice"
           : uiRole === "paralegal"
             ? "Legal Support"
-            : "Administration",
-      isAttorney: ATTORNEY_ROLES.has(raw) || uiRole === "attorney",
+            : uiRole === "billing_specialist"
+              ? "Billing"
+              : uiRole === "accounting_manager"
+                ? "Accounting"
+                : "Administration",
+      isAttorney:
+        ATTORNEY_ROLES.has(raw) ||
+        uiRole === "attorney" ||
+        uiRole === "managing_partner",
     };
   }
   return {
@@ -195,10 +206,36 @@ function toApprovalStatus(
 }
 
 function toJobStatus(status: string | null): JobApplicationStatus {
-  if (status === "interview" || status === "hired" || status === "rejected") {
-    return status;
+  const normalized = (status || "").toLowerCase();
+  if (
+    normalized === "interview" ||
+    normalized === "hired" ||
+    normalized === "rejected"
+  ) {
+    return normalized;
   }
+  // DB default is "new"; treat as pending review in Admin UI.
   return "pending";
+}
+
+function parseJobNotes(notes: string | null): {
+  practiceArea: string;
+  yearsExperience: number;
+  resumeOnFile: boolean;
+  cleanNotes: string;
+} {
+  const raw = notes?.trim() || "";
+  const practiceMatch = raw.match(/Practice area:\s*([^|.]+)/i);
+  const yearsMatch = raw.match(/(\d+)\+?\s*years?/i);
+  const resumeMissing = /resume\s+(missing|not on file)/i.test(raw);
+  const resumeAttached = /resume\s+(attached|on file)/i.test(raw);
+
+  return {
+    practiceArea: practiceMatch?.[1]?.trim() || "General",
+    yearsExperience: yearsMatch ? Number(yearsMatch[1]) : 0,
+    resumeOnFile: resumeAttached ? true : resumeMissing ? false : true,
+    cleanNotes: raw,
+  };
 }
 
 function addDays(isoDate: string, days: number): string {
@@ -353,18 +390,19 @@ function mapVacation(
 }
 
 function mapJobApplication(row: JobAppRow): AdminJobApplication {
+  const parsed = parseJobNotes(row.notes);
   return {
     id: row.id,
     applicantName: row.applicant_name?.trim() || "Unknown Applicant",
     email: row.email?.trim() || "",
     phone: "",
     appliedRole: row.role_applied?.trim() || "Open Role",
-    practiceArea: "General",
+    practiceArea: parsed.practiceArea,
     submittedAt: row.submitted_at || new Date().toISOString(),
     status: toJobStatus(row.status),
-    yearsExperience: 0,
-    notes: row.notes?.trim() || "",
-    resumeOnFile: false,
+    yearsExperience: parsed.yearsExperience,
+    notes: parsed.cleanNotes,
+    resumeOnFile: parsed.resumeOnFile,
   };
 }
 
@@ -602,17 +640,19 @@ export async function fetchAdminOperationsDataset(): Promise<AdminOperationsData
 
   const staffProfiles = profiles.filter((p) => {
     const role = (p.role || "").toLowerCase();
-    return role !== "client";
+    return role !== "client" && role !== "prospective_client";
   });
 
-  const employees = staffProfiles.map((p, index) =>
-    mapEmployee(
-      p,
-      practiceById.get(p.practice_area_id || "") || "General",
-      hoursByProfile,
-      index,
-    ),
-  );
+  const employees = staffProfiles
+    .map((p, index) =>
+      mapEmployee(
+        p,
+        practiceById.get(p.practice_area_id || "") || "General",
+        hoursByProfile,
+        index,
+      ),
+    )
+    .sort((a, b) => a.fullName.localeCompare(b.fullName));
   const employeeById = new Map(employees.map((e) => [e.id, e]));
 
   const leadByMatter = new Map<string, { name: string; employeeId: string }>();
@@ -704,8 +744,10 @@ export async function fetchAdminOperationsDataset(): Promise<AdminOperationsData
   const jobApplications = jobRows.map(mapJobApplication);
 
   // Role matrix from shared CounselFlow role-config (DB role_permissions is sparse/empty).
-  const rolePermissions: AdminRolePermission[] =
-    DEMO_STAFF_ROLE_PERMISSIONS.map((r) => ({ ...r }));
+  // Employee Profiles is internal staff only — exclude external portal roles.
+  const rolePermissions: AdminRolePermission[] = DEMO_STAFF_ROLE_PERMISSIONS.filter(
+    (r) => r.roleKey !== "client" && r.roleKey !== "prospective_client",
+  ).map((r) => ({ ...r }));
 
   const pendingApprovalsByEmployee: Record<string, number> = {};
   for (const a of approvals) {
