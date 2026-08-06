@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { Suspense } from "react";
 import { AccountingManagerMattersView } from "@/components/accounting-manager/matters/AccountingManagerMattersView";
 import { RoleRestrictedModule } from "@/components/layout/RoleRestrictedModule";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { ManagingPartnerMattersView } from "@/components/matters/ManagingPartnerMattersView";
 import { MatterWorkspace } from "@/components/matters/MatterWorkspace";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -16,6 +18,21 @@ export function MattersPageClient() {
 
   if (selectedRole === "accounting_manager") {
     return <AccountingManagerMattersView />;
+  }
+
+  if (selectedRole === "managing_partner") {
+    return (
+      <Suspense
+        fallback={
+          <PageHeader
+            title="Firm Matters"
+            description="Loading firm-wide matter register…"
+          />
+        }
+      >
+        <ManagingPartnerMattersView />
+      </Suspense>
+    );
   }
 
   if (selectedRole === "paralegal") {
