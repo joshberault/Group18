@@ -14,6 +14,7 @@ import {
   buildProductivityMetrics,
   buildWorkloadItems,
 } from "@/lib/admin/calculations";
+import { MOCK_JOB_APPLICATIONS } from "@/lib/admin/job-applications-data";
 import type {
   AdminApproval,
   AdminAssignment,
@@ -25,6 +26,8 @@ import type {
   AdminUnassignedMatter,
   AdminVacation,
 } from "@/lib/admin/types";
+
+export { MOCK_JOB_APPLICATIONS } from "@/lib/admin/job-applications-data";
 
 /** Fixed “today” so due-soon / overdue demos stay stable. */
 export const ADMIN_REFERENCE_DATE = "2026-08-04";
@@ -1412,6 +1415,7 @@ export function getAdminDashboardDataset() {
     unassignedMatters: MOCK_UNASSIGNED_MATTERS,
     approvals: MOCK_APPROVALS,
     vacations: MOCK_VACATIONS,
+    jobApplications: MOCK_JOB_APPLICATIONS,
     workload: buildWorkloadItems(MOCK_EMPLOYEES, OPEN_MATTERS, PENDING_BY_EMP),
     productivity: buildProductivityMetrics(MOCK_EMPLOYEES, MATTERS_CLOSED),
     summary: buildDashboardSummary({

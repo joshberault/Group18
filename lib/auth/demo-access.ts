@@ -6,6 +6,7 @@ export const STAFF_ROLES: UserRole[] = [
   "attorney",
   "paralegal",
   "billing_specialist",
+  "accounting_manager",
   "firm_administrator",
 ];
 

@@ -1,3 +1,5 @@
+"use client";
+
 import { formatDate, statusBadgeClass } from "@/lib/attorney/format";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
@@ -15,7 +17,7 @@ export function TimeEntryList({ entries }: { entries: TimeEntry[] }) {
     return (
       <EmptyState
         title="No time entries yet"
-        description="Log your first entry using the form above."
+        description="Log your first entry using the timer or manual form above."
       />
     );
   }
@@ -27,6 +29,7 @@ export function TimeEntryList({ entries }: { entries: TimeEntry[] }) {
           <TableHead>Date</TableHead>
           <TableHead>Matter</TableHead>
           <TableHead>Hours</TableHead>
+          <TableHead>Billable</TableHead>
           <TableHead>Description</TableHead>
           <TableHead>Status</TableHead>
         </TableRow>
@@ -37,9 +40,12 @@ export function TimeEntryList({ entries }: { entries: TimeEntry[] }) {
             <TableCell>{formatDate(entry.entry_date)}</TableCell>
             <TableCell>{entry.matter?.title ?? "—"}</TableCell>
             <TableCell>{entry.hours}</TableCell>
+            <TableCell>{entry.is_billable ? "Yes" : "No"}</TableCell>
             <TableCell>{entry.description}</TableCell>
             <TableCell>
-              <span className={`rounded-full px-2 py-1 text-xs font-medium capitalize ${statusBadgeClass(entry.status)}`}>
+              <span
+                className={`rounded-full px-2 py-1 text-xs font-medium capitalize ${statusBadgeClass(entry.status)}`}
+              >
                 {entry.status}
               </span>
             </TableCell>

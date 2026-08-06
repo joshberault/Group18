@@ -1,12 +1,23 @@
-import { RoleRestrictedModule } from "@/components/layout/RoleRestrictedModule";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { ClientPortalContent } from "@/components/client-portal/ClientPortalContent";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 
 export default function ClientPortalPage() {
-  return (
-    <RoleRestrictedModule
-      href="/client-portal"
-      title="Client Portal"
-      description="Client-facing access to matters, invoices, trust balances, and secure document sharing."
-      iconName="portal"
-    />
-  );
+  const router = useRouter();
+  const { selectedRole } = useDemoRole();
+
+  useEffect(() => {
+    if (selectedRole === "client") {
+      router.replace("/client-portal/account-summary");
+    }
+  }, [router, selectedRole]);
+
+  if (selectedRole === "client") {
+    return null;
+  }
+
+  return <ClientPortalContent />;
 }

@@ -20,9 +20,22 @@ export function TableBody({ children }: { children: React.ReactNode }) {
   return <tbody className="divide-y divide-gray-100">{children}</tbody>;
 }
 
-export function TableRow({ children, className }: { children: React.ReactNode; className?: string }) {
+export function TableRow({
+  children,
+  className,
+  onClick,
+  ...props
+}: React.ComponentPropsWithoutRef<"tr">) {
   return (
-    <tr className={cn("hover:bg-gray-50/80 transition-colors", className)}>
+    <tr
+      className={cn(
+        "hover:bg-gray-50/80 transition-colors",
+        onClick && "cursor-pointer",
+        className,
+      )}
+      onClick={onClick}
+      {...props}
+    >
       {children}
     </tr>
   );
@@ -43,11 +56,15 @@ export function TableHead({
 export function TableCell({
   children,
   className,
+  colSpan,
 }: {
   children: React.ReactNode;
   className?: string;
+  colSpan?: number;
 }) {
   return (
-    <td className={cn("px-4 py-3 text-navy-900", className)}>{children}</td>
+    <td colSpan={colSpan} className={cn("px-4 py-3 text-navy-900", className)}>
+      {children}
+    </td>
   );
 }

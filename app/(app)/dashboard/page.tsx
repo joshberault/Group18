@@ -1,5 +1,5 @@
-import { DashboardContent } from "@/components/dashboard/DashboardContent";
+import { RoleLandingGate } from "@/components/layout/RoleLandingGate";
 
 export default function DashboardPage() {
-  return <DashboardContent />;
+  return <RoleLandingGate />;
 }

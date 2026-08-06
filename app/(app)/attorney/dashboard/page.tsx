@@ -1,8 +1,14 @@
+"use client";
+
 import Link from "next/link";
 import { Briefcase, Clock, ListTodo } from "lucide-react";
+import { AttorneyCalendar } from "@/components/attorney/AttorneyCalendar";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { ParalegalAttorneyHub } from "@/components/paralegal/ParalegalAttorneyHub";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { KPICard } from "@/components/ui/KPICard";
 import {
+  DEMO_ATTORNEY_TITLE,
   DEMO_MATTERS,
   DEMO_PROFILE,
   DEMO_TASKS,
@@ -10,6 +16,11 @@ import {
 } from "@/lib/attorney/demo-data";
 
 export default function AttorneyDashboardPage() {
+  const { role } = useDemoRole();
+  if (role === "paralegal") {
+    return <ParalegalAttorneyHub />;
+  }
+
   const matterCount = DEMO_MATTERS.length;
   const pendingTime = DEMO_TIME_ENTRIES.filter((e) => e.status === "pending").length;
   const openTasks = DEMO_TASKS.filter((t) => t.status !== "completed").length;
@@ -24,7 +35,7 @@ export default function AttorneyDashboardPage() {
     <div>
       <PageHeader
         title="Attorney Hub"
-        description={`Welcome back, ${DEMO_PROFILE.full_name}. Track matters, time, and tasks.`}
+        description={`Welcome back, ${DEMO_PROFILE.full_name}, ${DEMO_ATTORNEY_TITLE}. Track matters, time, and tasks.`}
       />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -34,6 +45,8 @@ export default function AttorneyDashboardPage() {
           </Link>
         ))}
       </div>
+
+      <AttorneyCalendar />
     </div>
   );
 }

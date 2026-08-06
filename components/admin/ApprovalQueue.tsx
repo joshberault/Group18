@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -32,8 +32,16 @@ import {
   MOCK_APPROVALS,
   MOCK_ASSIGNMENTS,
   MOCK_EMPLOYEES,
+  MOCK_MATTERS,
   MOCK_VACATIONS,
 } from "@/lib/admin/mock-data";
+import { invoiceApprovedBillableTime } from "@/lib/billing/approved-time-billing";
+import {
+  getMergedApprovals,
+  isDemoSessionApproval,
+  resolveDemoTimeApproval,
+  subscribeTimeWorkflow,
+} from "@/lib/demo/time-workflow-store";
 import type {
   AdminApproval,
   AdminEmployee,
@@ -75,8 +83,17 @@ function typeLabel(type: ApprovalType) {
 
 export function ApprovalQueue() {
   const [approvals, setApprovals] = useState<AdminApproval[]>(() =>
-    MOCK_APPROVALS.map((row) => ({ ...row })),
+    getMergedApprovals().map((row) => ({ ...row })),
   );
+
+  useEffect(() => {
+    return subscribeTimeWorkflow(() => {
+      setApprovals((prev) => {
+        const edited = new Map(prev.map((row) => [row.id, row]));
+        return getMergedApprovals().map((row) => edited.get(row.id) ?? row);
+      });
+    });
+  }, []);
   const [employees, setEmployees] = useState<AdminEmployee[]>(() =>
     MOCK_EMPLOYEES.map((row) => ({ ...row })),
   );
@@ -245,7 +262,7 @@ export function ApprovalQueue() {
     setModalMode(mode);
   }
 
-  function applyDecision(decision: "approved" | "rejected" | "returned") {
+  async function applyDecision(decision: "approved" | "rejected" | "returned") {
     if (!selected || !actingReviewer || processingLock.current) return;
 
     const blocked = assertCanReview(selected);
@@ -282,11 +299,50 @@ export function ApprovalQueue() {
       return;
     }
 
+    let approvedInvoice:
+      | { invoiceNumber: string; amount: number; alreadyInvoiced: boolean }
+      | undefined;
+    if (
+      decision === "approved" &&
+      selected.type === "time_entry" &&
+      selected.timeEntryBillable
+    ) {
+      const employee = employees.find((row) => row.id === selected.employeeId);
+      const matter = MOCK_MATTERS.find((row) => row.id === selected.matterId);
+      if (!employee || !matter) {
+        setActionError(
+          "The employee or matter record needed to create the invoice was not found.",
+        );
+        return;
+      }
+
+      const billingResult = await invoiceApprovedBillableTime({
+        approval: selected,
+        employee,
+        matter,
+        invoiceDate: ADMIN_REFERENCE_DATE,
+      });
+      if (!billingResult.ok) {
+        setActionError(billingResult.error);
+        return;
+      }
+      approvedInvoice = billingResult;
+    }
+
     processingLock.current = true;
     setProcessingId(selected.id);
     const reviewedAt = `${ADMIN_REFERENCE_DATE}T18:00:00Z`;
     const title = selected.title;
     const reviewerName = actingReviewer.fullName;
+
+    if (isDemoSessionApproval(selected.id) && selected.type === "time_entry") {
+      resolveDemoTimeApproval(
+        selected.id,
+        decision,
+        reviewerName,
+        reviewNotes.trim() || undefined,
+      );
+    }
 
     setApprovals((prev) =>
       prev.map((row) => {
@@ -344,8 +400,14 @@ export function ApprovalQueue() {
       }
     }
 
+    const invoiceMessage = approvedInvoice
+      ? ` Invoice ${approvedInvoice.invoiceNumber} was ${approvedInvoice.alreadyInvoiced ? "already present" : "created"} for ${new Intl.NumberFormat(
+          "en-US",
+          { style: "currency", currency: "USD" },
+        ).format(approvedInvoice.amount)}, and the client was notified.`
+      : "";
     setSuccessMessage(
-      `${decision === "approved" ? "Approved" : decision === "rejected" ? "Rejected" : "Returned"} “${title}” as ${reviewerName}.`,
+      `${decision === "approved" ? "Approved" : decision === "rejected" ? "Rejected" : "Returned"} “${title}” as ${reviewerName}.${invoiceMessage}`,
     );
     processingLock.current = false;
     setProcessingId(null);
@@ -893,7 +955,11 @@ export function ApprovalQueue() {
       <DecisionModal
         open={modalMode === "confirm_approve"}
         title="Confirm approval"
-        description="Final approval will update local status and preserve the original submission."
+        description={
+          selected?.type === "time_entry" && selected.timeEntryBillable
+            ? "Final approval will calculate the title-based fee, add a sent invoice, and notify the client."
+            : "Final approval will update local status and preserve the original submission."
+        }
         notesRequired={false}
         reviewNotes={reviewNotes}
         notesError={notesError}

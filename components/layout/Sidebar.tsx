@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useDemoRole } from "@/components/layout/DemoRoleProvider";
-import { canAccessNavItem } from "@/lib/auth/demo-access";
-import { NAV_ITEMS } from "@/lib/navigation";
 import { cn } from "@/lib/utils/cn";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { Button } from "@/components/ui/Button";
 
 interface SidebarProps {
@@ -23,10 +21,7 @@ export function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const pathname = usePathname();
-  const { role } = useDemoRole();
-  const visibleNavItems = NAV_ITEMS.filter((item) =>
-    canAccessNavItem(role, item.roles),
-  );
+  const { navigationItems } = useDemoRole();
 
   return (
     <>
@@ -74,10 +69,12 @@ export function Sidebar({
 
         <nav className="flex-1 overflow-y-auto px-2 py-4">
           <ul className="space-y-1">
-            {visibleNavItems.map((item) => {
+            {navigationItems.map((item) => {
               const isActive =
                 pathname === item.href ||
-                (item.href !== "/dashboard" && pathname.startsWith(item.href));
+                (item.href !== "/dashboard" &&
+                  item.href !== "/attorney/dashboard" &&
+                  pathname.startsWith(item.href));
               const Icon = item.icon;
 
               return (

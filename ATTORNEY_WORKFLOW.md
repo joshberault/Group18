@@ -8,18 +8,18 @@
 
 ## Demo role access (no login)
 
-Use the **Demo role** dropdown in the header to switch roles and see who can access each area:
+Use the **Demo role** dropdown in the header to switch roles and see who can access each area.
 
-| Role | Attorney Hub | Billing / Accounting | Client Portal |
-|------|--------------|----------------------|---------------|
-| Managing Partner | Yes | Yes | Yes |
-| Attorney | Yes | No | No |
-| Paralegal | Yes | No | No |
-| Billing Specialist | Time only | Yes | No |
-| Firm Administrator | No | Yes | Yes |
-| Client | No | No | Yes |
+**Role-based home dashboards:**
 
-Sidebar nav and page guards update automatically when you change roles. Sample data is shown until real Supabase auth is added.
+| Role | Lands on |
+|------|----------|
+| Attorney / Paralegal | `/attorney/dashboard` (My Dashboard) |
+| Managing Partner | `/dashboard` (firm overview) + Attorney Hub in nav |
+| Billing Specialist | `/billing` |
+| Client | `/client-portal` |
+
+See `INTEGRATION.md` for teammate dependencies and merge order.
 
 ## Shared stubs (coordinate with teammates)
 

@@ -89,7 +89,7 @@ Assign modules to teammates and record branch names here as work begins:
 | Module | Route | Owner | Branch |
 |--------|-------|-------|--------|
 | Dashboard | `/dashboard` | Shared foundation | `main` |
-| Clients | `/clients` | TBD | TBD |
+| Clients | `/clients` | Joseph | `Joseph` |
 | Matters | `/matters` | TBD | TBD |
 | Time & Expenses | `/time` | TBD | TBD |
 | Tasks & Deadlines | `/tasks` | TBD | TBD |

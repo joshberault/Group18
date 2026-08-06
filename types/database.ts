@@ -75,9 +75,42 @@ export type ExpenseSubmission = {
 export type Task = {
   id: string;
   matter_id: string;
+  profile_id?: string;
   title: string;
   description: string | null;
   due_date: string | null;
   status: TaskStatus;
   matter?: { title: string } | null;
+};
+
+export type Deadline = {
+  id: string;
+  matter_id: string;
+  title: string;
+  description: string | null;
+  due_date: string;
+  matter?: { title: string } | null;
+};
+
+export type AttorneyNote = {
+  id: string;
+  matter_id: string;
+  profile_id: string;
+  note_text: string;
+  created_at: string;
+  matter?: { title: string } | null;
+  author?: { full_name: string } | null;
+};
+
+export type DocumentChecklistItem = {
+  id: string;
+  matter_id: string;
+  label: string;
+  completed: boolean;
+  due_date: string | null;
+};
+
+export type DemoAttorney = {
+  id: string;
+  full_name: string;
 };

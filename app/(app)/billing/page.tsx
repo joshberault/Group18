@@ -1,12 +1,10 @@
-import { RoleRestrictedModule } from "@/components/layout/RoleRestrictedModule";
+import { BillingPageClient } from "./BillingPageClient";
+import { fetchBillingDashboard } from "@/lib/billing/queries";
 
-export default function BillingPage() {
-  return (
-    <RoleRestrictedModule
-      href="/billing"
-      title="Billing"
-      description="Configure billing rates, fee arrangements, billing cycles, and pre-invoice review."
-      iconName="billing"
-    />
-  );
+export const dynamic = "force-dynamic";
+
+export default async function BillingPage() {
+  const data = await fetchBillingDashboard();
+
+  return <BillingPageClient dashboardData={data} />;
 }

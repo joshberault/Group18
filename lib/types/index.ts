@@ -3,6 +3,7 @@ export const USER_ROLES = [
   "attorney",
   "paralegal",
   "billing_specialist",
+  "accounting_manager",
   "firm_administrator",
   "client",
 ] as const;
@@ -14,6 +15,7 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
   attorney: "Attorney",
   paralegal: "Paralegal",
   billing_specialist: "Billing Specialist",
+  accounting_manager: "Accounting Manager",
   firm_administrator: "Firm Administrator",
   client: "Client",
 };

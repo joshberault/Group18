@@ -1,6 +1,8 @@
 import type {
+  AdminActivityItem,
   AdminApproval,
   AdminAssignment,
+  AdminAttentionItem,
   AdminDashboardFilters,
   AdminDashboardSummary,
   AdminEmployee,
@@ -9,6 +11,7 @@ import type {
   AdminVacation,
   AdminWorkloadBoardRow,
   AdminWorkloadItem,
+  AttentionPriority,
   EmployeeProfileProductivity,
   VacationStatusLabel,
   WorkloadBoardClassification,
@@ -489,6 +492,9 @@ export function buildDashboardSummary(input: {
     employeesOnApprovedLeave: employees.filter((e) => e.status === "on_leave")
       .length,
     pendingApprovals: approvals.filter((a) => a.status === "pending").length,
+    urgentPendingApprovals: approvals.filter(
+      (a) => a.status === "pending" && a.priority === "urgent",
+    ).length,
     overloadedEmployees: employees.filter(
       (e) => deriveCapacityStatus(e) === "overloaded",
     ).length,
@@ -497,6 +503,13 @@ export function buildDashboardSummary(input: {
       referenceDate,
       7,
     ).length,
+    overdueAssignments: getOverdueAssignments(assignments, referenceDate)
+      .filter(
+        (a) =>
+          a.status === "active" ||
+          a.status === "pending" ||
+          a.status === "overdue",
+      ).length,
     unassignedMatters: unassignedMatters.length,
     averageAttorneyUtilization: calculateAverageUtilization(attorneyMetrics),
   };
@@ -952,4 +965,415 @@ export function workloadBoardClassificationLabel(
     case "unavailable":
       return "Unavailable";
   }
+}
+
+const PRIORITY_RANK: Record<AttentionPriority, number> = {
+  urgent: 0,
+  high: 1,
+  normal: 2,
+};
+
+/** Available for assignment: active attorney, not on leave, workload below 90%. */
+export function getAttorneysAvailableForAssignment(
+  employees: AdminEmployee[],
+): AdminEmployee[] {
+  return employees.filter((employee) => {
+    if (!employee.isAttorney) return false;
+    if (employee.status !== "active") return false;
+    const pct = calculateWorkloadPercentage(
+      employee.assignedHours,
+      employee.weeklyCapacityHours,
+    );
+    return pct < 90;
+  });
+}
+
+export function buildAttentionItems(input: {
+  employees: AdminEmployee[];
+  assignments: AdminAssignment[];
+  approvals: AdminApproval[];
+  unassignedMatters: AdminUnassignedMatter[];
+  vacations: AdminVacation[];
+  referenceDate: string;
+  limit?: number;
+}): AdminAttentionItem[] {
+  const {
+    employees,
+    assignments,
+    approvals,
+    unassignedMatters,
+    vacations,
+    referenceDate,
+    limit = 8,
+  } = input;
+  const items: AdminAttentionItem[] = [];
+
+  for (const employee of employees) {
+    if (employee.status === "inactive") continue;
+    const pct = calculateWorkloadPercentage(
+      employee.assignedHours,
+      employee.weeklyCapacityHours,
+    );
+    if (pct > 100) {
+      items.push({
+        id: `attn-over-${employee.id}`,
+        priority: "urgent",
+        issue: "Attorney above 100% capacity",
+        subjectLabel: employee.fullName,
+        subjectHref: `/admin/employees/${employee.id}`,
+        dateOrAge: `${pct}% workload`,
+        actionLabel: "View Workload",
+        actionHref: "/admin/workload",
+        sortAgeDays: Math.round(pct),
+      });
+    } else if (pct >= 90) {
+      items.push({
+        id: `attn-near-${employee.id}`,
+        priority: "high",
+        issue: "Attorney between 90% and 100% capacity",
+        subjectLabel: employee.fullName,
+        subjectHref: `/admin/employees/${employee.id}`,
+        dateOrAge: `${pct}% workload`,
+        actionLabel: "View Workload",
+        actionHref: "/admin/workload",
+        sortAgeDays: Math.round(pct),
+      });
+    }
+  }
+
+  for (const matter of unassignedMatters) {
+    items.push({
+      id: `attn-unassigned-${matter.id}`,
+      priority: matter.urgency === "high" ? "urgent" : "high",
+      issue: "Matter without a lead attorney",
+      subjectLabel: `${matter.matterLabel} (${matter.matterReference})`,
+      subjectHref: "/admin/assignments",
+      dateOrAge: `Opened ${matter.openedDate}`,
+      actionLabel: "Assign Attorney",
+      actionHref: `/admin/assignments?matterId=${matter.id}&intent=new`,
+      sortAgeDays: countBusinessDaysAge(
+        `${matter.openedDate}T00:00:00Z`,
+        referenceDate,
+      ),
+    });
+  }
+
+  for (const assignment of getOverdueAssignments(assignments, referenceDate)) {
+    if (
+      assignment.status !== "active" &&
+      assignment.status !== "pending" &&
+      assignment.status !== "overdue"
+    ) {
+      continue;
+    }
+    items.push({
+      id: `attn-overdue-${assignment.id}`,
+      priority: "urgent",
+      issue: "Overdue assignment",
+      subjectLabel: `${assignment.matterReference} — ${assignment.attorneyName}`,
+      subjectHref: "/admin/assignments",
+      dateOrAge: `Due ${assignment.dueDate}`,
+      actionLabel: "View Assignment",
+      actionHref: `/admin/assignments?employeeId=${assignment.employeeId}`,
+      sortAgeDays: countBusinessDaysAge(
+        `${assignment.dueDate}T00:00:00Z`,
+        referenceDate,
+      ),
+    });
+  }
+
+  for (const approval of approvals.filter((a) => a.status === "pending")) {
+    if (approval.type === "vacation") {
+      items.push({
+        id: `attn-vac-apr-${approval.id}`,
+        priority: approval.priority === "urgent" ? "urgent" : "high",
+        issue: "Vacation request awaiting approval",
+        subjectLabel: approval.submittedBy,
+        subjectHref: `/admin/employees/${approval.employeeId}`,
+        dateOrAge: `${countBusinessDaysAge(approval.submittedAt, referenceDate)} business days`,
+        actionLabel: "Review Approval",
+        actionHref: "/admin/approvals",
+        sortAgeDays: countBusinessDaysAge(
+          approval.submittedAt,
+          referenceDate,
+        ),
+      });
+
+      if (approval.vacationStartDate && approval.vacationEndDate) {
+        const conflicts = getConflictingAssignmentsForVacation(
+          approval.employeeId,
+          approval.vacationStartDate,
+          approval.vacationEndDate,
+          assignments,
+        );
+        if (conflicts.length > 0) {
+          items.push({
+            id: `attn-vac-conflict-${approval.id}`,
+            priority: "urgent",
+            issue: "Vacation conflicting with a deadline",
+            subjectLabel: `${approval.submittedBy} · ${conflicts[0].matterReference}`,
+            subjectHref: `/admin/employees/${approval.employeeId}`,
+            dateOrAge: `${approval.vacationStartDate} → ${approval.vacationEndDate}`,
+            actionLabel: "Review Coverage",
+            actionHref: "/admin/approvals",
+            sortAgeDays: countBusinessDaysAge(
+              approval.submittedAt,
+              referenceDate,
+            ),
+          });
+        }
+        if (!approval.backupEmployeeId && conflicts.length > 0) {
+          items.push({
+            id: `attn-vac-cover-${approval.id}`,
+            priority: "high",
+            issue: "Employee on leave without coverage",
+            subjectLabel: approval.submittedBy,
+            subjectHref: `/admin/employees/${approval.employeeId}`,
+            dateOrAge: "No backup employee listed",
+            actionLabel: "Review Coverage",
+            actionHref: "/admin/approvals",
+            sortAgeDays: countBusinessDaysAge(
+              approval.submittedAt,
+              referenceDate,
+            ),
+          });
+        }
+      }
+    }
+
+    const age = countBusinessDaysAge(approval.submittedAt, referenceDate);
+    if (isApprovalAgingOverdue(age)) {
+      items.push({
+        id: `attn-aging-${approval.id}`,
+        priority: "high",
+        issue: "Approval pending more than 3 business days",
+        subjectLabel: approval.title,
+        subjectHref: "/admin/approvals",
+        dateOrAge: `${age} business days`,
+        actionLabel: "Review Approval",
+        actionHref: "/admin/approvals",
+        sortAgeDays: age,
+      });
+    }
+  }
+
+  for (const employee of employees.filter((e) => e.status === "on_leave")) {
+    const open = getOpenAssignmentsForEmployee(employee.id, assignments);
+    if (open.length > 0 && !approvals.some(
+      (a) =>
+        a.employeeId === employee.id &&
+        a.type === "vacation" &&
+        a.backupEmployeeId,
+    )) {
+      const vac = vacations.find(
+        (v) => v.employeeId === employee.id && v.status === "approved",
+      );
+      items.push({
+        id: `attn-leave-cover-${employee.id}`,
+        priority: "high",
+        issue: "Employee on leave without coverage",
+        subjectLabel: employee.fullName,
+        subjectHref: `/admin/employees/${employee.id}`,
+        dateOrAge: vac
+          ? `${vac.startDate} → ${vac.endDate}`
+          : "Currently on leave",
+        actionLabel: "Review Coverage",
+        actionHref: "/admin/workload",
+        sortAgeDays: 5,
+      });
+    }
+  }
+
+  for (const employee of employees.filter((e) => e.status === "inactive")) {
+    const open = getOpenAssignmentsForEmployee(employee.id, assignments);
+    if (open.length > 0) {
+      items.push({
+        id: `attn-inactive-${employee.id}`,
+        priority: "urgent",
+        issue: "Inactive employee with active assignments",
+        subjectLabel: employee.fullName,
+        subjectHref: `/admin/employees/${employee.id}`,
+        dateOrAge: `${open.length} open assignment(s)`,
+        actionLabel: "Reassign",
+        actionHref: `/admin/assignments?employeeId=${employee.id}`,
+        sortAgeDays: open.length,
+      });
+    }
+  }
+
+  for (const assignment of assignments) {
+    if (
+      assignment.status !== "active" &&
+      assignment.status !== "pending" &&
+      assignment.status !== "overdue"
+    ) {
+      continue;
+    }
+    const employee = employees.find((e) => e.id === assignment.employeeId);
+    if (!employee) continue;
+    if (assignment.practiceArea !== employee.practiceArea) {
+      items.push({
+        id: `attn-practice-${assignment.id}`,
+        priority: "normal",
+        issue: "Assignment outside the employee’s practice area",
+        subjectLabel: `${employee.fullName} · ${assignment.matterReference}`,
+        subjectHref: `/admin/employees/${employee.id}`,
+        dateOrAge: `${assignment.practiceArea} vs ${employee.practiceArea}`,
+        actionLabel: "View Assignment",
+        actionHref: `/admin/assignments?employeeId=${employee.id}`,
+        sortAgeDays: countBusinessDaysAge(
+          `${assignment.assignedDate}T00:00:00Z`,
+          referenceDate,
+        ),
+      });
+    }
+  }
+
+  const deduped = [...new Map(items.map((item) => [item.id, item])).values()];
+  deduped.sort((a, b) => {
+    const byPriority = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+    if (byPriority !== 0) return byPriority;
+    return b.sortAgeDays - a.sortAgeDays;
+  });
+  return deduped.slice(0, limit);
+}
+
+export function buildRecentAdminActivity(input: {
+  approvals: AdminApproval[];
+  assignments: AdminAssignment[];
+  limit?: number;
+}): AdminActivityItem[] {
+  const { approvals, assignments, limit = 5 } = input;
+  const rows: AdminActivityItem[] = [];
+
+  for (const approval of approvals) {
+    if (!approval.reviewedAt || !approval.decision) continue;
+    const verb =
+      approval.decision === "approved"
+        ? approval.type === "vacation"
+          ? "Vacation approved"
+          : "Approval approved"
+        : approval.decision === "rejected"
+          ? "Approval rejected"
+          : "Approval returned";
+    rows.push({
+      id: `act-apr-${approval.id}`,
+      action: verb,
+      performedBy: approval.reviewerName ?? "Administrator",
+      affected: `${approval.submittedBy} · ${approval.title}`,
+      at: approval.reviewedAt,
+    });
+  }
+
+  for (const assignment of assignments) {
+    rows.push({
+      id: `act-asg-${assignment.id}`,
+      action:
+        assignment.status === "completed"
+          ? "Matter assignment completed"
+          : assignment.cancelReason
+            ? "Matter reassigned / canceled"
+            : "Matter assigned",
+      performedBy: "Administrator",
+      affected: `${assignment.attorneyName} · ${assignment.matterReference}`,
+      at: `${assignment.assignedDate}T12:00:00Z`,
+    });
+  }
+
+  rows.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  return rows.slice(0, limit);
+}
+
+export type LeaveCoverageStatus =
+  | "Covered"
+  | "Missing coverage"
+  | "Deadline conflict"
+  | "Backup over capacity";
+
+export interface UpcomingLeaveCoverageRow {
+  employeeId: string;
+  employeeName: string;
+  startDate: string;
+  endDate: string;
+  activeMatters: number;
+  coverageEmployee: string;
+  coverageStatus: LeaveCoverageStatus;
+  reviewHref: string;
+}
+
+export function buildUpcomingLeaveCoverage(input: {
+  vacations: AdminVacation[];
+  employees: AdminEmployee[];
+  assignments: AdminAssignment[];
+  approvals: AdminApproval[];
+  referenceDate: string;
+}): UpcomingLeaveCoverageRow[] {
+  const { vacations, employees, assignments, approvals, referenceDate } = input;
+  const ref = new Date(`${referenceDate}T12:00:00Z`).getTime();
+
+  return vacations
+    .filter(
+      (v) =>
+        v.status === "approved" &&
+        new Date(`${v.startDate}T00:00:00Z`).getTime() > ref,
+    )
+    .map((vacation) => {
+      const open = getOpenAssignmentsForEmployee(
+        vacation.employeeId,
+        assignments,
+      );
+      const relatedApproval = approvals.find(
+        (a) =>
+          a.employeeId === vacation.employeeId &&
+          a.type === "vacation" &&
+          a.vacationStartDate === vacation.startDate,
+      );
+      const backupId = relatedApproval?.backupEmployeeId;
+      const backupName =
+        relatedApproval?.backupEmployeeName ??
+        (backupId
+          ? employees.find((e) => e.id === backupId)?.fullName
+          : undefined);
+      const conflicts = getConflictingAssignmentsForVacation(
+        vacation.employeeId,
+        vacation.startDate,
+        vacation.endDate,
+        assignments,
+      );
+
+      let coverageStatus: LeaveCoverageStatus = "Covered";
+      if (!backupId) coverageStatus = "Missing coverage";
+      else if (conflicts.length > 0) coverageStatus = "Deadline conflict";
+      else {
+        const backup = employees.find((e) => e.id === backupId);
+        if (
+          backup &&
+          calculateWorkloadPercentage(
+            backup.assignedHours,
+            backup.weeklyCapacityHours,
+          ) > 100
+        ) {
+          coverageStatus = "Backup over capacity";
+        }
+      }
+
+      return {
+        employeeId: vacation.employeeId,
+        employeeName: vacation.employeeName,
+        startDate: vacation.startDate,
+        endDate: vacation.endDate,
+        activeMatters: new Set(open.map((a) => a.matterId)).size,
+        coverageEmployee: backupName ?? "None assigned",
+        coverageStatus,
+        reviewHref:
+          coverageStatus === "Missing coverage" ||
+          coverageStatus === "Deadline conflict"
+            ? "/admin/approvals"
+            : "/admin/workload",
+      };
+    })
+    .sort(
+      (a, b) =>
+        new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
+    );
 }
