@@ -11,7 +11,11 @@ import { AccessRestricted } from "./AccessRestricted";
  */
 export function RoleGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { selectedRole } = useDemoRole();
+  const { selectedRole, isClientReady } = useDemoRole();
+
+  if (!isClientReady) {
+    return <>{children}</>;
+  }
 
   if (!canAccessRoute(selectedRole, pathname)) {
     return <AccessRestricted attemptedPath={pathname} />;

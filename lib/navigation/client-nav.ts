@@ -4,7 +4,6 @@ import {
   ClipboardList,
   CreditCard,
   GitBranch,
-  LayoutDashboard,
   MessageSquare,
   Upload,
   Wallet,
@@ -13,13 +12,6 @@ import type { NavItem } from "@/lib/navigation";
 
 /** Sidebar navigation used ONLY when the demo role is Client. */
 export const CLIENT_NAV_ITEMS: NavItem[] = [
-  {
-    routeKey: "dashboard",
-    label: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    description: "Your overview and key updates",
-  },
   {
     routeKey: "client_portal",
     label: "Account Summary",
