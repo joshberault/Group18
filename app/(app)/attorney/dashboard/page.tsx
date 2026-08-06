@@ -17,7 +17,7 @@ export default function AttorneyDashboardPage() {
   }
 
   return (
-    <Suspense fallback={<LoadingState message="Opening Attorney Hub…" />}>
+    <Suspense fallback={<LoadingState message="Opening dashboard…" />}>
       <AttorneyDashboard />
     </Suspense>
   );

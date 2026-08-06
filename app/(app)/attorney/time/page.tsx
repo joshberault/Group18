@@ -23,11 +23,12 @@ export default function AttorneyTimePage() {
   }
 
   return (
-    <TimeEntriesPageClient
-      profileId={DEMO_PROFILE.id}
-      initialMatters={DEMO_MATTERS}
-      initialEntries={DEMO_TIME_ENTRIES}
-      previewMode
-    />
+    <Suspense fallback={<LoadingState message="Loading time entries…" />}>
+      <TimeEntriesPageClient
+        profileId={DEMO_PROFILE.id}
+        initialMatters={DEMO_MATTERS}
+        initialEntries={DEMO_TIME_ENTRIES}
+      />
+    </Suspense>
   );
 }
