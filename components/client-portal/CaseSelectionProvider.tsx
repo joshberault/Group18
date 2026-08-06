@@ -11,10 +11,12 @@ import {
   getPortalCaseSelection,
   getVisibleCaseNumbers,
   getVisibleEngagedCases,
+  isPortalCaseSelected,
   matchesPortalCaseSelection,
   PORTAL_CASE_SELECTION_ALL,
   PORTAL_CASE_SELECTION_EVENT,
   setPortalCaseSelection,
+  togglePortalCaseId,
   type PortalCaseSelection,
 } from "@/lib/client-portal/case-selection";
 import type { ClientEngagedCase } from "@/lib/mock-data/client-portal";
@@ -31,7 +33,11 @@ function subscribe(callback: () => void) {
 interface CaseSelectionContextValue {
   selection: PortalCaseSelection;
   setSelection: (selection: PortalCaseSelection) => void;
+  toggleCaseId: (caseId: string) => void;
+  selectAllCases: () => void;
+  isCaseSelected: (caseId: string) => boolean;
   isAllCases: boolean;
+  isMultipleCases: boolean;
   selectedCases: ClientEngagedCase[];
   selectedCaseNumbers: Set<string>;
   matchesCase: (caseNumber: string | undefined | null) => boolean;
@@ -49,12 +55,28 @@ export function CaseSelectionProvider({
   const selection = useSyncExternalStore(
     subscribe,
     getPortalCaseSelection,
-    () => PORTAL_CASE_SELECTION_ALL,
+    (): PortalCaseSelection => PORTAL_CASE_SELECTION_ALL,
   );
 
   const setSelection = useCallback((next: PortalCaseSelection) => {
     setPortalCaseSelection(next);
   }, []);
+
+  const toggleCaseId = useCallback(
+    (caseId: string) => {
+      setPortalCaseSelection(togglePortalCaseId(selection, caseId));
+    },
+    [selection],
+  );
+
+  const selectAllCases = useCallback(() => {
+    setPortalCaseSelection(PORTAL_CASE_SELECTION_ALL);
+  }, []);
+
+  const isCaseSelected = useCallback(
+    (caseId: string) => isPortalCaseSelected(caseId, selection),
+    [selection],
+  );
 
   const selectedCases = useMemo(
     () => getVisibleEngagedCases(selection),
@@ -76,12 +98,25 @@ export function CaseSelectionProvider({
     () => ({
       selection,
       setSelection,
+      toggleCaseId,
+      selectAllCases,
+      isCaseSelected,
       isAllCases: selection === PORTAL_CASE_SELECTION_ALL,
+      isMultipleCases: selectedCases.length > 1,
       selectedCases,
       selectedCaseNumbers,
       matchesCase,
     }),
-    [selection, setSelection, selectedCases, selectedCaseNumbers, matchesCase],
+    [
+      selection,
+      setSelection,
+      toggleCaseId,
+      selectAllCases,
+      isCaseSelected,
+      selectedCases,
+      selectedCaseNumbers,
+      matchesCase,
+    ],
   );
 
   return (

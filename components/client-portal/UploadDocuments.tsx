@@ -92,7 +92,7 @@ function applyDeletionDecisions(
 export function UploadDocuments() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { identity, selectedRole } = useDemoRole();
-  const { matchesCase, selectedCases, isAllCases } = useCaseSelection();
+  const { matchesCase, selectedCases, isMultipleCases } = useCaseSelection();
   const [isDragging, setIsDragging] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [documentType, setDocumentType] = useState("");
@@ -407,8 +407,8 @@ export function UploadDocuments() {
 
           {visibleDocuments.length === 0 ? (
             <p className="text-sm text-muted">
-              {isAllCases
-                ? "No documents uploaded yet."
+              {isMultipleCases
+                ? "No documents uploaded for the selected matters yet."
                 : "No documents uploaded for this matter yet."}
             </p>
           ) : (
