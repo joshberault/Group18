@@ -57,7 +57,7 @@ export function PracticeAreaBreakdown({ summaries }: PracticeAreaBreakdownProps)
           <InsightChip
             label="Least profitable"
             value={`${bottom.practice_area} (${formatCurrency(bottom.net_profit)})`}
-            tone="neutral"
+            tone="negative"
           />
         </div>
       )}
@@ -118,15 +118,16 @@ function InsightChip({
 }: {
   label: string;
   value: string;
-  tone: "positive" | "neutral";
+  tone: "positive" | "neutral" | "negative";
 }) {
   return (
     <div
       className={cn(
         "rounded-lg border px-3 py-2 text-xs",
-        tone === "positive"
-          ? "border-emerald-200 bg-emerald-50/60 text-emerald-900"
-          : "border-gray-200 bg-gray-50 text-gray-700",
+        tone === "positive" &&
+          "border-emerald-200 bg-emerald-50/60 text-emerald-900",
+        tone === "neutral" && "border-gray-200 bg-gray-50 text-gray-700",
+        tone === "negative" && "border-red-200 bg-red-50 text-red-900",
       )}
     >
       <p className="font-semibold uppercase tracking-wide opacity-70">{label}</p>
