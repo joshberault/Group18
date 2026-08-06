@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { BillingPeriodToolbar } from "@/components/billing/BillingPeriodToolbar";
 import { RevenueByClient } from "@/components/billing/RevenueByClient";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import {
   Table,
@@ -13,14 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/Table";
 import { Card } from "@/components/ui/Card";
-import { computeDashboardMetricsForPeriod } from "@/lib/billing/dashboard-metrics";
-import { resolvePeriodRange } from "@/lib/billing/billing-period";
-import {
-  getManagedInvoicesSnapshot,
-  getServerInvoicesSnapshot,
-  refreshInvoiceCatalog,
-  subscribeInvoiceCatalog,
-} from "@/lib/billing/invoice-management-store";
+import { useBillingPeriodMetrics } from "@/lib/billing/use-billing-period-metrics";
 import { invoicesHref } from "@/lib/billing/routes";
 
 function formatCurrency(value: number): string {
@@ -36,28 +30,24 @@ type Props = {
 };
 
 export function RevenueByClientReport({ clientFilter }: Props) {
-  useEffect(() => {
-    void refreshInvoiceCatalog();
-  }, []);
-
-  const allInvoices = useSyncExternalStore(
-    subscribeInvoiceCatalog,
-    getManagedInvoicesSnapshot,
-    getServerInvoicesSnapshot,
-  );
-
-  const range = useMemo(() => resolvePeriodRange("ytd"), []);
-  const metrics = useMemo(
-    () => computeDashboardMetricsForPeriod(allInvoices, range),
-    [allInvoices, range.start, range.end],
-  );
+  const {
+    period,
+    applyPreset,
+    applyCustomRange,
+    periodLabel,
+    allInvoices,
+    invoicesInPeriod,
+    metrics,
+    outsidePeriodCount,
+    emptyPeriod,
+  } = useBillingPeriodMetrics();
 
   const rows = clientFilter
     ? metrics.revenueByClient.filter((r) => r.clientName === clientFilter)
     : metrics.revenueByClient;
 
   const detailInvoices = clientFilter
-    ? metrics.invoicesInPeriod.filter((i) => i.client === clientFilter)
+    ? invoicesInPeriod.filter((i) => i.client === clientFilter)
     : [];
 
   return (
@@ -68,10 +58,29 @@ export function RevenueByClientReport({ clientFilter }: Props) {
             ? `Revenue by Client — ${clientFilter}`
             : "Revenue by Client"
         }
-        description="YTD billed and open balances by client relationship."
+        description={`Billed and open balances by client for ${periodLabel}.`}
       />
 
-      <RevenueByClient rows={rows} linkMode="invoices" />
+      <BillingPeriodToolbar
+        variant="panel"
+        period={period}
+        periodLabel={periodLabel}
+        invoiceCountInPeriod={invoicesInPeriod.length}
+        invoiceCountAll={allInvoices.length}
+        outsidePeriodCount={outsidePeriodCount}
+        onApplyPreset={applyPreset}
+        onApplyCustomRange={applyCustomRange}
+        footnote="Revenue is rolled up from invoices issued in the selected period."
+      />
+
+      {emptyPeriod ? (
+        <EmptyState
+          title="No invoices found for the selected billing period."
+          description="Adjust the billing period filters to see client revenue."
+        />
+      ) : (
+        <RevenueByClient rows={rows} linkMode="invoices" />
+      )}
 
       {clientFilter && detailInvoices.length > 0 ? (
         <Card className="space-y-3">
