@@ -45,8 +45,10 @@ export function filterInvoicesByPeriod(
 
 /**
  * Live Billing dashboard metrics for a period (Supabase-backed invoice list).
- * - Invoice count / revenue / open AR: invoice issue date in range
- * - Collections: paymentHistory (from payments table) + paid fallbacks
+ * - Invoice count / revenue: invoices with issue date in range
+ * - Collections: paymentHistory (+ paid fallbacks) with dates in range
+ * - Outstanding A/R + overdue: firm-wide open balances (not limited to
+ *   invoices issued only in the period — balances still matter after issue month)
  */
 export function computeDashboardMetricsForPeriod(
   allInvoices: Invoice[],
@@ -54,16 +56,16 @@ export function computeDashboardMetricsForPeriod(
   asOf = new Date(),
 ): DashboardPeriodMetrics {
   const invoicesInPeriod = filterInvoicesByPeriod(allInvoices, range);
-  const ar = getReceivablesSummary(
-    getOutstandingReceivables(invoicesInPeriod, asOf),
+  const firmAr = getReceivablesSummary(
+    getOutstandingReceivables(allInvoices, asOf),
   );
 
   return {
     summary: {
       totalInvoices: invoicesInPeriod.length,
-      outstandingReceivable: ar.totalOutstanding,
+      outstandingReceivable: firmAr.totalOutstanding,
       collectionsThisMonth: getCollectionsInRange(allInvoices, range),
-      overdueInvoices: ar.overdueCount,
+      overdueInvoices: firmAr.overdueCount,
     },
     revenueByAttorney: buildRevenueByAttorneyFromInvoices(invoicesInPeriod),
     revenueByClient: buildRevenueByClientFromInvoices(invoicesInPeriod),

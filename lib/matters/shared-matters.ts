@@ -1,48 +1,18 @@
 /**
- * Shared matter repository — single source of truth derived from accounting-manager entities.
- * Role-specific views filter and present this data differently.
+ * Shared matter repository — Supabase-backed transforms for role-specific matter views.
  */
 
-import {
-  amMatters,
-  amClients,
-  type AmMatterEntity,
-} from "@/lib/mock-data/accounting-manager/entities";
+import { fetchAccountingClients, fetchAccountingMatters } from "@/lib/accounting";
+import type { AmMatterEntity } from "@/lib/mock-data/accounting-manager/entities";
 
 export type { AmMatterEntity as SharedMatter };
 
-export const sharedMatters: AmMatterEntity[] = amMatters;
-
-export function getAllSharedMatters(): AmMatterEntity[] {
-  return sharedMatters;
-}
-
-export function getMatterById(id: string): AmMatterEntity | undefined {
-  return sharedMatters.find((m) => m.id === id);
-}
-
-export function getMatterByNumber(matterNumber: string): AmMatterEntity | undefined {
-  return sharedMatters.find((m) => m.matterNumber === matterNumber);
-}
-
-export function getMattersForAttorney(attorneyName: string): AmMatterEntity[] {
-  return sharedMatters.filter((m) => m.attorney === attorneyName);
-}
-
-export function getMattersForClient(clientName: string): AmMatterEntity[] {
-  return sharedMatters.filter((m) => m.client === clientName);
-}
-
-export function getOverBudgetMatters(): AmMatterEntity[] {
-  return sharedMatters.filter((m) => m.financialStatus === "Over Budget");
-}
-
-export function getBillingHoldMatters(): AmMatterEntity[] {
-  return sharedMatters.filter((m) => m.billingHold);
-}
-
-export function getLowRetainerMatters(): AmMatterEntity[] {
-  return sharedMatters.filter((m) => m.financialStatus === "Low Retainer");
+export async function fetchAllSharedMatters(): Promise<{
+  matters: AmMatterEntity[];
+  error: string | null;
+}> {
+  const result = await fetchAccountingMatters();
+  return { matters: result.data, error: result.error };
 }
 
 export interface FirmAdminMatterRow {
@@ -60,45 +30,41 @@ export interface FirmAdminMatterRow {
   setupGap: string | null;
 }
 
-const OFFICE_MAP: Record<string, string> = {
-  "Sarah Chen": "Chicago",
-  "Michael Torres": "New York",
-  "Jennifer Walsh": "Los Angeles",
-  "David Kim": "Dallas",
-  "Rachel Foster": "Chicago",
-};
+export async function fetchFirmAdminMatterRows(): Promise<{
+  rows: FirmAdminMatterRow[];
+  error: string | null;
+}> {
+  const [mattersRes, clientsRes] = await Promise.all([
+    fetchAccountingMatters(),
+    fetchAccountingClients(),
+  ]);
+  if (mattersRes.error) return { rows: [], error: mattersRes.error };
 
-export function getFirmAdminMatterRows(): FirmAdminMatterRow[] {
-  return sharedMatters.map((m, index) => {
-    const client = amClients.find((c) => c.id === m.clientId);
-    const setupGap =
-      m.billingHold
-        ? "Billing hold active"
-        : index % 5 === 0
-          ? "Missing rate schedule"
-          : index % 7 === 0
-            ? "Conflict check pending"
-            : null;
-    return {
-      id: m.id,
-      matterNumber: m.matterNumber,
-      matterName: m.matterName,
-      client: m.client,
-      practiceArea: m.practiceArea,
-      attorney: m.attorney,
-      office: client?.office ?? OFFICE_MAP[m.attorney] ?? "Chicago",
-      staffing: `${m.attorney} · 1 paralegal`,
-      engagementDate: `2025-${String((index % 12) + 1).padStart(2, "0")}-15`,
-      matterStatus: m.matterStatus,
-      adminStatus:
-        m.matterStatus === "Closed"
-          ? "Closed"
-          : setupGap
-            ? "Exception"
-            : "Active",
-      setupGap,
-    };
-  });
+  const clientOffice = new Map(
+    clientsRes.data.map((c) => [c.id, c.office]),
+  );
+
+  const rows: FirmAdminMatterRow[] = mattersRes.data.map((m) => ({
+    id: m.id,
+    matterNumber: m.matterNumber,
+    matterName: m.matterName,
+    client: m.client,
+    practiceArea: m.practiceArea,
+    attorney: m.attorney,
+    office: clientOffice.get(m.clientId) ?? "",
+    staffing: m.attorney ? `${m.attorney}` : "Unassigned",
+    engagementDate: "",
+    matterStatus: m.matterStatus,
+    adminStatus:
+      m.matterStatus === "Closed"
+        ? "Closed"
+        : m.billingHold
+          ? "Exception"
+          : "Active",
+    setupGap: m.billingHold ? "Billing hold active" : null,
+  }));
+
+  return { rows, error: null };
 }
 
 export interface BillingMatterRow {
@@ -118,73 +84,33 @@ export interface BillingMatterRow {
   nextBillingDate: string;
 }
 
-export function getBillingSpecialistMatterRows(): BillingMatterRow[] {
-  return sharedMatters.map((m, index) => ({
+export async function fetchBillingSpecialistMatterRows(): Promise<{
+  rows: BillingMatterRow[];
+  error: string | null;
+}> {
+  const result = await fetchAccountingMatters();
+  if (result.error) return { rows: [], error: result.error };
+
+  const rows: BillingMatterRow[] = result.data.map((m) => ({
     id: m.id,
     matterNumber: m.matterNumber,
     matterName: m.matterName,
     client: m.client,
     billingMethod: m.billingMethod,
     billingAttorney: m.attorney,
-    billingCycle: index % 2 === 0 ? "Monthly" : "Bi-weekly",
-    rateStatus: index % 4 === 0 ? "Rate review due" : "Current",
+    billingCycle: "",
+    rateStatus: "",
     unbilledTime: m.unbilledWip,
     unbilledExpenses: m.unbilledExpenses,
     prebillStatus: m.billingHold
       ? "On hold"
-      : m.unbilledWip > 15000
+      : m.unbilledWip > 0
         ? "Ready for prebill"
-        : "In progress",
+        : "",
     billingHold: m.billingHold,
-    lastInvoice: `2026-07-${String((index % 28) + 1).padStart(2, "0")}`,
-    nextBillingDate: `2026-08-${String((index % 28) + 1).padStart(2, "0")}`,
+    lastInvoice: "",
+    nextBillingDate: "",
   }));
-}
 
-export interface PartnerMatterRow {
-  id: string;
-  matterNumber: string;
-  matterName: string;
-  client: string;
-  partner: string;
-  status: string;
-  budget: number;
-  billed: number;
-  collected: number;
-  wip: number;
-  profitability: number;
-  risk: string;
-  nextDeadline: string;
-  actionRequired: string | null;
-}
-
-export function getManagingPartnerMatterRows(): PartnerMatterRow[] {
-  return sharedMatters.map((m, index) => ({
-    id: m.id,
-    matterNumber: m.matterNumber,
-    matterName: m.matterName,
-    client: m.client,
-    partner: m.attorney,
-    status: m.matterStatus,
-    budget: m.budget,
-    billed: m.billedToDate,
-    collected: m.collectedToDate,
-    wip: m.unbilledWip,
-    profitability: m.marginPercent,
-    risk:
-      m.financialStatus === "Over Budget"
-        ? "Over budget"
-        : m.financialStatus === "Low Retainer"
-          ? "Low retainer"
-          : m.billingHold
-            ? "Billing hold"
-            : "Normal",
-    nextDeadline: `2026-08-${String((index % 20) + 10).padStart(2, "0")}`,
-    actionRequired:
-      m.financialStatus === "Over Budget"
-        ? "Review budget variance"
-        : m.billingHold
-          ? "Release billing hold"
-          : null,
-  }));
+  return { rows, error: null };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -11,7 +11,6 @@ import {
   XCircle,
 } from "lucide-react";
 import {
-  amAuditEvents,
   auditActionOptions,
   auditModuleOptions,
   auditReviewStatusOptions,
@@ -22,6 +21,9 @@ import {
   type AuditEvent,
   type AuditReviewStatus,
 } from "@/lib/mock-data/accounting-manager/audit";
+import { fetchAuditEvents, useSupabaseQuery } from "@/lib/accounting";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -79,9 +81,14 @@ function formatDateInput(iso: string): string {
 }
 
 export function AuditLogView() {
-  const [events, setEvents] = useState<AuditEvent[]>(() =>
-    amAuditEvents.map((e) => ({ ...e, detail: { ...e.detail } })),
+  const { data: auditRows = [], loading, error } = useSupabaseQuery(
+    fetchAuditEvents,
+    [],
   );
+  const [events, setEvents] = useState<AuditEvent[]>([]);
+  useEffect(() => {
+    setEvents((auditRows ?? []).map((e) => ({ ...e, detail: { ...e.detail } })));
+  }, [auditRows]);
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -222,6 +229,20 @@ export function AuditLogView() {
     setSelectedEvent(event);
     setReviewNote(event.reviewNote ?? "");
   };
+
+  if (loading) {
+    return <LoadingState message="Loading audit log..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Audit log unavailable"
+        description={error}
+        moduleLabel="Audit Log"
+      />
+    );
+  }
 
   return (
     <>

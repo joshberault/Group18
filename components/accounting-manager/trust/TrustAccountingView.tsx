@@ -31,16 +31,19 @@ import {
 import { Toast } from "@/components/ui/Toast";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import {
-  trustAccounts,
-  trustClientLedgers,
-  trustExceptions,
-  trustReconciliations,
-  trustSummaryKpis,
-  trustTransactions,
-  type TrustClientLedger,
-  type TrustException,
-  type TrustTransaction,
+  fetchTrustWorkspace,
+  resolveTrustException,
+  useSupabaseQuery,
+  voidTrustTransaction,
+} from "@/lib/accounting";
+import type {
+  TrustClientLedger,
+  TrustException,
+  TrustTransaction,
 } from "@/lib/mock-data/accounting-manager/trust";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { formatCurrency } from "@/lib/utils/cn";
 
 type TrustTab = "overview" | "accounts" | "ledgers" | "transactions" | "exceptions";
@@ -66,6 +69,15 @@ function retainerVariant(status: string) {
 }
 
 export function TrustAccountingView() {
+  const { selectedRole } = useDemoRole();
+  const { data: workspace, loading, error, refresh } = useSupabaseQuery(
+    fetchTrustWorkspace,
+    [],
+  );
+  const trustSummaryKpis = workspace?.kpis ?? [];
+  const trustAccounts = workspace?.accounts ?? [];
+  const trustClientLedgers = workspace?.ledgers ?? [];
+  const trustReconciliations = workspace?.reconciliations ?? [];
   const [activeTab, setActiveTab] = useState<TrustTab>("overview");
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState("all");
@@ -73,8 +85,8 @@ export function TrustAccountingView() {
   const [selectedTransaction, setSelectedTransaction] = useState<TrustTransaction | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; action: () => void } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [transactions, setTransactions] = useState(trustTransactions);
-  const [exceptions, setExceptions] = useState(trustExceptions);
+  const transactions = workspace?.transactions ?? [];
+  const exceptions = workspace?.exceptions ?? [];
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
@@ -119,12 +131,36 @@ export function TrustAccountingView() {
       title: "Resolve Exception",
       message: `Mark "${ex.type}" for ${ex.client} as resolved?`,
       action: () => {
-        setExceptions((prev) => prev.filter((e) => e.id !== ex.id));
-        setToast("Exception resolved");
-        setConfirmAction(null);
+        void (async () => {
+          const result = await resolveTrustException({
+            exceptionId: ex.id,
+            actor: { name: "Alex Morgan", role: selectedRole },
+          });
+          if (result.ok) {
+            setToast("Exception resolved");
+            await refresh();
+          } else {
+            setToast(result.error ?? "Failed to resolve exception");
+          }
+          setConfirmAction(null);
+        })();
       },
     });
   };
+
+  if (loading) {
+    return <LoadingState message="Loading trust accounting..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Trust data unavailable"
+        description={error}
+        moduleLabel="Trust Accounting"
+      />
+    );
+  }
 
   return (
     <>
@@ -411,7 +447,7 @@ export function TrustAccountingView() {
               </TableHeader>
               <TableBody>
                 {(activeTab === "overview"
-                  ? trustTransactions.slice(0, 5)
+                  ? transactions.slice(0, 5)
                   : filteredTransactions
                 ).map((txn) => (
                   <TableRow key={txn.id}>
@@ -583,16 +619,20 @@ export function TrustAccountingView() {
                     title: "Void Transaction",
                     message: `Void ${selectedTransaction.reference}? This cannot be undone.`,
                     action: () => {
-                      setTransactions((prev) =>
-                        prev.map((row) =>
-                          row.id === selectedTransaction.id
-                            ? { ...row, status: "Void" }
-                            : row,
-                        ),
-                      );
-                      setToast("Transaction voided");
-                      setSelectedTransaction(null);
-                      setConfirmAction(null);
+                      void (async () => {
+                        const result = await voidTrustTransaction({
+                          transactionId: selectedTransaction.id,
+                          actor: { name: "Alex Morgan", role: selectedRole },
+                        });
+                        if (result.ok) {
+                          setToast("Transaction voided");
+                          await refresh();
+                        } else {
+                          setToast(result.error ?? "Failed to void transaction");
+                        }
+                        setSelectedTransaction(null);
+                        setConfirmAction(null);
+                      })();
                     },
                   })
                 }

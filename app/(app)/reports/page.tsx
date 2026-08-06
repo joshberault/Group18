@@ -1,6 +1,11 @@
-import { ReportsPageClient } from "./ReportsPageClient";
+import { DemoRoleGuard } from "@/components/auth/DemoRoleGuard";
+import { ReportsContent } from "@/components/analytics/ReportsContent";
+import { ANALYTICS_ROLES } from "@/lib/analytics/types";
 
-/** Firm analytics, financial reports, and operational dashboards. */
 export default function ReportsPage() {
-  return <ReportsPageClient />;
+  return (
+    <DemoRoleGuard allowedRoles={[...ANALYTICS_ROLES]}>
+      <ReportsContent />
+    </DemoRoleGuard>
+  );
 }
