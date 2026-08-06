@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -27,12 +27,14 @@ import {
   uniquePracticeAreas,
 } from "@/lib/admin/calculations";
 import {
+  createMatterAssignment,
+  deleteMatterAssignment,
+  fetchAdminAssignmentsCatalog,
+  updateMatterAssignment,
+} from "@/lib/admin/assignments-supabase";
+import {
   ADMIN_REFERENCE_DATE,
   ADMIN_UI_FLAGS,
-  MOCK_ASSIGNMENTS,
-  MOCK_EMPLOYEES,
-  MOCK_MATTERS,
-  MOCK_VACATIONS,
 } from "@/lib/admin/mock-data";
 import type {
   AdminAssignment,
@@ -41,6 +43,9 @@ import type {
   AssignmentPriority,
   AssignmentStatus,
 } from "@/lib/admin/types";
+
+/** Live staff profiles don't share mock vacation IDs — skip seed vacation checks. */
+const LIVE_VACATIONS: import("@/lib/admin/types").AdminVacation[] = [];
 
 type ModalMode =
   | "view"
@@ -87,16 +92,17 @@ const ROLE_OPTIONS = [
   "Of Counsel",
 ];
 
-function emptyForm(): AssignmentFormState {
+function emptyForm(defaultMatterId = ""): AssignmentFormState {
+  const today = new Date().toISOString().slice(0, 10);
   return {
-    matterId: MOCK_MATTERS.find((m) => m.status === "open")?.id ?? "",
+    matterId: defaultMatterId,
     employeeId: "",
     roleOnMatter: "Lead Counsel",
     priority: "medium",
     status: "active",
-    assignedDate: ADMIN_REFERENCE_DATE,
-    startDate: ADMIN_REFERENCE_DATE,
-    dueDate: "2026-08-20",
+    assignedDate: today,
+    startDate: today,
+    dueDate: today,
     estimatedHours: "20",
     managerInstructions: "",
     cancelReason: "",
@@ -154,9 +160,12 @@ function workloadImpactLabel(
 }
 
 export function AssignmentsPanel() {
-  const [assignments, setAssignments] = useState<AdminAssignment[]>(() =>
-    MOCK_ASSIGNMENTS.map((row) => ({ ...row })),
-  );
+  const [matters, setMatters] = useState<AdminMatter[]>([]);
+  const [employees, setEmployees] = useState<AdminEmployee[]>([]);
+  const [assignments, setAssignments] = useState<AdminAssignment[]>([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [searchMatter, setSearchMatter] = useState("");
   const [searchEmployee, setSearchEmployee] = useState("");
   const [practiceFilter, setPracticeFilter] = useState("all");
@@ -171,15 +180,31 @@ export function AssignmentsPanel() {
 
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [form, setForm] = useState<AssignmentFormState>(emptyForm);
+  const [form, setForm] = useState<AssignmentFormState>(() => emptyForm());
   const [errors, setErrors] = useState<FormErrors>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [hasError, setHasError] = useState(ADMIN_UI_FLAGS.forceError);
+  const [hasError, setHasError] = useState<boolean>(ADMIN_UI_FLAGS.forceError);
   const [pendingSave, setPendingSave] = useState<AdminAssignment | null>(null);
 
+  const loadCatalog = useCallback(async () => {
+    setLoadingCatalog(true);
+    setCatalogError(null);
+    const result = await fetchAdminAssignmentsCatalog();
+    setMatters(result.matters);
+    setEmployees(result.employees);
+    setAssignments(result.assignments);
+    setCatalogError(result.error);
+    setHasError(ADMIN_UI_FLAGS.forceError || Boolean(result.error && result.matters.length === 0));
+    setLoadingCatalog(false);
+  }, []);
+
+  useEffect(() => {
+    void loadCatalog();
+  }, [loadCatalog]);
+
   const practiceAreas = useMemo(
-    () => uniquePracticeAreas(MOCK_EMPLOYEES),
-    [],
+    () => uniquePracticeAreas(employees),
+    [employees],
   );
 
   const selected = useMemo(
@@ -188,13 +213,13 @@ export function AssignmentsPanel() {
   );
 
   const selectedMatter = useMemo(
-    () => MOCK_MATTERS.find((m) => m.id === form.matterId),
-    [form.matterId],
+    () => matters.find((m) => m.id === form.matterId),
+    [matters, form.matterId],
   );
 
   const selectedEmployee = useMemo(
-    () => MOCK_EMPLOYEES.find((e) => e.id === form.employeeId),
-    [form.employeeId],
+    () => employees.find((e) => e.id === form.employeeId),
+    [employees, form.employeeId],
   );
 
   const impactPreview = useMemo(() => {
@@ -210,7 +235,7 @@ export function AssignmentsPanel() {
       priorEstimatedHours: priorEst,
       startDate: form.startDate,
       dueDate: form.dueDate,
-      vacations: MOCK_VACATIONS,
+      vacations: LIVE_VACATIONS,
     });
     const projectedAssigned = Math.max(
       0,
@@ -218,7 +243,7 @@ export function AssignmentsPanel() {
     );
     const vacationStatus = getVacationStatusLabel(
       selectedEmployee,
-      MOCK_VACATIONS,
+      LIVE_VACATIONS,
       ADMIN_REFERENCE_DATE,
     );
     return {
@@ -303,7 +328,9 @@ export function AssignmentsPanel() {
   function openCreate() {
     setSelectedId(null);
     setPendingSave(null);
-    setForm(emptyForm());
+    const defaultMatterId =
+      matters.find((m) => m.status === "open")?.id ?? matters[0]?.id ?? "";
+    setForm(emptyForm(defaultMatterId));
     setErrors({});
     setModalMode("create");
   }
@@ -399,7 +426,7 @@ export function AssignmentsPanel() {
       next.estimatedHours = "Estimated hours must be greater than zero.";
     }
 
-    const employee = MOCK_EMPLOYEES.find((e) => e.id === form.employeeId);
+    const employee = employees.find((e) => e.id === form.employeeId);
     if (employee && employee.status === "inactive") {
       next.employeeId = "Inactive employees cannot be assigned.";
     }
@@ -416,8 +443,8 @@ export function AssignmentsPanel() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
-    const matter = MOCK_MATTERS.find((m) => m.id === form.matterId);
-    const employee = MOCK_EMPLOYEES.find((e) => e.id === form.employeeId);
+    const matter = matters.find((m) => m.id === form.matterId);
+    const employee = employees.find((e) => e.id === form.employeeId);
     if (!matter || !employee) {
       setErrors({ form: "Matter and employee are required." });
       return;
@@ -471,7 +498,7 @@ export function AssignmentsPanel() {
       priorEstimatedHours: priorEst,
       startDate: form.startDate,
       dueDate: form.dueDate,
-      vacations: MOCK_VACATIONS,
+      vacations: LIVE_VACATIONS,
     });
 
     const pending = buildAssignmentFromForm(
@@ -495,27 +522,54 @@ export function AssignmentsPanel() {
       return;
     }
 
-    commitSave(pending, mode);
+    void commitSave(pending, mode);
   }
 
-  function commitSave(
+  async function commitSave(
     row: AdminAssignment,
     mode: "create" | "edit" | "reassign",
   ) {
+    setSaving(true);
+    setErrors({});
+
     if (mode === "create") {
-      setAssignments((prev) => [row, ...prev]);
-      setSuccessMessage(`Created assignment for ${row.attorneyName} on ${row.matterLabel}.`);
-    } else {
-      setAssignments((prev) =>
-        prev.map((item) => (item.id === row.id ? row : item)),
+      const result = await createMatterAssignment({
+        matterId: row.matterId,
+        profileId: row.employeeId,
+        roleOnMatter: row.roleOnMatter,
+      });
+      if (result.error) {
+        setSaving(false);
+        setErrors({ form: result.error });
+        setModalMode("create");
+        return;
+      }
+      setSuccessMessage(
+        `Created assignment for ${row.attorneyName} on ${row.matterLabel}.`,
       );
+    } else {
+      const result = await updateMatterAssignment({
+        id: row.id,
+        matterId: row.matterId,
+        profileId: row.employeeId,
+        roleOnMatter: row.roleOnMatter,
+      });
+      if (result.error) {
+        setSaving(false);
+        setErrors({ form: result.error });
+        setModalMode(mode);
+        return;
+      }
       setSuccessMessage(
         mode === "reassign"
           ? `Reassigned ${row.matterLabel} to ${row.attorneyName}.`
           : `Updated assignment ${row.matterReference}.`,
       );
     }
+
+    setSaving(false);
     closeModal();
+    await loadCatalog();
   }
 
   function resolveSaveMode(): "create" | "edit" | "reassign" {
@@ -541,8 +595,8 @@ export function AssignmentsPanel() {
     const merged = { ...form, ...flags };
     setForm(merged);
 
-    const matter = MOCK_MATTERS.find((m) => m.id === pendingSave.matterId);
-    const employee = MOCK_EMPLOYEES.find((e) => e.id === pendingSave.employeeId);
+    const matter = matters.find((m) => m.id === pendingSave.matterId);
+    const employee = employees.find((e) => e.id === pendingSave.employeeId);
     if (!matter || !employee) {
       setErrors({ form: "Matter and employee are required." });
       return;
@@ -584,7 +638,7 @@ export function AssignmentsPanel() {
       priorEstimatedHours: priorEst,
       startDate: pendingSave.startDate,
       dueDate: pendingSave.dueDate,
-      vacations: MOCK_VACATIONS,
+      vacations: LIVE_VACATIONS,
     });
 
     if (
@@ -600,7 +654,7 @@ export function AssignmentsPanel() {
       return;
     }
 
-    commitSave(pendingSave, saveMode);
+    void commitSave(pendingSave, saveMode);
   }
 
   function confirmClosedMatter() {
@@ -642,29 +696,26 @@ export function AssignmentsPanel() {
     setSuccessMessage(`Marked ${row.matterLabel} complete on ${ADMIN_REFERENCE_DATE}.`);
   }
 
-  function confirmCancel() {
+  async function confirmCancel() {
     const nextErrors = validateForm("cancel");
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0 || !selected) return;
-    setAssignments((prev) =>
-      prev.map((item) =>
-        item.id === selected.id
-          ? {
-              ...item,
-              status: "canceled",
-              cancelReason: form.cancelReason.trim(),
-            }
-          : item,
-      ),
-    );
+    setSaving(true);
+    const result = await deleteMatterAssignment(selected.id);
+    setSaving(false);
+    if (result.error) {
+      setErrors({ form: result.error });
+      return;
+    }
     setSuccessMessage(
-      `Canceled assignment ${selected.matterReference}. Reason recorded; record was not deleted.`,
+      `Removed assignment ${selected.matterReference} (${form.cancelReason.trim()}).`,
     );
     closeModal();
+    await loadCatalog();
   }
 
-  if (ADMIN_UI_FLAGS.forceLoading) {
-    return <LoadingState message="Loading assignments..." />;
+  if (ADMIN_UI_FLAGS.forceLoading || loadingCatalog) {
+    return <LoadingState message="Loading assignments from Supabase..." />;
   }
 
   if (hasError) {
@@ -675,17 +726,18 @@ export function AssignmentsPanel() {
             Unable to load assignments
           </CardTitle>
           <CardDescription className="text-red-700">
-            Local mock assignment data could not be loaded.
+            {catalogError ||
+              "Could not load matters, employees, or assignments from Supabase."}
           </CardDescription>
         </CardHeader>
         <Button
           variant="secondary"
           onClick={() => {
             setHasError(false);
-            setAssignments(MOCK_ASSIGNMENTS.map((row) => ({ ...row })));
+            void loadCatalog();
           }}
         >
-          Retry with mock data
+          Retry
         </Button>
       </Card>
     );
@@ -698,11 +750,14 @@ export function AssignmentsPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Mock data:</strong>{" "}
-        Assignments use existing admin mock employees/matters. Estimated hours
-        (planned) are distinct from actual hours (worked). Changes update local
-        page state only.
+      <div className="rounded-lg border border-navy-800/10 bg-surface px-4 py-3 text-sm text-navy-800">
+        <strong className="font-semibold text-navy-900">Live Supabase:</strong>{" "}
+        Matter and employee options come from firm <code>matters</code> and{" "}
+        <code>profiles</code>. Creating or updating an assignment writes to{" "}
+        <code>matter_assignments</code>.
+        {catalogError ? (
+          <span className="mt-1 block text-amber-800">Note: {catalogError}</span>
+        ) : null}
       </div>
 
       {successMessage && (
@@ -727,7 +782,12 @@ export function AssignmentsPanel() {
               capacity and vacation checks.
             </CardDescription>
           </div>
-          <Button onClick={openCreate}>Create assignment</Button>
+          <Button
+            onClick={openCreate}
+            disabled={matters.length === 0 || employees.length === 0}
+          >
+            Create assignment
+          </Button>
         </CardHeader>
 
         <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -804,7 +864,7 @@ export function AssignmentsPanel() {
         {filtered.length === 0 ? (
           <EmptyState
             title="No assignments match your filters"
-            description="Clear filters or create a new assignment from the mock matter catalog."
+            description="Clear filters or create a new assignment from the firm matter catalog."
             moduleLabel="Admin · Assignments"
           />
         ) : (
@@ -830,7 +890,7 @@ export function AssignmentsPanel() {
             </TableHeader>
             <TableBody>
               {filtered.map((row) => {
-                const employee = MOCK_EMPLOYEES.find(
+                const employee = employees.find(
                   (e) => e.id === row.employeeId,
                 );
                 const rowConflicts = employee
@@ -840,7 +900,7 @@ export function AssignmentsPanel() {
                       priorEstimatedHours: 0,
                       startDate: row.startDate,
                       dueDate: row.dueDate,
-                      vacations: MOCK_VACATIONS,
+                      vacations: LIVE_VACATIONS,
                     })
                   : null;
                 const rowWorkload = employee
@@ -1046,22 +1106,27 @@ export function AssignmentsPanel() {
               label="Matter"
               value={form.matterId}
               error={errors.matterId}
+              disabled={saving || formMode === "edit"}
               onChange={(e) => updateField("matterId", e.target.value)}
-              options={MOCK_MATTERS.map((m) => ({
-                value: m.id,
-                label: `${m.matterLabel} (${m.status})`,
-              }))}
+              options={[
+                { value: "", label: "Select matter" },
+                ...matters.map((m) => ({
+                  value: m.id,
+                  label: `${m.matterLabel} (${m.status})`,
+                })),
+              ]}
             />
             <Select
               label="Assigned employee"
               value={form.employeeId}
               error={errors.employeeId}
+              disabled={saving}
               onChange={(e) => updateField("employeeId", e.target.value)}
               options={[
                 { value: "", label: "Select employee" },
-                ...MOCK_EMPLOYEES.map((e) => ({
+                ...employees.map((e) => ({
                   value: e.id,
-                  label: `${e.fullName} (${e.status})`,
+                  label: `${e.fullName} · ${e.roleLabel}`,
                 })),
               ]}
             />
@@ -1237,15 +1302,16 @@ export function AssignmentsPanel() {
           )}
 
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={closeModal}>
+            <Button variant="secondary" onClick={closeModal} disabled={saving}>
               Cancel
             </Button>
             <Button
+              disabled={saving || matters.length === 0 || employees.length === 0}
               onClick={() =>
                 attemptSave(formMode as "create" | "edit" | "reassign")
               }
             >
-              Save assignment
+              {saving ? "Saving…" : "Save assignment"}
             </Button>
           </div>
         </div>
