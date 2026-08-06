@@ -22,7 +22,18 @@ function MattersPageContent() {
   }
 
   if (selectedRole === "managing_partner") {
-    return <ManagingPartnerMattersView />;
+    return (
+      <Suspense
+        fallback={
+          <PageHeader
+            title="Firm Matters"
+            description="Loading firm-wide matter register…"
+          />
+        }
+      >
+        <ManagingPartnerMattersView />
+      </Suspense>
+    );
   }
 
   if (selectedRole === "billing_specialist") {
