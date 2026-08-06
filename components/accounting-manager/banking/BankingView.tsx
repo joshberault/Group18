@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
   Check,
@@ -29,14 +29,10 @@ import {
 } from "@/components/ui/Table";
 import { Toast } from "@/components/ui/Toast";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
-import {
-  bankAccounts,
-  bankReconciliations,
-  bankTransactions,
-  bankingSummaryKpis,
-  type BankAccount,
-  type BankTransaction,
-} from "@/lib/mock-data/accounting-manager/banking";
+import { fetchBankingWorkspace, useSupabaseQuery } from "@/lib/accounting";
+import type { BankAccount, BankTransaction } from "@/lib/mock-data/accounting-manager/banking";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { formatCurrency } from "@/lib/utils/cn";
 
 type BankingTab = "overview" | "accounts" | "transactions" | "reconciliation";
@@ -55,6 +51,20 @@ function reconVariant(status: string) {
 }
 
 export function BankingView() {
+  const { data: workspace, loading, error } = useSupabaseQuery(
+    fetchBankingWorkspace,
+    [],
+  );
+  const bankingSummaryKpis = workspace?.kpis ?? [];
+  const bankAccounts = workspace?.accounts ?? [];
+  const bankReconciliations = workspace?.reconciliations ?? [];
+  const [localTransactions, setLocalTransactions] = useState<BankTransaction[]>([]);
+  useEffect(() => {
+    if (workspace?.transactions) {
+      setLocalTransactions(workspace.transactions);
+    }
+  }, [workspace]);
+  const transactions = localTransactions;
   const [activeTab, setActiveTab] = useState<BankingTab>("overview");
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState("all");
@@ -63,7 +73,6 @@ export function BankingView() {
   const [selectedTransaction, setSelectedTransaction] = useState<BankTransaction | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; action: () => void } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [transactions, setTransactions] = useState(bankTransactions);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
@@ -96,12 +105,26 @@ export function BankingView() {
   };
 
   const markCleared = (txn: BankTransaction) => {
-    setTransactions((prev) =>
+    setLocalTransactions((prev) =>
       prev.map((t) => (t.id === txn.id ? { ...t, cleared: true } : t)),
     );
     setToast("Transaction marked as cleared");
     setSelectedTransaction(null);
   };
+
+  if (loading) {
+    return <LoadingState message="Loading banking data..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Banking data unavailable"
+        description={error}
+        moduleLabel="Banking"
+      />
+    );
+  }
 
   return (
     <>

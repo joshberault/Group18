@@ -6,6 +6,7 @@ import {
   buildRevenueByClientFromInvoices,
 } from "@/lib/billing/invoice-revenue-utils";
 import type { Invoice } from "@/lib/billing/invoice-types";
+import { buildInvoiceStatusSummary } from "@/lib/billing/invoice-status-summary";
 import {
   getOutstandingReceivables,
   getReceivablesSummary,
@@ -44,9 +45,20 @@ export function filterInvoicesByPeriod(
 }
 
 /**
+ * Status summary input for period-scoped dashboards.
+ * Callers should pass {@link filterInvoicesByPeriod} output (or
+ * `metrics.invoicesInPeriod`) so counts stay period-aligned.
+ */
+export function buildPeriodInvoiceStatusSummary(invoicesInPeriod: Invoice[]) {
+  return buildInvoiceStatusSummary(invoicesInPeriod);
+}
+
+/**
  * Live Billing dashboard metrics for a period (Supabase-backed invoice list).
- * - Invoice count / revenue / open AR: invoice issue date in range
- * - Collections: paymentHistory (from payments table) + paid fallbacks
+ * Every metric is derived ONLY from invoices whose invoiceDate falls in range:
+ * - Invoice count / revenue: invoices issued in period
+ * - Outstanding A/R + overdue: open balances among those invoices
+ * - Collections: paymentHistory (and paid fallbacks) in range on those invoices
  */
 export function computeDashboardMetricsForPeriod(
   allInvoices: Invoice[],
@@ -54,19 +66,21 @@ export function computeDashboardMetricsForPeriod(
   asOf = new Date(),
 ): DashboardPeriodMetrics {
   const invoicesInPeriod = filterInvoicesByPeriod(allInvoices, range);
-  const ar = getReceivablesSummary(
+  const periodAr = getReceivablesSummary(
     getOutstandingReceivables(invoicesInPeriod, asOf),
   );
 
-  return {
+  const result = {
     summary: {
       totalInvoices: invoicesInPeriod.length,
-      outstandingReceivable: ar.totalOutstanding,
-      collectionsThisMonth: getCollectionsInRange(allInvoices, range),
-      overdueInvoices: ar.overdueCount,
+      outstandingReceivable: periodAr.totalOutstanding,
+      // Payments in range that belong to invoices issued in the period
+      collectionsThisMonth: getCollectionsInRange(invoicesInPeriod, range),
+      overdueInvoices: periodAr.overdueCount,
     },
     revenueByAttorney: buildRevenueByAttorneyFromInvoices(invoicesInPeriod),
     revenueByClient: buildRevenueByClientFromInvoices(invoicesInPeriod),
     invoicesInPeriod,
   };
+  return result;
 }

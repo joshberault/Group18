@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import {
   billingAttorneyOptions,
   billingCycleOptions,
-  billingQueueRecords,
   billingQueueStatusOptions,
   type BillingQueueRecord,
   type BillingQueueStatus,
@@ -38,6 +37,7 @@ export interface BillingQueueFilters {
 interface BillingQueueSectionProps {
   filters: BillingQueueFilters;
   onFiltersChange: (filters: BillingQueueFilters) => void;
+  records?: BillingQueueRecord[];
 }
 
 function statusToBadgeKey(status: BillingQueueStatus): string {
@@ -47,6 +47,7 @@ function statusToBadgeKey(status: BillingQueueStatus): string {
 export function BillingQueueSection({
   filters,
   onFiltersChange,
+  records = [],
 }: BillingQueueSectionProps) {
   const [page, setPage] = useState(0);
   const [selectedRecord, setSelectedRecord] = useState<BillingQueueRecord | null>(
@@ -56,7 +57,7 @@ export function BillingQueueSection({
   const filteredRecords = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
 
-    return billingQueueRecords
+    return records
       .filter((record) => {
         if (filters.exceptionsOnly && !record.isException) return false;
         if (filters.status !== "all" && record.status !== filters.status) {
@@ -82,7 +83,7 @@ export function BillingQueueSection({
         );
       })
       .sort((a, b) => b.daysWaiting - a.daysWaiting);
-  }, [filters]);
+  }, [filters, records]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages - 1);

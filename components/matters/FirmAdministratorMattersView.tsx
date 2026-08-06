@@ -1,10 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FileDown, Search } from "lucide-react";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
-import { getFirmAdminMatterRows } from "@/lib/matters/shared-matters";
+import {
+  fetchSharedFirmMatters,
+  toFirmAdminMatterRow,
+} from "@/lib/matters/firm-matters-supabase";
+import type { FirmAdminMatterRow } from "@/lib/matters/shared-matters";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -23,10 +27,24 @@ import {
 } from "@/components/ui/Table";
 
 export function FirmAdministratorMattersView() {
-  const rows = useMemo(() => getFirmAdminMatterRows(), []);
+  const [rows, setRows] = useState<FirmAdminMatterRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selected, setSelected] = useState<(typeof rows)[0] | null>(null);
+  const [selected, setSelected] = useState<FirmAdminMatterRow | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const result = await fetchSharedFirmMatters({ includeWip: false });
+    setRows(result.matters.map(toFirmAdminMatterRow));
+    setError(result.error);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const filtered = useMemo(() => {
     return rows.filter((row) => {
@@ -73,7 +91,7 @@ export function FirmAdministratorMattersView() {
       >
         <div className="flex gap-2">
           <Link href="/admin/matters"><Button variant="secondary">Admin Matters Panel</Button></Link>
-          <Button variant="secondary" onClick={exportCsv}>
+          <Button variant="secondary" onClick={exportCsv} disabled={loading || rows.length === 0}>
             <FileDown className="mr-2 h-4 w-4" />
             Export
           </Button>
@@ -81,9 +99,9 @@ export function FirmAdministratorMattersView() {
       </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <KPICard title="Open Matters" value={String(kpis.open)} subtitle="Across all offices" />
-        <KPICard title="Setup Exceptions" value={String(kpis.exceptions)} subtitle="Requires admin action" />
-        <KPICard title="Offices" value={String(kpis.offices)} subtitle="Active locations" />
+        <KPICard title="Open Matters" value={loading ? "…" : String(kpis.open)} subtitle="Across all offices" />
+        <KPICard title="Setup Exceptions" value={loading ? "…" : String(kpis.exceptions)} subtitle="Requires admin action" />
+        <KPICard title="Offices" value={loading ? "…" : String(kpis.offices)} subtitle="Active locations" />
       </div>
 
       <Card>
@@ -108,6 +126,9 @@ export function FirmAdministratorMattersView() {
             ]}
           />
         </div>
+        {error ? (
+          <p className="px-4 pb-4 text-sm text-red-700">{error}</p>
+        ) : null}
         <Table>
           <TableHeader>
             <TableRow>
@@ -121,7 +142,24 @@ export function FirmAdministratorMattersView() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((row) => (
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-muted">
+                  Loading matters from CounselFlow…
+                </TableCell>
+              </TableRow>
+            ) : null}
+            {!loading && !error && filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-muted">
+                  {rows.length === 0
+                    ? "No matters found. Add matters in CounselFlow, then return here."
+                    : "No matters match the current filters."}
+                </TableCell>
+              </TableRow>
+            ) : null}
+            {!loading &&
+              filtered.map((row) => (
               <TableRow key={row.id} className="cursor-pointer hover:bg-gray-50" onClick={() => setSelected(row)}>
                 <TableCell>
                   <p className="font-medium">{row.matterName}</p>
