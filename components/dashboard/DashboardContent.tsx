@@ -23,6 +23,7 @@ import {
   YAxis,
 } from "recharts";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { AdminDataProvider } from "@/components/admin/AdminDataProvider";
 import { JobApplicationsPanel } from "@/components/admin/JobApplicationsPanel";
 import { ParalegalDashboard } from "@/components/dashboard/ParalegalDashboard";
 import { AttorneyDashboard } from "@/components/dashboard/AttorneyDashboard";
@@ -463,7 +464,9 @@ export function DashboardContent() {
 
       {role === "firm_administrator" && (
         <div className="mb-6">
-          <JobApplicationsPanel />
+          <AdminDataProvider>
+            <JobApplicationsPanel />
+          </AdminDataProvider>
         </div>
       )}
 
