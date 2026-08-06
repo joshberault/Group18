@@ -262,9 +262,16 @@ export function getManagedInvoicesSnapshot(): Invoice[] {
   return invoices;
 }
 
+/** Stable empty reference — getServerSnapshot must not return a new [] each call */
+const EMPTY_SERVER_SNAPSHOT: Invoice[] = [];
+
+/**
+ * SSR snapshot for useSyncExternalStore.
+ * Must return a cached identity; a fresh [] each call triggers React’s infinite loop.
+ */
 export function getServerInvoicesSnapshot(): Invoice[] {
   // SSR has no browser cache; seed optional for SSR demos only
-  return USE_INVOICE_SEED ? INVOICE_SEED : [];
+  return USE_INVOICE_SEED ? INVOICE_SEED : EMPTY_SERVER_SNAPSHOT;
 }
 
 /**
