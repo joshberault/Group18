@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, ChevronLeft } from "lucide-react";
 import {
   ATTORNEY_DEMO_SPECIALTIES,
   getAttorneySpecialtyOption,
   type AttorneyDemoSpecialty,
 } from "@/lib/attorney/specialties";
-import { USER_ROLE_LABELS, USER_ROLES, type UserRole } from "@/lib/types";
+import { getLeadAttorneyForSpecialty } from "@/lib/attorney/specialty-attorneys";
 import { DEFAULT_DEMO_ROLE } from "@/lib/roles/role-config";
+import { USER_ROLE_LABELS, USER_ROLES, type UserRole } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
 import { useDemoRole } from "./DemoRoleProvider";
 
@@ -17,7 +19,8 @@ interface DemoRoleSelectProps {
   className?: string;
 }
 
-const SUBMENU_CLOSE_DELAY_MS = 160;
+const SUBMENU_CLOSE_DELAY_MS = 200;
+const FLYOUT_WIDTH_PX = 280;
 
 function roleTriggerLabel(
   selectedRole: UserRole,
@@ -29,6 +32,11 @@ function roleTriggerLabel(
   return USER_ROLE_LABELS[selectedRole];
 }
 
+type FlyoutPlacement = {
+  top: number;
+  left: number;
+};
+
 export function DemoRoleSelect({
   onRoleChange,
   className,
@@ -37,19 +45,34 @@ export function DemoRoleSelect({
     useDemoRole();
   const [open, setOpen] = useState(false);
   const [attorneySubmenuOpen, setAttorneySubmenuOpen] = useState(false);
-  const [flyoutTop, setFlyoutTop] = useState(0);
+  const [flyoutPlacement, setFlyoutPlacement] = useState<FlyoutPlacement | null>(
+    null,
+  );
+  const [mounted, setMounted] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const attorneyRowRef = useRef<HTMLLIElement>(null);
   const submenuCloseTimerRef = useRef<number | null>(null);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const syncFlyoutPosition = useCallback(() => {
     const row = attorneyRowRef.current;
-    const panel = panelRef.current;
-    if (!row || !panel) return;
-    const rowRect = row.getBoundingClientRect();
-    const panelRect = panel.getBoundingClientRect();
-    setFlyoutTop(rowRect.top - panelRect.top);
+    if (!row) return;
+    const rect = row.getBoundingClientRect();
+    const gap = 8;
+    let left = rect.left - FLYOUT_WIDTH_PX - gap;
+    let top = rect.top;
+
+    if (left < gap) {
+      left = Math.max(gap, rect.right - FLYOUT_WIDTH_PX);
+    }
+
+    const maxTop = window.innerHeight - 220;
+    top = Math.min(Math.max(gap, top), maxTop);
+    setFlyoutPlacement({ top, left });
   }, []);
 
   const clearSubmenuCloseTimer = useCallback(() => {
@@ -73,12 +96,22 @@ export function DemoRoleSelect({
     }, SUBMENU_CLOSE_DELAY_MS);
   }, [clearSubmenuCloseTimer]);
 
+  const toggleAttorneySubmenu = useCallback(() => {
+    if (attorneySubmenuOpen) {
+      setAttorneySubmenuOpen(false);
+      return;
+    }
+    openAttorneySubmenu();
+  }, [attorneySubmenuOpen, openAttorneySubmenu]);
+
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-        setAttorneySubmenuOpen(false);
-      }
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      const flyout = document.getElementById("attorney-specialty-flyout");
+      if (flyout?.contains(target)) return;
+      setOpen(false);
+      setAttorneySubmenuOpen(false);
     }
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
@@ -91,8 +124,18 @@ export function DemoRoleSelect({
     }
     syncFlyoutPosition();
     window.addEventListener("resize", syncFlyoutPosition);
-    return () => window.removeEventListener("resize", syncFlyoutPosition);
+    window.addEventListener("scroll", syncFlyoutPosition, true);
+    return () => {
+      window.removeEventListener("resize", syncFlyoutPosition);
+      window.removeEventListener("scroll", syncFlyoutPosition, true);
+    };
   }, [open, syncFlyoutPosition]);
+
+  useEffect(() => {
+    if (attorneySubmenuOpen) {
+      syncFlyoutPosition();
+    }
+  }, [attorneySubmenuOpen, syncFlyoutPosition]);
 
   useEffect(() => {
     return () => clearSubmenuCloseTimer();
@@ -110,9 +153,65 @@ export function DemoRoleSelect({
     setAttorneySubmenuOpen(false);
   }
 
+  const specialtyFlyout =
+    mounted && attorneySubmenuOpen && flyoutPlacement
+      ? createPortal(
+          <div
+            id="attorney-specialty-flyout"
+            className="fixed z-[200] w-[min(17.5rem,calc(100vw-1rem))]"
+            style={{
+              top: flyoutPlacement.top,
+              left: flyoutPlacement.left,
+              maxWidth: FLYOUT_WIDTH_PX,
+            }}
+            onMouseEnter={openAttorneySubmenu}
+            onMouseLeave={scheduleCloseAttorneySubmenu}
+          >
+            <ul
+              role="listbox"
+              aria-label="Attorney specialties"
+              className="rounded-lg border border-gray-200 bg-white py-1 shadow-xl"
+            >
+              {ATTORNEY_DEMO_SPECIALTIES.map((option) => {
+                const lead = getLeadAttorneyForSpecialty(option.id);
+                return (
+                  <li key={option.id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={
+                        selectedRole === "attorney" &&
+                        attorneySpecialty === option.id
+                      }
+                      className={cn(
+                        "w-full px-3 py-2.5 text-left hover:bg-gray-50",
+                        selectedRole === "attorney" &&
+                          attorneySpecialty === option.id &&
+                          "bg-navy-50",
+                      )}
+                      onClick={() => selectSpecialty(option.id)}
+                    >
+                      <span className="block text-sm font-medium text-navy-900">
+                        {option.label}
+                      </span>
+                      <span className="block text-xs text-muted">
+                        {lead.fullName}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
-    <div ref={rootRef} className={cn("relative min-w-[220px]", className)}>
-      <label className="mb-1.5 block text-sm font-medium text-navy-900">Demo role</label>
+    <div ref={rootRef} className={cn("relative min-w-[180px] sm:min-w-[220px]", className)}>
+      <label className="mb-1.5 block text-sm font-medium text-navy-900">
+        Demo role
+      </label>
       <button
         type="button"
         aria-haspopup="listbox"
@@ -126,13 +225,15 @@ export function DemoRoleSelect({
             ? roleTriggerLabel(selectedRole, attorneySpecialty)
             : USER_ROLE_LABELS[DEFAULT_DEMO_ROLE]}
         </span>
-        <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted transition", open && "rotate-180")} />
+        <ChevronDown
+          className={cn("h-4 w-4 shrink-0 text-muted transition", open && "rotate-180")}
+        />
       </button>
 
       {open && (
         <div
           ref={panelRef}
-          className="absolute right-0 z-50 mt-1 w-full min-w-[260px] overflow-visible rounded-lg border border-gray-200 bg-white shadow-lg"
+          className="absolute right-0 z-[100] mt-1 w-full min-w-[260px] rounded-lg border border-gray-200 bg-white shadow-lg"
         >
           <ul
             role="listbox"
@@ -158,13 +259,9 @@ export function DemoRoleSelect({
                         (selectedRole === "attorney" || attorneySubmenuOpen) &&
                           "bg-navy-50 font-medium",
                       )}
-                      onClick={() => {
-                        openAttorneySubmenu();
-                        if (attorneySpecialty) {
-                          selectAttorneySpecialty(attorneySpecialty);
-                        } else {
-                          selectAttorneySpecialty("litigation");
-                        }
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleAttorneySubmenu();
                       }}
                     >
                       <span>{USER_ROLE_LABELS.attorney}</span>
@@ -197,46 +294,10 @@ export function DemoRoleSelect({
               );
             })}
           </ul>
-
-          {attorneySubmenuOpen && (
-            <div
-              className="absolute z-[60] flex items-stretch"
-              style={{ top: flyoutTop, right: "100%" }}
-              onMouseEnter={openAttorneySubmenu}
-              onMouseLeave={scheduleCloseAttorneySubmenu}
-            >
-              <div className="w-2 shrink-0 self-stretch" aria-hidden />
-              <ul
-                role="listbox"
-                aria-label="Attorney specialties"
-                className="w-[min(17.5rem,calc(100vw-2rem))] rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
-              >
-                {ATTORNEY_DEMO_SPECIALTIES.map((option) => (
-                  <li key={option.id}>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={
-                        selectedRole === "attorney" &&
-                        attorneySpecialty === option.id
-                      }
-                      className={cn(
-                        "w-full px-3 py-2.5 text-left text-sm text-navy-900 hover:bg-gray-50",
-                        selectedRole === "attorney" &&
-                          attorneySpecialty === option.id &&
-                          "bg-navy-50 font-medium",
-                      )}
-                      onClick={() => selectSpecialty(option.id)}
-                    >
-                      {option.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       )}
+
+      {specialtyFlyout}
     </div>
   );
 }
