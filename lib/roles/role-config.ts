@@ -3,7 +3,7 @@ import {
   isAccountingManagerExclusivePath,
   isAccountingManagerRoute,
 } from "@/lib/navigation/accounting-manager-nav";
-import { NAV_ITEMS, type NavItem, type RouteKey } from "@/lib/navigation";
+import { NAV_ITEMS, getNavItemsForRole, type NavItem, type RouteKey } from "@/lib/navigation";
 import type { UserRole } from "@/lib/types";
 import { USER_ROLE_LABELS } from "@/lib/types";
 import type { Permission } from "./permissions";
@@ -43,8 +43,11 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
       "dashboard",
       "clients",
       "matters",
+      "attorney_hub",
       "time",
       "tasks",
+      "calendar",
+      "notes",
       "billing",
       "invoices",
       "receivables",
@@ -70,13 +73,15 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   attorney: {
     displayName: USER_ROLE_LABELS.attorney,
-    defaultRoute: "/dashboard",
+    defaultRoute: "/attorney/dashboard",
     allowedRoutes: [
-      "dashboard",
+      "attorney_hub",
       "clients",
       "matters",
       "time",
       "tasks",
+      "calendar",
+      "notes",
       "invoices",
     ],
     dashboardTitle: "Attorney Dashboard",
@@ -92,8 +97,17 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   paralegal: {
     displayName: USER_ROLE_LABELS.paralegal,
-    defaultRoute: "/dashboard",
-    allowedRoutes: ["dashboard", "clients", "matters", "time", "tasks"],
+    defaultRoute: "/attorney/dashboard",
+    allowedRoutes: [
+      "dashboard",
+      "attorney_hub",
+      "clients",
+      "matters",
+      "time",
+      "tasks",
+      "calendar",
+      "notes",
+    ],
     dashboardTitle: "Paralegal Dashboard",
     dashboardDescription:
       "Manage assigned tasks, upcoming deadlines, attorney reviews, and time-entry responsibilities.",
@@ -270,7 +284,7 @@ export function getNavigationForRole(role: UserRole): NavItem[] {
     return ACCOUNTING_MANAGER_NAV_ITEMS;
   }
 
-  return NAV_ITEMS.filter((item) => item.roles?.includes(role) ?? false);
+  return getNavItemsForRole(role);
 }
 
 export function isValidDemoRole(value: string): value is UserRole {

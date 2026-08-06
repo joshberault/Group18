@@ -26,6 +26,7 @@ export type RouteKey =
   | "dashboard"
   | "clients"
   | "matters"
+  | "attorney_hub"
   | "admin"
   | "time"
   | "tasks"
@@ -112,7 +113,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["firm_administrator"],
   },
   {
-    routeKey: "matters",
+    routeKey: "attorney_hub",
     label: "Attorney Hub",
     href: "/attorney/dashboard",
     icon: Briefcase,
@@ -216,6 +217,7 @@ export function getNavItemsForRole(role: UserRole): NavItem[] {
       if (item.href === "/dashboard" && usesAttorneyHubAsHome(role)) {
         return {
           ...item,
+          routeKey: "attorney_hub" as RouteKey,
           label: "My Dashboard",
           href: "/attorney/dashboard",
           description: "Your matters, time, tasks, and deadlines",
@@ -230,6 +232,7 @@ export function getNavItemsForRole(role: UserRole): NavItem[] {
       if (item.href === "/dashboard" && role === "client") {
         return {
           ...item,
+          routeKey: "client_portal" as RouteKey,
           label: "My Portal",
           href: "/client-portal",
           description: "Your matters and invoices",
