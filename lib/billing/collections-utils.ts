@@ -78,3 +78,59 @@ export function getCollectionsThisMonthTotal(
     resolvePeriodRange("this_month", asOf),
   );
 }
+
+export type MonthlyCollectionPoint = {
+  /** Short month label for chart axis, e.g. "Mar" */
+  month: string;
+  amount: number;
+  /** Year-month key YYYY-MM */
+  key: string;
+};
+
+function monthStartLocal(year: number, monthIndex: number): Date {
+  return new Date(year, monthIndex, 1);
+}
+
+function monthEndLocal(year: number, monthIndex: number): Date {
+  return new Date(year, monthIndex + 1, 0);
+}
+
+/**
+ * Monthly collections series for the Billing Specialist firm dashboard.
+ * Uses fully paid invoices only:
+ * - payment history amounts bucketed by payment date, or
+ * - invoice total bucketed by invoice date when there is no payment history.
+ */
+export function getMonthlyCollectionsFromPaidInvoices(
+  invoices: Invoice[],
+  monthCount = 6,
+  asOf = new Date(),
+): MonthlyCollectionPoint[] {
+  const paidInvoices = getFullyPaidInvoices(invoices);
+  const points: MonthlyCollectionPoint[] = [];
+  const y = asOf.getFullYear();
+  const m = asOf.getMonth();
+
+  for (let i = monthCount - 1; i >= 0; i -= 1) {
+    const d = new Date(y, m - i, 1);
+    const year = d.getFullYear();
+    const monthIndex = d.getMonth();
+    const start = toIsoHelper(monthStartLocal(year, monthIndex));
+    const end = toIsoHelper(monthEndLocal(year, monthIndex));
+    const amount = getCollectionsInRange(paidInvoices, { start, end });
+    points.push({
+      key: `${year}-${String(monthIndex + 1).padStart(2, "0")}`,
+      month: d.toLocaleString("en-US", { month: "short" }),
+      amount,
+    });
+  }
+
+  return points;
+}
+
+function toIsoHelper(date: Date): string {
+  const yy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}

@@ -93,10 +93,10 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   paralegal: {
     displayName: USER_ROLE_LABELS.paralegal,
     defaultRoute: "/dashboard",
-    allowedRoutes: ["dashboard", "matters", "time", "tasks"],
+    allowedRoutes: ["dashboard", "clients", "matters", "time", "tasks"],
     dashboardTitle: "Paralegal Dashboard",
     dashboardDescription:
-      "Assigned tasks, matter deadlines, and document workflows.",
+      "Manage assigned tasks, upcoming deadlines, attorney reviews, and time-entry responsibilities.",
     permissions: [
       "view_assigned_matters",
       "enter_time",
@@ -247,6 +247,15 @@ function canAccessStandardRoute(role: UserRole, pathname: string): boolean {
 export function canAccessRoute(role: UserRole, pathname: string): boolean {
   if (role === "accounting_manager") {
     return isAccountingManagerRoute(pathname);
+  }
+
+  // Billing Specialist may open Client Trust Accounts from the firm Dashboard KPI.
+  if (
+    role === "billing_specialist" &&
+    (pathname === "/accounting/trust" ||
+      pathname.startsWith("/accounting/trust/"))
+  ) {
+    return true;
   }
 
   if (isAccountingManagerExclusivePath(pathname)) {

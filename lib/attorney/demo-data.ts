@@ -10,12 +10,26 @@ import type {
   DemoAttorney,
 } from "@/types/database";
 
+/** Attorney ladder titles used for display and hourly billing rates. */
+export const ATTORNEY_TITLES = [
+  "Senior Partner",
+  "Partner",
+  "Senior Associate",
+  "Associate",
+  "Junior Associate",
+] as const;
+
+export type AttorneyTitle = (typeof ATTORNEY_TITLES)[number];
+
 export const DEMO_PROFILE: Profile = {
   id: "4a0bef63-d0d2-4ca9-aa8f-69082b6c5384",
   full_name: "George Giddens",
   email: "gsgidden@go.olemiss.edu",
   role: "attorney",
 };
+
+/** Title shown after the attorney name in Attorney Hub. */
+export const DEMO_ATTORNEY_TITLE: AttorneyTitle = "Senior Partner";
 
 /** True when demo preview is enabled (default for local CounselFlow demos). */
 export function isDevPreview(): boolean {

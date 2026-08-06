@@ -1,12 +1,6 @@
-import { RoleRestrictedModule } from "@/components/layout/RoleRestrictedModule";
+import { MattersPageClient } from "./MattersPageClient";
 
+/** Legal matters directory and financial management. */
 export default function MattersPage() {
-  return (
-    <RoleRestrictedModule
-      href="/matters"
-      title="Matters"
-      description="Track legal matters, engagement terms, responsible attorneys, and matter lifecycle status."
-      iconName="briefcase"
-    />
-  );
+  return <MattersPageClient />;
 }

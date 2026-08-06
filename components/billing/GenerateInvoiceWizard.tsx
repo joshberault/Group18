@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { GenerateInvoicePreview } from "@/components/billing/GenerateInvoicePreview";
 import type {
   FinalizedInvoiceRecord,
@@ -10,20 +10,35 @@ import type {
   GenerateMatter,
   InvoiceTotals,
   ClientBillingMethod,
-  MatterStatus,
   TimeApprovalStatus,
   UnbilledTimeEntry,
 } from "@/lib/billing/generate-invoice-types";
 import {
-  GENERATE_CLIENTS,
-  getMattersForClient,
-} from "@/lib/billing/generate-invoice-seed";
-import {
-  allocateNextInvoiceNumber,
+  allocateNextInvoiceNumberAsync,
   buildManagedInvoiceFromGeneration,
+  getInvoicedExpenseIds,
+  getInvoicedTimeEntryIds,
+  refreshInvoiceCatalog,
   upsertGeneratedInvoice,
 } from "@/lib/billing/invoice-management-store";
+import {
+  type CatalogSource,
+  enrichClientWithRetainerBalance,
+  loadBillingClients,
+  loadBillingMattersForClient,
+} from "@/lib/billing/counselflow-catalog";
+import { hydrateMatterWithModuleWip } from "@/lib/billing/matter-wip";
+import {
+  applyRetainerToMatter,
+  fetchMatterRetainerBalance,
+} from "@/lib/billing/retainer";
+import { pushFinalizedInvoiceToClientPortal } from "@/lib/billing/finalize-invoice-to-portal";
 import { toIsoDate } from "@/lib/billing/billing-period";
+import {
+  BILLING_ROUTES,
+  invoicesHref,
+} from "@/lib/billing/routes";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const STEPS = [
   "Select Client",
@@ -81,227 +96,28 @@ function approvalBadgeClass(status: TimeApprovalStatus): string {
   return "gi-approval gi-approval--rejected";
 }
 
-const MATTER_NAME_OPTIONS = [
-  "General Corporate Counsel",
-  "Mergers & Acquisitions",
-  "Employment Compliance",
-  "Commercial Litigation",
-  "Real Estate / Leasing",
-  "Intellectual Property",
-  "Regulatory Defense",
-  "Contract Negotiation",
-  "Corporate Financing",
-  "Other / write your own",
-] as const;
-
-const ATTORNEY_OPTIONS = [
-  "Elena Vargas",
-  "Marcus Hale",
-  "Priya Shah",
-  "Jonah Reed",
-  "Camille Ortiz",
-] as const;
-
-function emptyMatterForm() {
-  const period = new Date().toISOString().slice(0, 7);
-  return {
-    matterTemplate: MATTER_NAME_OPTIONS[0] as string,
-    customMatterName: "",
-    matterNumber: "",
-    responsibleAttorney: ATTORNEY_OPTIONS[0] as string,
-    status: "Open" as MatterStatus,
-    billingPeriod: period,
-  };
-}
-
-function createMatterWithSeed(
-  clientId: string,
-  matterName: string,
-  matterNumber: string,
-  attorney: string,
-  status: MatterStatus,
-  billingPeriod: string,
-): GenerateMatter {
-  const id = `gm-manual-${Date.now()}`;
-  const today = new Date().toISOString().slice(0, 10);
-  return {
-    id,
-    clientId,
-    matterName,
-    matterNumber:
-      matterNumber.trim() ||
-      `NV-M-${String(Math.floor(Math.random() * 90000) + 10000)}`,
-    responsibleAttorney: attorney,
-    status,
-    billingPeriod,
-    timeEntries: [
-      {
-        id: `${id}-t1`,
-        date: today,
-        person: attorney,
-        role: "Attorney",
-        description: `Work on ${matterName}`,
-        hours: 2.0,
-        rate: 520,
-        approvalStatus: "Approved",
-        billed: false,
-      },
-      {
-        id: `${id}-t2`,
-        date: today,
-        person: "Alex Chen",
-        role: "Staff",
-        description: "Matter setup and document indexing",
-        hours: 1.5,
-        rate: 185,
-        approvalStatus: "Approved",
-        billed: false,
-      },
-    ],
-    expenses: [
-      {
-        id: `${id}-e1`,
-        date: today,
-        category: "Legal Research Charges",
-        description: "Research related to new matter",
-        amount: 150,
-        approved: true,
-        billed: false,
-      },
-    ],
-    writeDowns: [],
-    courtesyDiscountApproved: 0,
-  };
-}
-
-function emptyClientForm() {
-  return {
-    name: "",
-    /** Digits after fixed CLT- prefix (same length as firm clients, e.g. CLT-10042) */
-    clientIdBody: "",
-    billingContact: "",
-    billingMethod: "Hourly" as ClientBillingMethod,
-    trustRetainerBalance: "0",
-    email: "",
-    phone: "",
-    address: "",
-  };
-}
-
-/** Matches seed clients such as CLT-10042 */
-const CLIENT_ID_PREFIX = "CLT-";
-const CLIENT_ID_BODY_LENGTH = 5;
-
-function buildClientId(body: string): string {
-  return `${CLIENT_ID_PREFIX}${body}`;
-}
-
-function sanitizeClientIdBody(raw: string): string {
-  return raw.replace(/\D/g, "").slice(0, CLIENT_ID_BODY_LENGTH);
-}
-
-function clientIdBodyFromFull(clientId: string): string {
-  if (clientId.startsWith(CLIENT_ID_PREFIX)) {
-    return sanitizeClientIdBody(clientId.slice(CLIENT_ID_PREFIX.length));
-  }
-  return sanitizeClientIdBody(clientId);
-}
-
-/** Clients created in this Generate Invoice session */
-function isSessionClient(client: GenerateClient): boolean {
-  return client.id.startsWith("gc-custom-");
-}
-
-/**
- * Matters created during this invoice workflow (Add legal matter or new-client starter).
- * Firm directory matters (seed ids like gm-1) are never editable.
- */
-function isSessionCreatedMatter(matter: GenerateMatter): boolean {
-  return (
-    matter.id.startsWith("gm-manual-") || matter.id.startsWith("gm-new-")
-  );
-}
-
-/** Required phone format: xxx-xxx-xxxx */
-const PHONE_FORMAT = /^\d{3}-\d{3}-\d{4}$/;
-
-/** Format digit input as xxx-xxx-xxxx while typing. */
-function formatPhoneInput(raw: string): string {
-  const digits = raw.replace(/\D/g, "").slice(0, 10);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) {
-    return `${digits.slice(0, 3)}-${digits.slice(3)}`;
-  }
-  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
-}
-
-function isValidPhone(phone: string): boolean {
-  return PHONE_FORMAT.test(phone.trim());
-}
-
-function createStarterMatter(clientId: string, clientName: string): GenerateMatter {
-  const period = new Date().toISOString().slice(0, 7);
-  return {
-    id: `gm-new-${clientId}`,
-    clientId,
-    matterName: `${clientName} — General Counsel`,
-    matterNumber: `NV-M-${String(Math.floor(Math.random() * 90000) + 10000)}`,
-    responsibleAttorney: "Elena Vargas",
-    status: "Open",
-    billingPeriod: period,
-    timeEntries: [
-      {
-        id: `gt-new-${clientId}-1`,
-        date: new Date().toISOString().slice(0, 10),
-        person: "Elena Vargas",
-        role: "Attorney",
-        description: "Initial matter intake and billing setup",
-        hours: 1.5,
-        rate: 650,
-        approvalStatus: "Approved",
-        billed: false,
-      },
-      {
-        id: `gt-new-${clientId}-2`,
-        date: new Date().toISOString().slice(0, 10),
-        person: "Alex Chen",
-        role: "Staff",
-        description: "Client file setup and retainer memorandum",
-        hours: 2.0,
-        rate: 185,
-        approvalStatus: "Approved",
-        billed: false,
-      },
-    ],
-    expenses: [
-      {
-        id: `ge-new-${clientId}-1`,
-        date: new Date().toISOString().slice(0, 10),
-        category: "Postage",
-        description: "Engagement letter courier",
-        amount: 45,
-        approved: true,
-        billed: false,
-      },
-    ],
-    writeDowns: [],
-    courtesyDiscountApproved: 0,
-  };
-}
-
 export function GenerateInvoiceWizard() {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [clients, setClients] = useState<GenerateClient[]>(GENERATE_CLIENTS);
-  const [extraMatters, setExtraMatters] = useState<GenerateMatter[]>([]);
-  const [showAddClient, setShowAddClient] = useState(false);
-  const [editingClientId, setEditingClientId] = useState<string | null>(null);
-  const [newClientForm, setNewClientForm] = useState(emptyClientForm);
-  const [addClientErrors, setAddClientErrors] = useState<string[]>([]);
-  const [showAddMatter, setShowAddMatter] = useState(false);
-  const [editingMatterId, setEditingMatterId] = useState<string | null>(null);
-  const [newMatterForm, setNewMatterForm] = useState(emptyMatterForm);
-  const [addMatterErrors, setAddMatterErrors] = useState<string[]>([]);
+  const [clients, setClients] = useState<GenerateClient[]>([]);
+  const [catalogSource, setCatalogSource] =
+    useState<CatalogSource>("empty");
+  const [catalogMessage, setCatalogMessage] = useState<string | null>(
+    "Loading firm clients…",
+  );
+  const [clientsLoading, setClientsLoading] = useState(true);
+  const [firmMatters, setFirmMatters] = useState<GenerateMatter[]>([]);
+  const [mattersLoading, setMattersLoading] = useState(false);
+  const [mattersMessage, setMattersMessage] = useState<string | null>(null);
+  const [matterWipLoading, setMatterWipLoading] = useState(false);
+  const [matterWipMessage, setMatterWipMessage] = useState<string | null>(null);
+  /** Matter-scoped retainer (authoritative when a matter is selected). */
+  const [matterRetainerBalance, setMatterRetainerBalance] = useState(0);
+  const [retainerSourceNote, setRetainerSourceNote] = useState<string | null>(
+    null,
+  );
+  const [retainerLoading, setRetainerLoading] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
   const [client, setClient] = useState<GenerateClient | null>(null);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [autofillName, setAutofillName] = useState("");
@@ -329,7 +145,12 @@ export function GenerateInvoiceWizard() {
   const [invoiceHistory, setInvoiceHistory] = useState<FinalizedInvoiceRecord[]>(
     [],
   );
-  const [lockedTimeIds, setLockedTimeIds] = useState<Set<string>>(new Set());
+  const [lockedTimeIds, setLockedTimeIds] = useState<Set<string>>(() =>
+    getInvoicedTimeEntryIds(),
+  );
+  const [lockedExpenseIds, setLockedExpenseIds] = useState<Set<string>>(() =>
+    getInvoicedExpenseIds(),
+  );
   const [messages, setMessages] = useState<string[]>([]);
   const [successNote, setSuccessNote] = useState<string | null>(null);
   const [managementLinkNumber, setManagementLinkNumber] = useState<string | null>(
@@ -339,12 +160,109 @@ export function GenerateInvoiceWizard() {
     new Set(),
   );
 
-  const matters = useMemo(() => {
-    if (!client) return [];
-    const seeded = getMattersForClient(client.id);
-    const added = extraMatters.filter((m) => m.clientId === client.id);
-    return [...seeded, ...added];
-  }, [client, extraMatters]);
+  const reloadMattersForClient = useCallback(
+    async (firmClient: GenerateClient | null) => {
+      if (!firmClient) {
+        setFirmMatters([]);
+        setMattersMessage(null);
+        setMattersLoading(false);
+        return;
+      }
+      setMattersLoading(true);
+      setMattersMessage(null);
+      const catalog = await loadBillingMattersForClient(firmClient.id);
+      setFirmMatters(catalog.matters);
+      setMattersMessage(catalog.message);
+      setMattersLoading(false);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadClients(opts?: { silent?: boolean }) {
+      if (!opts?.silent) setClientsLoading(true);
+      await refreshInvoiceCatalog();
+      if (cancelled) return;
+      const catalog = await loadBillingClients();
+      if (cancelled) return;
+      setClients(catalog.clients);
+      setCatalogSource(catalog.source);
+      setCatalogMessage(catalog.message);
+      setClientsLoading(false);
+      setLockedTimeIds(getInvoicedTimeEntryIds());
+      setLockedExpenseIds(getInvoicedExpenseIds());
+      // Keep selected client balances in sync after CRM refresh
+      setClient((prev) => {
+        if (!prev) return prev;
+        const fresh = catalog.clients.find((c) => c.id === prev.id);
+        if (!fresh) return prev;
+        return {
+          ...prev,
+          name: fresh.name,
+          clientId: fresh.clientId,
+          email: fresh.email,
+          phone: fresh.phone,
+          address: fresh.address,
+          trustRetainerBalance: fresh.trustRetainerBalance,
+        };
+      });
+    }
+
+    void loadClients();
+
+    function onFocus() {
+      void loadClients({ silent: true });
+    }
+    function onVisibility() {
+      if (document.visibilityState === "visible") {
+        void loadClients({ silent: true });
+      }
+    }
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
+
+  // Refresh matters + matter retainer when returning to the tab
+  useEffect(() => {
+    if (!client) return;
+    const firmClientId = client.id;
+    const matterId = matter?.id;
+
+    function onRefresh() {
+      void reloadMattersForClient({ id: firmClientId } as GenerateClient);
+      if (matterId) {
+        void fetchMatterRetainerBalance(matterId).then((r) => {
+          setMatterRetainerBalance(r.balance);
+          setRetainerSourceNote(
+            r.message
+              ? r.message
+              : `Matter retainer available: ${money(r.balance)} (from CounselFlow matter record).`,
+          );
+          setRetainerToApply((prev) => Math.min(prev, r.balance));
+        });
+      }
+    }
+    function onVisibility() {
+      if (document.visibilityState === "visible") onRefresh();
+    }
+
+    window.addEventListener("focus", onRefresh);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", onRefresh);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [client, matter?.id, reloadMattersForClient]);
+
+  const matters = firmMatters;
 
   /** All unbilled (not locked) time shown on Step 3, including pending/rejected */
   const unbilledTimeEntries = useMemo(() => {
@@ -361,8 +279,10 @@ export function GenerateInvoiceWizard() {
 
   const approvedExpenses = useMemo(() => {
     if (!matter) return [];
-    return matter.expenses.filter((e) => e.approved && !e.billed);
-  }, [matter]);
+    return matter.expenses.filter(
+      (e) => e.approved && !e.billed && !lockedExpenseIds.has(e.id),
+    );
+  }, [matter, lockedExpenseIds]);
 
   const selectedTime = approvedUnbilledTime.filter((t) =>
     selectedTimeIds.has(t.id),
@@ -392,7 +312,13 @@ export function GenerateInvoiceWizard() {
     0,
   );
 
-  const maxRetainer = client?.trustRetainerBalance ?? 0;
+  /**
+   * Retainer available for application: matter-level after matter select;
+   * client sum of matter retainers before that.
+   */
+  const maxRetainer = matter
+    ? matterRetainerBalance
+    : (client?.trustRetainerBalance ?? 0);
 
   const amountDueBeforeRetainer = useMemo(() => {
     const pre = timeSubtotal + expenseSubtotal - writeDownTotal - courtesyDiscount;
@@ -451,6 +377,9 @@ export function GenerateInvoiceWizard() {
     setAutofillMethod(next.billingMethod);
     setCompleteAmount(String(next.trustRetainerBalance));
     setMatter(null);
+    setMatterWipMessage(null);
+    setMatterRetainerBalance(0);
+    setRetainerSourceNote(null);
     setSelectedTimeIds(new Set());
     setSelectedExpenseIds(new Set());
     setRetainerToApply(0);
@@ -458,16 +387,22 @@ export function GenerateInvoiceWizard() {
     setSuccessNote(null);
     setStatus("Draft");
     setSelectClientErrors([]);
-    // Invoice # and dates stay unset until preview (step 6)
     setInvoiceNumber("");
     setInvoiceDate("");
     setDueDate("");
+    void reloadMattersForClient(next);
   }
 
-  function loadClientIntoForm(clientId: string) {
+  async function loadClientIntoForm(clientId: string) {
     setSelectedClientId(clientId);
     setSelectClientErrors([]);
     setClient(null);
+    setFirmMatters([]);
+    setMattersMessage(null);
+    setMatter(null);
+    setMatterWipMessage(null);
+    setMatterRetainerBalance(0);
+    setRetainerSourceNote(null);
     if (!clientId) {
       setAutofillName("");
       setAutofillClientId("");
@@ -475,6 +410,7 @@ export function GenerateInvoiceWizard() {
       setAutofillMethod("Hourly");
       setCompleteAmount("");
       setPrepaidAmount("");
+      setRetainerLoading(false);
       return;
     }
     const found = clients.find((c) => c.id === clientId);
@@ -483,421 +419,117 @@ export function GenerateInvoiceWizard() {
     setAutofillClientId(found.clientId);
     setAutofillContact(found.billingContact);
     setAutofillMethod(found.billingMethod);
-    setCompleteAmount(String(found.trustRetainerBalance));
     setPrepaidAmount("");
+    setRetainerLoading(true);
+    setCompleteAmount("…");
+    const enriched = await enrichClientWithRetainerBalance(found);
+    setAutofillName(enriched.name);
+    setCompleteAmount(String(enriched.trustRetainerBalance));
+    setRetainerSourceNote(
+      "Retainer balance is the sum of retainer_balance on this client's CounselFlow matters.",
+    );
+    setRetainerLoading(false);
+    // Keep clients list balance fresh
+    setClients((list) =>
+      list.map((c) => (c.id === enriched.id ? enriched : c)),
+    );
   }
 
-  function confirmExistingClient() {
+  async function confirmExistingClient() {
     const errors: string[] = [];
     if (!selectedClientId) {
       errors.push("Select an existing client from the dropdown.");
     }
-    const trust = Number(completeAmount);
-    const prepaid = Number(prepaidAmount || "0");
-    if (completeAmount.trim() === "" || Number.isNaN(trust) || trust < 0) {
-      errors.push(
-        "Enter the trust / retainer balance amount (0 or greater).",
-      );
-    }
-    if (Number.isNaN(prepaid) || prepaid < 0) {
-      errors.push("Prepaid / deposit amount must be 0 or greater.");
-    }
-    if (errors.length) {
-      setSelectClientErrors(errors);
-      return;
+    const found = clients.find((c) => c.id === selectedClientId);
+    if (!found && selectedClientId) {
+      errors.push("That client could not be found.");
     }
 
-    const found = clients.find((c) => c.id === selectedClientId);
-    if (!found) {
-      setSelectClientErrors(["That client could not be found."]);
-      return;
+    const prepaid = Number(prepaidAmount || "0");
+    if (Number.isNaN(prepaid) || prepaid < 0) {
+      errors.push("Prepaid / deposit amount must be 0 or greater.");
     }
 
     const contact = autofillContact.trim();
     if (!contact) {
-      setSelectClientErrors(["Billing contact is required."]);
+      errors.push("Billing contact is required.");
+    }
+
+    if (errors.length || !found) {
+      setSelectClientErrors(errors);
       return;
     }
 
+    setRetainerLoading(true);
+    const enriched = await enrichClientWithRetainerBalance(found);
+    setRetainerLoading(false);
+
     const updated: GenerateClient = {
-      ...found,
+      ...enriched,
       billingContact: contact,
       billingMethod: autofillMethod,
-      trustRetainerBalance: trust,
     };
     setClients((list) =>
       list.map((c) => (c.id === updated.id ? updated : c)),
     );
+    setCompleteAmount(String(updated.trustRetainerBalance));
     selectClient(updated);
-    // Seed suggested retainer apply from prepaid when later on adjustments
     if (prepaid > 0) {
-      setRetainerToApply(Math.min(prepaid, trust));
+      setRetainerToApply(Math.min(prepaid, updated.trustRetainerBalance));
     }
     setSuccessNote(
-      `${updated.name} is selected. Client ID, name, and billing contact were filled from the firm record. You entered trust/retainer of ${money(trust)}${prepaid > 0 ? ` and prepaid deposit of ${money(prepaid)}` : ""}.`,
+      `${updated.name} is selected. Retainer total from matter records: ${money(updated.trustRetainerBalance)}. Select a matter next to bill time and apply that matter’s retainer.`,
     );
   }
 
-  function closeClientForm() {
-    setShowAddClient(false);
-    setEditingClientId(null);
-    setAddClientErrors([]);
-    setNewClientForm(emptyClientForm());
-  }
-
-  function openAddClientForm() {
-    setEditingClientId(null);
-    setNewClientForm(emptyClientForm());
-    setAddClientErrors([]);
-    setShowAddClient(true);
-    setSuccessNote(null);
-  }
-
-  function openEditClientForm(target: GenerateClient) {
-    if (!isSessionClient(target)) {
-      setMessages([
-        "Firm directory clients are edited via Billing Contact and amounts when selected above. Full profile edit is available for clients you added during this invoice.",
-      ]);
-      return;
-    }
-    setEditingClientId(target.id);
-    setNewClientForm({
-      name: target.name,
-      clientIdBody: clientIdBodyFromFull(target.clientId),
-      billingContact: target.billingContact,
-      billingMethod: target.billingMethod,
-      trustRetainerBalance: String(target.trustRetainerBalance),
-      email: target.email,
-      phone: formatPhoneInput(target.phone),
-      address: target.address,
-    });
-    setAddClientErrors([]);
-    setShowAddClient(true);
-    setSuccessNote(null);
-    setMessages([]);
-  }
-
-  function submitNewClient() {
-    const errors: string[] = [];
-    const name = newClientForm.name.trim();
-    const clientIdBody = sanitizeClientIdBody(newClientForm.clientIdBody);
-    const clientId = buildClientId(clientIdBody);
-    const billingContact = newClientForm.billingContact.trim();
-    const email = newClientForm.email.trim();
-    const phone = newClientForm.phone.trim();
-    const address = newClientForm.address.trim();
-    const trust = Number(newClientForm.trustRetainerBalance);
-    const isEdit = Boolean(editingClientId);
-
-    if (!name) errors.push("Client name is required.");
-    if (clientIdBody.length !== CLIENT_ID_BODY_LENGTH) {
-      errors.push(
-        `Client ID must be ${CLIENT_ID_PREFIX} followed by exactly ${CLIENT_ID_BODY_LENGTH} digits (e.g. ${CLIENT_ID_PREFIX}10200).`,
-      );
-    }
-    if (!billingContact) errors.push("Billing contact is required.");
-    if (!phone) {
-      errors.push("Phone number is required.");
-    } else if (!isValidPhone(phone)) {
-      errors.push("Phone number must be in the format xxx-xxx-xxxx.");
-    }
-    if (!newClientForm.billingMethod) {
-      errors.push("Billing method is required.");
-    }
-    if (Number.isNaN(trust) || trust < 0) {
-      errors.push("Trust/retainer balance must be zero or a positive amount.");
-    }
-    if (
-      clientIdBody.length === CLIENT_ID_BODY_LENGTH &&
-      clients.some(
-        (c) =>
-          c.clientId.toLowerCase() === clientId.toLowerCase() &&
-          c.id !== editingClientId,
-      )
-    ) {
-      errors.push("That Client ID is already in use.");
-    }
-
-    if (errors.length) {
-      setAddClientErrors(errors);
-      return;
-    }
-
-    if (isEdit && editingClientId) {
-      const previous = clients.find((c) => c.id === editingClientId);
-      if (!previous || !isSessionClient(previous)) {
-        setAddClientErrors(["This client can no longer be edited here."]);
-        return;
-      }
-      const updated: GenerateClient = {
-        ...previous,
-        clientId,
-        name,
-        billingContact,
-        billingMethod: newClientForm.billingMethod,
-        trustRetainerBalance: trust,
-        email: email || previous.email,
-        phone,
-        address: address || previous.address,
-      };
-      setClients((list) =>
-        list.map((c) => (c.id === updated.id ? updated : c)),
-      );
-      if (client?.id === updated.id || selectedClientId === updated.id) {
-        selectClient(updated);
-        setCompleteAmount(String(trust));
-      }
-      closeClientForm();
-      setSuccessNote(
-        `${name} was updated. Changes apply to this invoice workflow.`,
-      );
-      return;
-    }
-
-    const id = `gc-custom-${Date.now()}`;
-    const created: GenerateClient = {
-      id,
-      clientId,
-      name,
-      billingContact,
-      billingMethod: newClientForm.billingMethod,
-      trustRetainerBalance: trust,
-      email: email || "billing@client.example",
-      phone,
-      address: address || "Address on file",
-    };
-
-    setClients((list) => [created, ...list]);
-    setExtraMatters((list) => [
-      createStarterMatter(id, name),
-      ...list,
-    ]);
-    selectClient(created);
-    setCompleteAmount(String(trust));
-    closeClientForm();
-    setSuccessNote(
-      `${name} was added and selected. A starter open matter with unbilled time was created so you can continue the invoice workflow. You can return to this step anytime to edit the client.`,
-    );
-  }
-
-  function closeMatterForm() {
-    setShowAddMatter(false);
-    setEditingMatterId(null);
-    setAddMatterErrors([]);
-    setNewMatterForm(emptyMatterForm());
-  }
-
-  function openAddMatterForm() {
-    setEditingMatterId(null);
-    setNewMatterForm(emptyMatterForm());
-    setAddMatterErrors([]);
-    setShowAddMatter(true);
-    setSuccessNote(null);
-  }
-
-  function openEditMatterForm(target: GenerateMatter) {
-    // Existing firm / seed matters cannot be edited — only session-created ones
-    if (
-      !isSessionCreatedMatter(target) ||
-      !extraMatters.some((m) => m.id === target.id)
-    ) {
-      setMessages([
-        "Existing firm legal matters cannot be edited. Select the matter to use it on this invoice, or use Add legal matter to create a new one.",
-      ]);
-      setSuccessNote(null);
-      return;
-    }
-    const knownTemplate = MATTER_NAME_OPTIONS.find(
-      (opt) =>
-        opt !== "Other / write your own" && opt === target.matterName,
-    );
-    setEditingMatterId(target.id);
-    setNewMatterForm({
-      matterTemplate: knownTemplate ?? "Other / write your own",
-      customMatterName: knownTemplate ? "" : target.matterName,
-      matterNumber: target.matterNumber,
-      responsibleAttorney: (ATTORNEY_OPTIONS as readonly string[]).includes(
-        target.responsibleAttorney,
-      )
-        ? target.responsibleAttorney
-        : ATTORNEY_OPTIONS[0],
-      status: target.status,
-      billingPeriod: target.billingPeriod,
-    });
-    setAddMatterErrors([]);
-    setShowAddMatter(true);
-    setSuccessNote(null);
-    setMessages([]);
-  }
-
-  function applyMatterUpdate(updated: GenerateMatter) {
-    setExtraMatters((list) =>
-      list.map((m) => (m.id === updated.id ? updated : m)),
-    );
-    if (matter?.id === updated.id) {
-      setMatter(updated);
-      // Keep selections that still exist on the matter
-      setSelectedTimeIds((prev) => {
-        const valid = new Set(
-          updated.timeEntries
-            .filter(
-              (t) =>
-                isTimeApproved(t) &&
-                !t.billed &&
-                !lockedTimeIds.has(t.id) &&
-                prev.has(t.id),
-            )
-            .map((t) => t.id),
-        );
-        return valid.size > 0
-          ? valid
-          : new Set(
-              updated.timeEntries
-                .filter(
-                  (t) =>
-                    isTimeApproved(t) &&
-                    !t.billed &&
-                    !lockedTimeIds.has(t.id),
-                )
-                .map((t) => t.id),
-            );
-      });
-      setSelectedExpenseIds((prev) => {
-        const valid = new Set(
-          updated.expenses
-            .filter((e) => e.approved && !e.billed && prev.has(e.id))
-            .map((e) => e.id),
-        );
-        return valid.size > 0
-          ? valid
-          : new Set(
-              updated.expenses
-                .filter((e) => e.approved && !e.billed)
-                .map((e) => e.id),
-            );
-      });
-    } else {
-      selectMatter(updated);
-    }
-  }
-
-  function submitNewMatter() {
-    if (!client) {
-      setAddMatterErrors(["Select a client in Step 1 before adding a matter."]);
-      return;
-    }
-
-    const isOther =
-      newMatterForm.matterTemplate === "Other / write your own";
-    const matterName = isOther
-      ? newMatterForm.customMatterName.trim()
-      : newMatterForm.matterTemplate.trim();
-    const errors: string[] = [];
-
-    if (!matterName) {
-      errors.push(
-        isOther
-          ? "Enter a custom matter name, or choose a template from the dropdown."
-          : "Select a matter type from the dropdown.",
-      );
-    }
-    if (!newMatterForm.responsibleAttorney) {
-      errors.push("Responsible attorney is required.");
-    }
-    if (!newMatterForm.billingPeriod.trim()) {
-      errors.push("Billing period is required (YYYY-MM).");
-    }
-    if (
-      !/^\d{4}-\d{2}$/.test(newMatterForm.billingPeriod.trim()) &&
-      newMatterForm.billingPeriod.trim()
-    ) {
-      errors.push("Billing period should look like 2026-07.");
-    }
-
-    const resolvedNumber =
-      newMatterForm.matterNumber.trim() ||
-      `NV-M-${String(Math.floor(Math.random() * 90000) + 10000)}`;
-
-    if (
-      matters.some(
-        (m) =>
-          m.id !== editingMatterId &&
-          (m.matterNumber.toLowerCase() === resolvedNumber.toLowerCase() ||
-            (m.matterName.toLowerCase() === matterName.toLowerCase() &&
-              m.billingPeriod === newMatterForm.billingPeriod.trim())),
-      )
-    ) {
-      errors.push(
-        "A matter with this number or the same name and billing period already exists for this client.",
-      );
-    }
-
-    if (errors.length) {
-      setAddMatterErrors(errors);
-      return;
-    }
-
-    if (editingMatterId) {
-      const existing = extraMatters.find((m) => m.id === editingMatterId);
-      if (!existing || !isSessionCreatedMatter(existing)) {
-        setAddMatterErrors([
-          "Existing firm legal matters cannot be edited. Cancel and select the matter as-is, or add a new legal matter.",
-        ]);
-        return;
-      }
-      const updated: GenerateMatter = {
-        ...existing,
-        matterName,
-        matterNumber: resolvedNumber,
-        responsibleAttorney: newMatterForm.responsibleAttorney,
-        status: newMatterForm.status,
-        billingPeriod: newMatterForm.billingPeriod.trim(),
-      };
-      applyMatterUpdate(updated);
-      closeMatterForm();
-      setSuccessNote(
-        `Matter “${matterName}” was updated. You can continue this invoice or revise further on any prior step.`,
-      );
-      return;
-    }
-
-    const created = createMatterWithSeed(
-      client.id,
-      matterName,
-      resolvedNumber,
-      newMatterForm.responsibleAttorney,
-      newMatterForm.status,
-      newMatterForm.billingPeriod.trim(),
-    );
-
-    setExtraMatters((list) => [created, ...list]);
-    selectMatter(created);
-    closeMatterForm();
-    setSuccessNote(
-      `Matter “${matterName}” was added for ${client.name} and selected for this invoice. You can return and edit it anytime before finalizing.`,
-    );
-  }
-
-  function selectMatter(next: GenerateMatter) {
-    setMatter(next);
+  async function selectMatter(base: GenerateMatter) {
+    setMatterWipLoading(true);
+    setMatterWipMessage(null);
     setExpandedTimeIds(new Set());
-    const timeIds = next.timeEntries
-      .filter(
-        (t) =>
-          isTimeApproved(t) && !t.billed && !lockedTimeIds.has(t.id),
-      )
-      .map((t) => t.id);
-    const expenseIds = next.expenses
-      .filter((e) => e.approved && !e.billed)
-      .map((e) => e.id);
-    setSelectedTimeIds(new Set(timeIds));
-    setSelectedExpenseIds(new Set(expenseIds));
+    setSelectedTimeIds(new Set());
+    setSelectedExpenseIds(new Set());
     setRetainerToApply(0);
     setApplyWriteDowns(true);
     setApplyCourtesy(true);
     setMessages([]);
     setSuccessNote(null);
     setStatus("Draft");
+    setMatter({ ...base, timeEntries: [], expenses: [] });
+
+    const billedTime = getInvoicedTimeEntryIds();
+    const billedExp = getInvoicedExpenseIds();
+    setLockedTimeIds(billedTime);
+    setLockedExpenseIds(billedExp);
+
+    const [result, retainer] = await Promise.all([
+      hydrateMatterWithModuleWip(base),
+      fetchMatterRetainerBalance(base.id),
+    ]);
+    setMatterWipLoading(false);
+    setMatterWipMessage(result.message);
+    setMatter(result.matter);
+    setMatterRetainerBalance(retainer.balance);
+    setRetainerSourceNote(
+      retainer.message
+        ? retainer.message
+        : `Matter retainer available: ${money(retainer.balance)} (from CounselFlow matter record).`,
+    );
+
+    const prepaid = Number(prepaidAmount || "0");
+    if (prepaid > 0 && !retainer.message) {
+      setRetainerToApply(Math.min(prepaid, retainer.balance));
+    }
+
+    const timeIds = result.matter.timeEntries
+      .filter(
+        (t) => isTimeApproved(t) && !t.billed && !billedTime.has(t.id),
+      )
+      .map((t) => t.id);
+    const expenseIds = result.matter.expenses
+      .filter((e) => e.approved && !e.billed && !billedExp.has(e.id))
+      .map((e) => e.id);
+    setSelectedTimeIds(new Set(timeIds));
+    setSelectedExpenseIds(new Set(expenseIds));
   }
 
   function selectAllApprovedTime() {
@@ -1012,9 +644,15 @@ export function GenerateInvoiceWizard() {
       setMessages(["Select a legal matter to continue."]);
       return;
     }
+    if (step === 1 && matterWipLoading) {
+      setMessages([
+        "Still loading billable time for this matter. Wait a moment, then continue.",
+      ]);
+      return;
+    }
     if (step === 2 && selectedTime.length === 0) {
       setMessages([
-        "Include at least one approved billable time entry, or return to pick a matter with unbilled time.",
+        "Include at least one approved billable time entry from Time & Expenses, or return to pick a matter with approved unbilled time.",
       ]);
       return;
     }
@@ -1023,7 +661,9 @@ export function GenerateInvoiceWizard() {
       if (!invoiceDate) setInvoiceDate(todayIso());
       if (!dueDate) setDueDate(plusDaysIso(30));
       if (!invoiceNumber) {
-        setInvoiceNumber(allocateNextInvoiceNumber());
+        void allocateNextInvoiceNumberAsync().then((num) =>
+          setInvoiceNumber(num),
+        );
       }
     }
     setMessages([]);
@@ -1036,7 +676,7 @@ export function GenerateInvoiceWizard() {
     setStep((s) => Math.max(0, s - 1));
   }
 
-  function saveDraft() {
+  async function saveDraft() {
     const errs = validateForPreviewOrLater();
     if (errs.length) {
       setMessages(errs);
@@ -1044,7 +684,8 @@ export function GenerateInvoiceWizard() {
     }
     if (!client || !matter) return;
 
-    const number = invoiceNumber || allocateNextInvoiceNumber();
+    const number =
+      invoiceNumber || (await allocateNextInvoiceNumberAsync());
     const invDate = invoiceDate || todayIso();
     const due = dueDate || plusDaysIso(30);
     setInvoiceNumber(number);
@@ -1088,7 +729,7 @@ export function GenerateInvoiceWizard() {
       );
     }
 
-    const saved = upsertGeneratedInvoice(
+    const saved = await upsertGeneratedInvoice(
       buildManagedInvoiceFromGeneration({
         id: `draft-${number}`,
         invoiceNumber: number,
@@ -1108,33 +749,73 @@ export function GenerateInvoiceWizard() {
     if (saved.ok) {
       setManagementLinkNumber(number);
       setSuccessNote(
-        `Draft ${number} saved to Invoice Management (${saved.count} generated invoice${saved.count === 1 ? "" : "s"} stored). Time entries remain billable until finalized.`,
+        `Draft ${number} saved to Invoice Management (${saved.count} invoice${saved.count === 1 ? "" : "s"} in firm catalog). Time entries remain billable until finalized.`,
       );
       setMessages([]);
     } else {
       setManagementLinkNumber(null);
       setMessages([
-        `Could not save draft ${number} to Invoice Management: ${saved.error || "unknown error"}. Try again or check browser storage settings.`,
+        `Could not save draft ${number} to Invoice Management: ${saved.error || "unknown error"}. Check Supabase configuration and that the client/matter are linked.`,
       ]);
       setSuccessNote(null);
     }
   }
 
-  function finalizeInvoice() {
+  async function finalizeInvoice() {
     const errs = validateForPreviewOrLater();
     if (errs.length) {
       setMessages(errs);
       return;
     }
     if (!client || !matter) return;
+    if (finalizing) return;
 
-    // Resolve identities before any state clears — avoids empty/ stale dates
-    const number = invoiceNumber || allocateNextInvoiceNumber();
+    setFinalizing(true);
+    setMessages([]);
+    setSuccessNote(null);
+
+    const number =
+      invoiceNumber || (await allocateNextInvoiceNumberAsync());
     const invDate = invoiceDate || todayIso();
     const due = dueDate || plusDaysIso(30);
 
+    // Write back matter retainer before locking invoice — fail closed (no invent).
+    let remainingMatterRetainer = matterRetainerBalance;
+    if (retainerToApply > 0) {
+      const applyResult = await applyRetainerToMatter(
+        matter.id,
+        retainerToApply,
+      );
+      if (!applyResult.ok) {
+        setFinalizing(false);
+        setMessages([
+          applyResult.error ||
+            "Could not update matter retainer balance. Finalize was blocked so funds stay correct.",
+        ]);
+        setSuccessNote(null);
+        return;
+      }
+      remainingMatterRetainer = applyResult.remainingBalance;
+      setMatterRetainerBalance(remainingMatterRetainer);
+      setClient((c) =>
+        c
+          ? {
+              ...c,
+              trustRetainerBalance: Math.max(
+                0,
+                Math.round(
+                  ((c.trustRetainerBalance || 0) - retainerToApply) * 100,
+                ) / 100,
+              ),
+            }
+          : c,
+      );
+    }
+
     const locked = selectedTime.map((t) => t.id);
+    const lockedExp = selectedExpenses.map((e) => e.id);
     setLockedTimeIds((prev) => new Set([...prev, ...locked]));
+    setLockedExpenseIds((prev) => new Set([...prev, ...lockedExp]));
 
     const existingIndex = invoiceHistory.findIndex(
       (h) => h.invoiceNumber === number,
@@ -1161,13 +842,18 @@ export function GenerateInvoiceWizard() {
       createdAt,
     };
 
+    const clientForInvoice: GenerateClient = {
+      ...client,
+      trustRetainerBalance: remainingMatterRetainer,
+    };
+
     const managed = buildManagedInvoiceFromGeneration({
       id: record.id,
       invoiceNumber: number,
       invoiceDate: invDate,
       dueDate: due,
       status: "Sent",
-      client,
+      client: clientForInvoice,
       matter,
       timeEntries: selectedTime,
       expenses: selectedExpenses,
@@ -1176,7 +862,7 @@ export function GenerateInvoiceWizard() {
       totals,
     });
 
-    const saved = upsertGeneratedInvoice(managed);
+    const saved = await upsertGeneratedInvoice(managed);
 
     setInvoiceHistory((h) => {
       const without = h.filter((row) => row.invoiceNumber !== number);
@@ -1186,18 +872,41 @@ export function GenerateInvoiceWizard() {
     setInvoiceNumber(number);
     setInvoiceDate(invDate);
     setDueDate(due);
+    setFinalizing(false);
 
     if (saved.ok) {
+      const portalPush = pushFinalizedInvoiceToClientPortal({
+        invoiceNumber: number,
+        invoiceDate: invDate,
+        totalDue: totals.totalDue,
+        client,
+        matter,
+      });
       setManagementLinkNumber(number);
+      const retainerNote =
+        retainerToApply > 0
+          ? ` Applied ${money(retainerToApply)} from matter retainer (remaining ${money(remainingMatterRetainer)}).`
+          : "";
       setSuccessNote(
-        `Invoice ${number} finalized as Sent and added to Invoice Management (${saved.count} generated invoice${saved.count === 1 ? "" : "s"} stored). Use the link below to open it.`,
+        `${
+          portalPush.chargeAdded
+            ? `Invoice ${number} finalized as Sent, saved to firm Invoice Management (${saved.count} invoice${saved.count === 1 ? "" : "s"} in catalog), and charged to the client Account Summary. A client notification was sent.`
+            : `Invoice ${number} finalized as Sent and saved to firm Invoice Management (${saved.count} invoice${saved.count === 1 ? "" : "s"} in catalog). Client Account Summary already had this invoice charge.`
+        }${retainerNote} Use the link below to open it.`,
       );
       setMessages([]);
+      if (retainerToApply > 0) {
+        setRetainerToApply(0);
+      }
     } else {
       setManagementLinkNumber(null);
       setSuccessNote(null);
       setMessages([
-        `Invoice ${number} finalized in this session, but could not be written to Invoice Management storage: ${saved.error || "unknown error"}. Check browser privacy/storage settings and try Finalize again.`,
+        `Invoice ${number} was partially processed but could not be written to Invoice Management storage: ${saved.error || "unknown error"}. Check browser privacy/storage settings and try Finalize again.${
+          retainerToApply > 0
+            ? " Matter retainer was already reduced — verify balance in CounselFlow before re-applying."
+            : ""
+        }`,
       ]);
     }
   }
@@ -1219,31 +928,22 @@ export function GenerateInvoiceWizard() {
   }
 
   function cancelWizard() {
-    router.push("/billing");
+    router.push(BILLING_ROUTES.dashboard);
   }
 
   return (
-    <div className="dashboard gi">
-      <header className="dashboard__hero">
-        <div className="dashboard__brand-block">
-          <p className="dashboard__firm">North &amp; Vale LLP · Billing</p>
-          <p className="page-back">
-            <Link href="/billing">← Billing Dashboard</Link>
-          </p>
-          <h1 className="dashboard__title">Generate Invoice</h1>
-          <p className="dashboard__lede">
-            Create invoices from completed legal work — select client and
-            matter, pull approved time and expenses, adjust, preview, then
-            finalize.
-          </p>
-        </div>
-        <p className="dashboard__source" role="status">
-          Workflow:{" "}
-          <span>
-            Step {step + 1} of {STEPS.length}
-          </span>
+    <div className="space-y-6">
+      <PageHeader
+        title="Create Invoice"
+        description="Create invoices from completed legal work — select client and matter, pull approved time and expenses, adjust, preview, then finalize."
+      >
+        <p className="text-xs text-muted" role="status">
+          Workflow: Step {step + 1} of {STEPS.length}
         </p>
-      </header>
+      </PageHeader>
+
+      <div className="billing-module">
+      <div className="dashboard gi">
 
       <ol className="gi__steps" aria-label="Invoice generation steps">
         {STEPS.map((label, index) => (
@@ -1279,7 +979,7 @@ export function GenerateInvoiceWizard() {
           {managementLinkNumber ? (
             <p style={{ margin: "0.55rem 0 0" }}>
               <Link
-                href={`/invoices?highlight=${encodeURIComponent(managementLinkNumber)}`}
+                href={invoicesHref({ highlight: managementLinkNumber })}
                 className="dashboard__create-btn"
                 style={{ display: "inline-flex" }}
               >
@@ -1302,24 +1002,24 @@ export function GenerateInvoiceWizard() {
           <div className="gi__stack">
             <div className="gi-step1-toolbar">
               <p className="gi-muted" style={{ margin: 0, flex: 1 }}>
-                Select an existing client to autofill basic details, then
-                complete the invoice amounts. Invoice number and dates appear
-                only on the Preview step.
+                Clients are loaded from the CounselFlow Clients module. Select a
+                client to continue; matters for that client load on the next
+                step.
               </p>
-              <button
-                type="button"
+              <Link
+                href="/clients"
                 className="dashboard__create-btn"
-                onClick={() => {
-                  if (showAddClient) {
-                    closeClientForm();
-                  } else {
-                    openAddClientForm();
-                  }
-                }}
+                style={{ display: "inline-flex", textDecoration: "none" }}
               >
-                {showAddClient ? "Close form" : "Add client"}
-              </button>
+                Open Clients module
+              </Link>
             </div>
+
+            {catalogMessage ? (
+              <p className="gi-muted" role="status" style={{ margin: 0 }}>
+                {clientsLoading ? "Loading firm clients…" : catalogMessage}
+              </p>
+            ) : null}
 
             <div className="gi-add-client panel" aria-label="Select existing client">
               <header className="panel__header">
@@ -1327,11 +1027,9 @@ export function GenerateInvoiceWizard() {
                   Select existing client
                 </h3>
                 <p>
-                  Choose a client from the firm list. Name and Client ID fill
-                  automatically. Edit Billing Contact if needed, then complete
-                  the money amounts for this invoice. Clients you added during
-                  this process can be fully edited anytime you return to this
-                  step.
+                  Choose a client from firm CRM records. Name and Client ID fill
+                  automatically. Adjust billing contact and amounts for this
+                  invoice only.
                 </p>
               </header>
 
@@ -1350,9 +1048,16 @@ export function GenerateInvoiceWizard() {
                   <span>Client (existing)</span>
                   <select
                     value={selectedClientId}
-                    onChange={(e) => loadClientIntoForm(e.target.value)}
+                    onChange={(e) => void loadClientIntoForm(e.target.value)}
+                    disabled={clientsLoading || clients.length === 0}
                   >
-                    <option value="">Choose a client…</option>
+                    <option value="">
+                      {clientsLoading
+                        ? "Loading clients…"
+                        : clients.length === 0
+                          ? "No clients available"
+                          : "Choose a client…"}
+                    </option>
                     {clients.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} ({c.clientId})
@@ -1393,19 +1098,28 @@ export function GenerateInvoiceWizard() {
                   </select>
                 </label>
                 <label className="gi__field">
-                  <span>Trust / Retainer Balance</span>
+                  <span>Trust / Retainer (from matters)</span>
                   <input
                     type="number"
                     min={0}
                     step={50}
                     value={completeAmount}
-                    disabled={!selectedClientId}
-                    onChange={(e) => setCompleteAmount(e.target.value)}
-                    placeholder="Enter amount"
+                    readOnly
+                    disabled={!selectedClientId || retainerLoading}
+                    placeholder={
+                      retainerLoading
+                        ? "Loading retainer…"
+                        : "Loaded from matter retainers"
+                    }
+                    title="Sum of retainer_balance on this client's matters in CounselFlow"
                   />
+                  <span className="gi-field-hint" style={{ display: "block" }}>
+                    {retainerSourceNote ||
+                      "Read-only total of matter retainer balances for this client."}
+                  </span>
                 </label>
                 <label className="gi__field">
-                  <span>Prepaid / Deposit for this invoice</span>
+                  <span>Suggested retainer apply (optional)</span>
                   <input
                     type="number"
                     min={0}
@@ -1415,6 +1129,10 @@ export function GenerateInvoiceWizard() {
                     onChange={(e) => setPrepaidAmount(e.target.value)}
                     placeholder="0.00"
                   />
+                  <span className="gi-field-hint" style={{ display: "block" }}>
+                    Optional amount to prefill on the Adjustments step. Application
+                    uses the selected matter&apos;s retainer.
+                  </span>
                 </label>
               </div>
 
@@ -1422,223 +1140,19 @@ export function GenerateInvoiceWizard() {
                 <button
                   type="button"
                   className="dashboard__create-btn"
-                  onClick={confirmExistingClient}
-                  disabled={!selectedClientId}
+                  onClick={() => void confirmExistingClient()}
+                  disabled={!selectedClientId || retainerLoading}
                 >
                   Confirm client &amp; amounts
                 </button>
-                {selectedClientId &&
-                clients.some(
-                  (c) => c.id === selectedClientId && isSessionClient(c),
-                ) ? (
-                  <button
-                    type="button"
-                    className="gi-btn"
-                    onClick={() => {
-                      const target = clients.find(
-                        (c) => c.id === selectedClientId,
-                      );
-                      if (target) openEditClientForm(target);
-                    }}
-                  >
-                    Edit client details
-                  </button>
-                ) : null}
                 {client ? (
                   <span className="gi-muted">
                     Selected: <strong>{client.name}</strong>
-                    {isSessionClient(client) ? " (added this session)" : ""}
                   </span>
                 ) : null}
               </div>
             </div>
 
-            {showAddClient ? (
-              <div
-                className="gi-add-client panel"
-                aria-label={
-                  editingClientId ? "Edit client" : "Add new client"
-                }
-              >
-                <header className="panel__header">
-                  <h3 className="gi-subhead" style={{ margin: 0 }}>
-                    {editingClientId ? "Edit client" : "Add client"}
-                  </h3>
-                  <p>
-                    {editingClientId
-                      ? "Update billing details for this client. Changes apply immediately to the rest of this invoice."
-                      : "Enter billing details for a client not already in the firm list. You can return later in this workflow to edit them."}
-                  </p>
-                </header>
-
-                {addClientErrors.length > 0 ? (
-                  <div className="gi__alert" role="alert">
-                    <ul>
-                      {addClientErrors.map((err) => (
-                        <li key={err}>{err}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-
-                <div className="gi-add-client__grid">
-                  <label className="gi__field">
-                    <span>Client Name</span>
-                    <input
-                      value={newClientForm.name}
-                      onChange={(e) =>
-                        setNewClientForm((f) => ({
-                          ...f,
-                          name: e.target.value,
-                        }))
-                      }
-                      placeholder="e.g. Summit Holdings LLC"
-                    />
-                  </label>
-                  <label className="gi__field">
-                    <span>Client ID</span>
-                    <div className="gi-client-id">
-                      <span className="gi-client-id__prefix" aria-hidden="true">
-                        {CLIENT_ID_PREFIX}
-                      </span>
-                      <input
-                        className="gi-client-id__body"
-                        value={newClientForm.clientIdBody}
-                        onChange={(e) =>
-                          setNewClientForm((f) => ({
-                            ...f,
-                            clientIdBody: sanitizeClientIdBody(e.target.value),
-                          }))
-                        }
-                        inputMode="numeric"
-                        autoComplete="off"
-                        maxLength={CLIENT_ID_BODY_LENGTH}
-                        placeholder="10200"
-                        aria-label={`Client ID digits after ${CLIENT_ID_PREFIX}`}
-                      />
-                    </div>
-                    <span className="gi-field-hint">
-                      Prefix {CLIENT_ID_PREFIX} is fixed. Enter exactly{" "}
-                      {CLIENT_ID_BODY_LENGTH} digits (e.g. CLT-10200).
-                    </span>
-                  </label>
-                  <label className="gi__field">
-                    <span>Billing Contact</span>
-                    <input
-                      value={newClientForm.billingContact}
-                      onChange={(e) =>
-                        setNewClientForm((f) => ({
-                          ...f,
-                          billingContact: e.target.value,
-                        }))
-                      }
-                      placeholder="e.g. Pat Rivera, GC"
-                    />
-                  </label>
-                  <label className="gi__field">
-                    <span>Billing Method</span>
-                    <select
-                      value={newClientForm.billingMethod}
-                      onChange={(e) =>
-                        setNewClientForm((f) => ({
-                          ...f,
-                          billingMethod: e.target
-                            .value as ClientBillingMethod,
-                        }))
-                      }
-                    >
-                      <option value="Hourly">Hourly</option>
-                      <option value="Fixed Fee">Fixed Fee</option>
-                      <option value="Retainer">Retainer</option>
-                    </select>
-                  </label>
-                  <label className="gi__field">
-                    <span>Current Trust / Retainer Balance</span>
-                    <input
-                      type="number"
-                      min={0}
-                      step={100}
-                      value={newClientForm.trustRetainerBalance}
-                      onChange={(e) =>
-                        setNewClientForm((f) => ({
-                          ...f,
-                          trustRetainerBalance: e.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="gi__field">
-                    <span>Billing email</span>
-                    <input
-                      type="email"
-                      value={newClientForm.email}
-                      onChange={(e) =>
-                        setNewClientForm((f) => ({
-                          ...f,
-                          email: e.target.value,
-                        }))
-                      }
-                      placeholder="ap@client.com"
-                    />
-                  </label>
-                  <label className="gi__field">
-                    <span>Phone (required)</span>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      autoComplete="tel-national"
-                      value={newClientForm.phone}
-                      onChange={(e) =>
-                        setNewClientForm((f) => ({
-                          ...f,
-                          phone: formatPhoneInput(e.target.value),
-                        }))
-                      }
-                      placeholder="xxx-xxx-xxxx"
-                      maxLength={12}
-                      pattern="[0-9]{3}-[0-9]{3}-[0-9]{4}"
-                      required
-                      aria-required="true"
-                    />
-                    <span className="gi-field-hint">
-                      Format: xxx-xxx-xxxx (10 digits)
-                    </span>
-                  </label>
-                  <label className="gi__field gi-add-client__wide">
-                    <span>Billing address</span>
-                    <input
-                      value={newClientForm.address}
-                      onChange={(e) =>
-                        setNewClientForm((f) => ({
-                          ...f,
-                          address: e.target.value,
-                        }))
-                      }
-                      placeholder="Street, city, state, ZIP"
-                    />
-                  </label>
-                </div>
-
-                <div className="gi-actions">
-                  <button
-                    type="button"
-                    className="dashboard__create-btn"
-                    onClick={submitNewClient}
-                  >
-                    {editingClientId
-                      ? "Save client changes"
-                      : "Save & select client"}
-                  </button>
-                  <button
-                    type="button"
-                    className="gi-btn"
-                    onClick={closeClientForm}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : null}
           </div>
         ) : null}
 
@@ -1646,202 +1160,39 @@ export function GenerateInvoiceWizard() {
           <div className="gi__stack">
             <div className="gi-step1-toolbar">
               <p className="gi-muted" style={{ margin: 0, flex: "1 1 auto" }}>
-                Matters for <strong>{client.name}</strong>
-                {isSessionClient(client)
-                  ? " — you can edit this client on Step 1 anytime."
-                  : ""}
+                Matters for <strong>{client.name}</strong> — from CounselFlow
+                (matters linked to this client). Selecting a matter loads
+                approved unbilled time from Time &amp; Expenses.
               </p>
-              <div className="gi-actions" style={{ margin: 0 }}>
-                {isSessionClient(client) ? (
-                  <button
-                    type="button"
-                    className="gi-btn"
-                    onClick={() => {
-                      setStep(0);
-                      openEditClientForm(client);
-                    }}
-                  >
-                    Edit client
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="dashboard__create-btn"
-                  onClick={() => {
-                    if (showAddMatter) {
-                      closeMatterForm();
-                    } else {
-                      openAddMatterForm();
-                    }
-                  }}
-                >
-                  {showAddMatter ? "Close form" : "Add legal matter"}
-                </button>
-              </div>
+              <Link
+                href={"/clients/" + client.id}
+                className="dashboard__create-btn"
+                style={{ display: "inline-flex", textDecoration: "none" }}
+              >
+                Open client record
+              </Link>
             </div>
 
-            {showAddMatter ? (
-              <div
-                className="gi-add-client panel"
-                aria-label={
-                  editingMatterId ? "Edit legal matter" : "Add legal matter"
-                }
-              >
-                <header className="panel__header">
-                  <h3 className="gi-subhead" style={{ margin: 0 }}>
-                    {editingMatterId ? "Edit legal matter" : "Add legal matter"}
-                  </h3>
-                  <p>
-                    {editingMatterId
-                      ? "Update matter details. Billable time already on this matter is kept."
-                      : (
-                        <>
-                          Choose a standard matter type from the dropdown, or
-                          select <strong>Other / write your own</strong> to
-                          enter a custom name. You can return and edit matters
-                          you add before finalizing.
-                        </>
-                      )}
-                  </p>
-                </header>
-
-                {addMatterErrors.length > 0 ? (
-                  <div className="gi__alert" role="alert">
-                    <ul>
-                      {addMatterErrors.map((err) => (
-                        <li key={err}>{err}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-
-                <div className="gi-add-client__grid">
-                  <label className="gi__field gi-add-client__wide">
-                    <span>Matter type / name</span>
-                    <select
-                      value={newMatterForm.matterTemplate}
-                      onChange={(e) =>
-                        setNewMatterForm((f) => ({
-                          ...f,
-                          matterTemplate: e.target.value,
-                          customMatterName:
-                            e.target.value === "Other / write your own"
-                              ? f.customMatterName
-                              : "",
-                        }))
-                      }
-                    >
-                      {MATTER_NAME_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {newMatterForm.matterTemplate === "Other / write your own" ? (
-                    <label className="gi__field gi-add-client__wide">
-                      <span>Custom matter name</span>
-                      <input
-                        value={newMatterForm.customMatterName}
-                        onChange={(e) =>
-                          setNewMatterForm((f) => ({
-                            ...f,
-                            customMatterName: e.target.value,
-                          }))
-                        }
-                        placeholder="e.g. Data Center Expansion Dispute"
-                      />
-                    </label>
-                  ) : null}
-
-                  <label className="gi__field">
-                    <span>Matter Number (optional)</span>
-                    <input
-                      value={newMatterForm.matterNumber}
-                      onChange={(e) =>
-                        setNewMatterForm((f) => ({
-                          ...f,
-                          matterNumber: e.target.value,
-                        }))
-                      }
-                      placeholder="Auto-generated if left blank"
-                    />
-                  </label>
-                  <label className="gi__field">
-                    <span>Responsible Attorney</span>
-                    <select
-                      value={newMatterForm.responsibleAttorney}
-                      onChange={(e) =>
-                        setNewMatterForm((f) => ({
-                          ...f,
-                          responsibleAttorney: e.target.value,
-                        }))
-                      }
-                    >
-                      {ATTORNEY_OPTIONS.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="gi__field">
-                    <span>Matter Status</span>
-                    <select
-                      value={newMatterForm.status}
-                      onChange={(e) =>
-                        setNewMatterForm((f) => ({
-                          ...f,
-                          status: e.target.value as MatterStatus,
-                        }))
-                      }
-                    >
-                      <option value="Open">Open</option>
-                      <option value="Closed">Closed</option>
-                    </select>
-                  </label>
-                  <label className="gi__field">
-                    <span>Billing Period</span>
-                    <input
-                      value={newMatterForm.billingPeriod}
-                      onChange={(e) =>
-                        setNewMatterForm((f) => ({
-                          ...f,
-                          billingPeriod: e.target.value,
-                        }))
-                      }
-                      placeholder="YYYY-MM"
-                    />
-                  </label>
-                </div>
-
-                <div className="gi-actions">
-                  <button
-                    type="button"
-                    className="dashboard__create-btn"
-                    onClick={submitNewMatter}
-                  >
-                    {editingMatterId
-                      ? "Save matter changes"
-                      : "Save & select matter"}
-                  </button>
-                  <button
-                    type="button"
-                    className="gi-btn"
-                    onClick={closeMatterForm}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
+            {mattersLoading ? (
+              <p className="gi-muted" role="status">
+                Loading matters for this client…
+              </p>
             ) : null}
-
-            <p className="gi-muted" style={{ margin: 0 }}>
-              Existing firm legal matters can only be selected — not edited.
-              Edit is available only for matters you create with{" "}
-              <strong>Add legal matter</strong> during this invoice.
-            </p>
+            {mattersMessage && !mattersLoading ? (
+              <p className="gi-muted" role="status">
+                {mattersMessage}
+              </p>
+            ) : null}
+            {matterWipLoading ? (
+              <p className="gi-muted" role="status">
+                Loading billable time and expenses for the selected matter…
+              </p>
+            ) : null}
+            {matterWipMessage && !matterWipLoading ? (
+              <p className="gi-muted" role="status">
+                {matterWipMessage}
+              </p>
+            ) : null}
 
             <div className="gi__table-wrap">
               <table className="gi-table">
@@ -1856,22 +1207,29 @@ export function GenerateInvoiceWizard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {matters.length === 0 ? (
+                  {mattersLoading ? (
                     <tr>
                       <td
                         colSpan={6}
                         className="gi-muted"
                         style={{ padding: "1rem" }}
                       >
-                        No matters for this client yet. Use Add legal matter.
+                        Loading matters…
+                      </td>
+                    </tr>
+                  ) : matters.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="gi-muted"
+                        style={{ padding: "1rem" }}
+                      >
+                        No matters for this client yet. Create a matter linked
+                        to this client in CounselFlow, then return here.
                       </td>
                     </tr>
                   ) : (
-                    matters.map((m) => {
-                      const canEdit =
-                        isSessionCreatedMatter(m) &&
-                        extraMatters.some((em) => em.id === m.id);
-                      return (
+                    matters.map((m) => (
                       <tr
                         key={m.id}
                         className={
@@ -1884,36 +1242,21 @@ export function GenerateInvoiceWizard() {
                         <td>{m.status}</td>
                         <td>{m.billingPeriod}</td>
                         <td>
-                          <div className="gi-actions" style={{ margin: 0 }}>
-                            <button
-                              type="button"
-                              className="gi-btn gi-btn--small"
-                              onClick={() => selectMatter(m)}
-                            >
-                              {matter?.id === m.id ? "Selected" : "Select"}
-                            </button>
-                            {canEdit ? (
-                              <button
-                                type="button"
-                                className="gi-btn gi-btn--small"
-                                onClick={() => openEditMatterForm(m)}
-                              >
-                                Edit
-                              </button>
-                            ) : (
-                              <span
-                                className="gi-muted"
-                                style={{ fontSize: "0.78rem" }}
-                                title="Existing firm matters cannot be edited"
-                              >
-                                (firm matter)
-                              </span>
-                            )}
-                          </div>
+                          <button
+                            type="button"
+                            className="gi-btn gi-btn--small"
+                            disabled={matterWipLoading}
+                            onClick={() => void selectMatter(m)}
+                          >
+                            {matter?.id === m.id
+                              ? matterWipLoading
+                                ? "Loading…"
+                                : "Selected"
+                              : "Select"}
+                          </button>
                         </td>
                       </tr>
-                      );
-                    })
+                    ))
                   )}
                 </tbody>
               </table>
@@ -1923,6 +1266,16 @@ export function GenerateInvoiceWizard() {
 
         {step === 2 && client && matter ? (
           <div className="gi__stack">
+            {matterWipLoading ? (
+              <p className="gi-muted" role="status">
+                Loading Time &amp; Expenses for this matter…
+              </p>
+            ) : null}
+            {matterWipMessage && !matterWipLoading ? (
+              <p className="gi-muted" role="status">
+                {matterWipMessage}
+              </p>
+            ) : null}
             <dl className="gi-matter-strip" aria-label="Matter information">
               <div>
                 <dt>Client Name</dt>
@@ -2228,7 +1581,7 @@ export function GenerateInvoiceWizard() {
 
             <dl className="gi-kv">
               <div>
-                <dt>Retainer available</dt>
+                <dt>Retainer available (this matter)</dt>
                 <dd>{money(maxRetainer)}</dd>
               </div>
               <div>
@@ -2246,6 +1599,11 @@ export function GenerateInvoiceWizard() {
                 <dd>{money(matter.courtesyDiscountApproved)}</dd>
               </div>
             </dl>
+            {retainerSourceNote ? (
+              <p className="gi-muted" style={{ margin: 0 }}>
+                {retainerSourceNote}
+              </p>
+            ) : null}
 
             <label className="gi__check">
               <input
@@ -2495,13 +1853,14 @@ export function GenerateInvoiceWizard() {
               <button
                 type="button"
                 className="gi-btn gi-btn--finalize"
-                onClick={finalizeInvoice}
+                onClick={() => void finalizeInvoice()}
+                disabled={finalizing}
               >
-                Finalize Invoice
+                {finalizing ? "Finalizing…" : "Finalize Invoice"}
               </button>
               <p className="gi-finalize__hint">
-                Locks billable time, records this invoice as Sent, and adds it to
-                Invoice Management.
+                Updates matter retainer (if applied), locks billable time, marks
+                the invoice Sent, and adds it to Invoice Management.
               </p>
             </div>
           </div>
@@ -2526,10 +1885,12 @@ export function GenerateInvoiceWizard() {
             Continue
           </button>
         ) : (
-          <Link href="/billing" className="gi-btn gi-btn--ghost">
+          <Link href={BILLING_ROUTES.dashboard} className="gi-btn gi-btn--ghost">
             Return to Dashboard
           </Link>
         )}
+      </div>
+    </div>
       </div>
     </div>
   );
