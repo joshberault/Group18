@@ -373,7 +373,16 @@ export function InvoiceManagementSection({ invoices }: Props) {
   const filteredSorted = useMemo(() => {
     const q = clientSearch.trim().toLowerCase();
     const rows = data.filter((invoice) => {
-      if (q && !invoice.client.toLowerCase().includes(q)) return false;
+      if (q) {
+        const clientMatch = invoice.client.toLowerCase().includes(q);
+        const matterMatch = (invoice.legalMatter || "")
+          .toLowerCase()
+          .includes(q);
+        const matterIdMatch = (invoice.matterId || "")
+          .toLowerCase()
+          .includes(q);
+        if (!clientMatch && !matterMatch && !matterIdMatch) return false;
+      }
       if (attorney !== "all" && invoice.attorney !== attorney) return false;
       if (billingMethod !== "all" && invoice.billingMethod !== billingMethod) {
         return false;
@@ -546,14 +555,14 @@ export function InvoiceManagementSection({ invoices }: Props) {
       <Card className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Input
-            label="Search by client"
+            label="Search by client or matter"
             type="search"
             value={clientSearch}
             onChange={(e) => {
               setClientSearch(e.target.value);
               setPage(1);
             }}
-            placeholder="e.g. Northline"
+            placeholder="Client or matter name"
           />
           <Select
             label="Filter by attorney"

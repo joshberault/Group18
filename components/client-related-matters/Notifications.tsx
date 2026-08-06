@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   Bell,
   CalendarClock,
@@ -18,22 +24,32 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
+import { buildBillingNotificationsFromCatalog } from "@/lib/billing/billing-notifications";
+import {
+  getManagedInvoicesSnapshot,
+  getServerInvoicesSnapshot,
+  refreshInvoiceCatalog,
+  subscribeInvoiceCatalog,
+} from "@/lib/billing/invoice-management-store";
 import type { ResolvedMatter } from "@/lib/client-related-matters/data";
 import {
   completeNotification,
   CRM_NOTIFICATION_UPDATE_EVENT,
   getActiveNotifications,
+  getCompletedNotificationIds,
   type ClientMatterNotification,
 } from "@/lib/client-related-matters/notifications-store";
 import { cn } from "@/lib/utils/cn";
 
 function formatNotificationTime(value: string) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(value));
+  }).format(d);
 }
 
 function notificationIcon(type: ClientMatterNotification["type"]) {
@@ -52,7 +68,21 @@ function completionLabel(type: ClientMatterNotification["type"]) {
   return "I followed up on this invoice";
 }
 
-export function Notifications({ matters }: { matters: ResolvedMatter[] }) {
+function isBillingActionType(type: ClientMatterNotification["type"]) {
+  return (
+    type === "invoice_added" ||
+    type === "invoice_past_due" ||
+    type === "payment_received"
+  );
+}
+
+type Props = {
+  matters: ResolvedMatter[];
+  /** When set, only show notifications for this client name (or all if null). */
+  clientFilterName?: string | null;
+};
+
+export function Notifications({ matters, clientFilterName }: Props) {
   const [activeNotifications, setActiveNotifications] = useState<
     ClientMatterNotification[]
   >([]);
@@ -60,19 +90,65 @@ export function Notifications({ matters }: { matters: ResolvedMatter[] }) {
     null,
   );
 
-  const visibleReferences = matters.map((matter) => matter.matterReference);
-  const referenceKey = visibleReferences.join("|");
+  useEffect(() => {
+    void refreshInvoiceCatalog();
+  }, []);
+
+  const invoices = useSyncExternalStore(
+    subscribeInvoiceCatalog,
+    getManagedInvoicesSnapshot,
+    getServerInvoicesSnapshot,
+  );
+
+  const referenceKey = useMemo(
+    () => matters.map((m) => m.matterReference).join("|"),
+    [matters],
+  );
 
   const refreshNotifications = useCallback(() => {
-    const allowed = new Set(referenceKey ? referenceKey.split("|") : []);
-    setActiveNotifications(
-      getActiveNotifications().filter(
-        (notification) =>
-          !notification.matterReference ||
-          allowed.has(notification.matterReference),
-      ),
+    const completed = getCompletedNotificationIds();
+    const allowedRefs = new Set(
+      referenceKey ? referenceKey.split("|").filter(Boolean) : [],
     );
-  }, [referenceKey]);
+    const clientName = clientFilterName?.trim().toLowerCase() || null;
+
+    const fromCatalog = buildBillingNotificationsFromCatalog(invoices).filter(
+      (n) => !completed.has(n.id),
+    );
+
+    const dynamic = getActiveNotifications().filter((notification) => {
+      // Matter-scoped demo items (requests / status) still filter by assignment set
+      if (!isBillingActionType(notification.type)) {
+        if (notification.matterReference && allowedRefs.size > 0) {
+          return allowedRefs.has(notification.matterReference);
+        }
+      }
+      if (clientName) {
+        const cn = (notification.clientName ?? "").toLowerCase();
+        if (cn && cn !== clientName) return false;
+        // if no clientName on row, keep billing deep-links that mention the client
+        if (!cn && !notification.message.toLowerCase().includes(clientName)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // Prefer live catalog rows; drop dynamic payments for invoices that already have a live row
+    const liveKeys = new Set(
+      fromCatalog
+        .map((n) => n.invoiceNumber)
+        .filter((v): v is string => Boolean(v)),
+    );
+    const merged = [
+      ...fromCatalog,
+      ...dynamic.filter(
+        (n) => !n.invoiceNumber || !liveKeys.has(n.invoiceNumber),
+      ),
+    ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    setActiveNotifications(merged);
+  }, [invoices, referenceKey, clientFilterName]);
 
   useEffect(() => {
     refreshNotifications();
@@ -102,7 +178,8 @@ export function Notifications({ matters }: { matters: ResolvedMatter[] }) {
               <CardTitle>Notifications</CardTitle>
             </div>
             <CardDescription>
-              Notifications remain here until their required task is completed.
+              Actions open the matching firm invoice or accounts receivable
+              record from Supabase.
             </CardDescription>
           </div>
           <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-navy-900 text-gold-500">
@@ -131,7 +208,10 @@ export function Notifications({ matters }: { matters: ResolvedMatter[] }) {
             You’re all caught up
           </p>
           <p className="mt-1 text-sm text-muted">
-            No client matters require attention right now.
+            No open invoices need attention
+            {invoices.length === 0
+              ? " (invoice catalog is empty)."
+              : " for this filter."}
           </p>
         </div>
       ) : (

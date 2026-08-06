@@ -1246,8 +1246,8 @@ export function GenerateInvoiceWizard() {
                 ) : matters.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-muted">
-                      No matters for this client yet. Create a matter linked to
-                      this client in CounselFlow, then return here.
+                      {mattersMessage ||
+                        "No matters for this client yet. Create a matter linked to this client in CounselFlow, then return here."}
                     </TableCell>
                   </TableRow>
                 ) : (

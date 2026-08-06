@@ -223,6 +223,12 @@ type DbPayment = {
   status: string;
 };
 
+type DbMatterEmbed = {
+  id?: string;
+  title?: string | null;
+  status?: string | null;
+} | null;
+
 type DbInvoiceRow = {
   id: string;
   matter_id: string;
@@ -245,14 +251,25 @@ type DbInvoiceRow = {
   source_key: string | null;
   last_reminder_sent: string | null;
   reminder_count: number | null;
+  /** Join alias: matter:matters(...) */
+  matter?: DbMatterEmbed | DbMatterEmbed[] | null;
   invoice_time_lines?: DbTimeLine[] | null;
   invoice_expense_lines?: DbExpenseLine[] | null;
   invoice_write_down_lines?: DbWriteDownLine[] | null;
   payments?: DbPayment[] | null;
 };
 
+function embedMatter(row: DbInvoiceRow): DbMatterEmbed {
+  const raw = row.matter;
+  if (!raw) return null;
+  return Array.isArray(raw) ? (raw[0] ?? null) : raw;
+}
+
 function mapRowToInvoice(row: DbInvoiceRow): Invoice {
   const notes = parseNotes(row.notes);
+  const linkedMatter = embedMatter(row);
+  const matterTitle = (linkedMatter?.title || "").trim();
+  const legalMatter = matterTitle || (notes.legalMatter || "").trim() || "";
   const totalAmount = money(
     asNumber(row.total_amount) - asNumber(row.amount_written_down),
   );
@@ -310,14 +327,14 @@ function mapRowToInvoice(row: DbInvoiceRow): Invoice {
   const reminderCount = Number(row.reminder_count) || 0;
   const clientName =
     notes.clientInfo?.name ||
-    notes.legalMatter /* fallback filled below */ ||
+    legalMatter /* fallback filled below */ ||
     "";
 
   return {
     id: row.id,
     invoiceNumber: row.invoice_number,
     client: notes.clientInfo?.name || clientName || "Client",
-    legalMatter: notes.legalMatter || "",
+    legalMatter,
     attorney: notes.attorney || "",
     billingMethod: notes.billingMethod || mapDbBillingToUi(row.billing_type),
     invoiceDate:
@@ -340,7 +357,8 @@ function mapRowToInvoice(row: DbInvoiceRow): Invoice {
       phone: "",
       billingAddress: "",
     },
-    matterDescription: notes.matterDescription || notes.legalMatter || "",
+    matterDescription:
+      notes.matterDescription || legalMatter || notes.legalMatter || "",
     timeEntries,
     reimbursableExpenses,
     writeDowns,
@@ -599,6 +617,7 @@ async function syncNewPayments(
 
 const SELECT_FULL = `
   *,
+  matter:matters(id, title, status),
   invoice_time_lines(*),
   invoice_expense_lines(*),
   invoice_write_down_lines(*),
@@ -810,12 +829,131 @@ export async function deleteInvoiceInSupabase(
     };
   }
 
-  const { error } = await supabase
+  const number = invoiceNumber.trim();
+  if (!number) {
+    return { ok: false, count: 0, error: "Invoice number is required." };
+  }
+
+  // Resolve id so we can remove children that previously blocked RESTRICT FKs,
+  // then hard-delete the invoice row. Line tables cascade; payments/write_downs
+  // also cascade after migration, but explicit deletes keep demos working either way.
+  const { data: existing, error: findError } = await supabase
+    .from("invoices")
+    .select("id, invoice_number")
+    .eq("invoice_number", number)
+    .maybeSingle();
+
+  if (findError) {
+    return { ok: false, count: 0, error: findError.message };
+  }
+  if (!existing?.id) {
+    return {
+      ok: false,
+      count: 0,
+      error: `Invoice ${number} was not found in Supabase.`,
+    };
+  }
+
+  const invoiceId = existing.id as string;
+
+  // expenses.invoice_id is SET NULL on invoice delete, but check constraint
+  // expenses_billed_requires_invoice requires billed rows to keep an invoice_id.
+  const { error: expenseError } = await supabase
+    .from("expenses")
+    .update({ invoice_id: null, status: "approved" })
+    .eq("invoice_id", invoiceId);
+  if (
+    expenseError &&
+    !/relation|does not exist|schema cache|column/i.test(expenseError.message)
+  ) {
+    return {
+      ok: false,
+      count: 0,
+      error: `Could not detach expenses for ${number}: ${expenseError.message}`,
+    };
+  }
+
+  const childDeletes: Array<{
+    table: string;
+    run: () => PromiseLike<{ error: { message: string } | null }>;
+  }> = [
+    {
+      table: "payments",
+      run: () =>
+        supabase.from("payments").delete().eq("invoice_id", invoiceId),
+    },
+    {
+      table: "write_downs",
+      run: () =>
+        supabase.from("write_downs").delete().eq("invoice_id", invoiceId),
+    },
+    {
+      table: "invoice_time_lines",
+      run: () =>
+        supabase.from("invoice_time_lines").delete().eq("invoice_id", invoiceId),
+    },
+    {
+      table: "invoice_expense_lines",
+      run: () =>
+        supabase
+          .from("invoice_expense_lines")
+          .delete()
+          .eq("invoice_id", invoiceId),
+    },
+    {
+      table: "invoice_write_down_lines",
+      run: () =>
+        supabase
+          .from("invoice_write_down_lines")
+          .delete()
+          .eq("invoice_id", invoiceId),
+    },
+  ];
+
+  for (const step of childDeletes) {
+    const { error } = await step.run();
+    // Ignore missing-table / RLS soft failures only when message says table not found.
+    // Surface real FK/RLS errors so the UI can report them.
+    if (error && !/relation|does not exist|schema cache/i.test(error.message)) {
+      return {
+        ok: false,
+        count: 0,
+        error: `Could not remove ${step.table} for ${number}: ${error.message}`,
+      };
+    }
+  }
+
+  const { data: deletedRows, error: deleteError } = await supabase
     .from("invoices")
     .delete()
-    .eq("invoice_number", invoiceNumber);
+    .eq("id", invoiceId)
+    .select("id");
 
-  if (error) return { ok: false, count: 0, error: error.message };
+  if (deleteError) {
+    return { ok: false, count: 0, error: deleteError.message };
+  }
+  if (!deletedRows?.length) {
+    return {
+      ok: false,
+      count: 0,
+      error: `Delete did not remove invoice ${number} (check RLS/delete policies).`,
+    };
+  }
+
+  // Confirm gone so metrics/dashboards never keep a stale row from a partial delete.
+  const { data: stillThere } = await supabase
+    .from("invoices")
+    .select("id")
+    .eq("invoice_number", number)
+    .maybeSingle();
+
+  if (stillThere?.id) {
+    return {
+      ok: false,
+      count: 0,
+      error: `Invoice ${number} still exists after delete.`,
+    };
+  }
 
   const { count } = await supabase
     .from("invoices")

@@ -3,6 +3,7 @@ import {
   BarChart3,
   Briefcase,
   Calculator,
+  CircleDollarSign,
   Clock,
   FileText,
   LayoutDashboard,
@@ -18,8 +19,11 @@ import type { UserRole } from "@/lib/types";
 
 export type RouteKey =
   | "dashboard"
+  | "analytics"
   | "clients"
   | "matters"
+  | "admin"
+  | "administration"
   | "attorney_hub"
   | "time"
   | "tasks"
@@ -30,15 +34,13 @@ export type RouteKey =
   | "receivables"
   | "accounting"
   | "reports"
-  | "analytics"
   | "risk_center"
   | "client_portal"
   | "trust_accounting"
   | "revenue_ledger"
   | "banking"
   | "accounts_payable"
-  | "audit_log"
-  | "administration";
+  | "audit_log";
 
 export interface NavItem {
   routeKey: RouteKey;
@@ -50,16 +52,16 @@ export interface NavItem {
   roles?: UserRole[];
 }
 
-const ALL_ROLES: UserRole[] = [
+const STAFF: UserRole[] = [
   "managing_partner",
   "attorney",
   "paralegal",
   "billing_specialist",
   "firm_administrator",
-  "client",
 ];
 
-const STAFF: UserRole[] = ALL_ROLES.filter((r) => r !== "client");
+const ALL_ROLES: UserRole[] = [...STAFF, "client"];
+
 const ATTORNEY_TEAM: UserRole[] = ["managing_partner", "attorney", "paralegal"];
 const BILLING_TEAM: UserRole[] = [
   "managing_partner",
@@ -69,7 +71,7 @@ const BILLING_TEAM: UserRole[] = [
 
 /**
  * Sidebar navigation with demo-role visibility.
- * Admin/Staff Information is Firm Administrator only (Person 5).
+ * Accounting Manager uses lib/navigation/accounting-manager-nav.ts.
  */
 export const NAV_ITEMS: NavItem[] = [
   {
@@ -151,6 +153,14 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/invoices",
     icon: FileText,
     description: "Invoice generation and collections",
+    roles: BILLING_TEAM,
+  },
+  {
+    routeKey: "receivables",
+    label: "Accounts Receivable",
+    href: "/receivables",
+    icon: CircleDollarSign,
+    description: "Outstanding AR, payments, and reminders",
     roles: BILLING_TEAM,
   },
   {

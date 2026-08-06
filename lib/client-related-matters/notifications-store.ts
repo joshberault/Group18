@@ -1,10 +1,11 @@
 /**
- * Notification store for Client Related Matters.
+ * Notification store for Client Related Matters / Billing dashboard panels.
  *
- * Seed notifications ship with the module; anything raised at runtime (for
- * example a payment plan change) is persisted to localStorage so the demo keeps
- * its state across navigations. Completed notifications are tracked by id.
+ * Runtime events (payments, plan changes) are persisted in localStorage.
+ * Live invoice notifications come from the Supabase catalog (billing-notifications).
  */
+
+import { invoicesHref, receivablesHref } from "@/lib/billing/routes";
 
 export const CRM_NOTIFICATION_COMPLETED_KEY =
   "counselflow-crm-completed-notifications";
@@ -26,56 +27,16 @@ export type ClientMatterNotification = {
   createdAt: string;
   type: ClientMatterNotificationType;
   matterReference: string;
+  /** Optional client name for filtering on billing Client Related Matters */
+  clientName?: string;
+  /** Invoice number for deep links */
+  invoiceNumber?: string;
   actionLabel: string;
   actionHref: string;
 };
 
-export const SEED_NOTIFICATIONS: ClientMatterNotification[] = [
-  {
-    id: "crm-notif-1",
-    title: "Invoice past due",
-    message:
-      "Invoice INV-2044 for Northline Capital — M&A Diligence — Summit Co. is 18 days past due at $42,750.00.",
-    createdAt: "2026-07-24T14:10:00.000Z",
-    type: "invoice_past_due",
-    matterReference: "NV-M-22058",
-    actionLabel: "View receivables",
-    actionHref: "/receivables?view=overdue",
-  },
-  {
-    id: "crm-notif-2",
-    title: "New invoice added",
-    message:
-      "INV-2061 for Harborview Medical — Employment Compliance Review was issued for $9,600.00 from approved billable time.",
-    createdAt: "2026-07-30T16:45:00.000Z",
-    type: "invoice_added",
-    matterReference: "NV-M-21990",
-    actionLabel: "View invoice",
-    actionHref: "/invoices",
-  },
-  {
-    id: "crm-notif-3",
-    title: "Retainer replenishment required",
-    message:
-      "Northline Capital — Series B Financing is retainer billed. Work cannot be completed until the outstanding retainer of $18,400.00 is paid.",
-    createdAt: "2026-08-01T09:20:00.000Z",
-    type: "request",
-    matterReference: "NV-M-22041",
-    actionLabel: "Review account",
-    actionHref: "/receivables",
-  },
-  {
-    id: "crm-notif-4",
-    title: "Contingency matter awaiting verdict",
-    message:
-      "Harborview Medical — Delgado Injury Claim stays uninvoiced until a verdict is reached. A 35% fee invoice is created only on a client win.",
-    createdAt: "2026-08-03T11:05:00.000Z",
-    type: "case_status",
-    matterReference: "NV-M-22120",
-    actionLabel: "View matter",
-    actionHref: "/matters",
-  },
-];
+/** Mock seeds removed — use live catalog + dynamic payment events only. */
+export const SEED_NOTIFICATIONS: ClientMatterNotification[] = [];
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -98,6 +59,10 @@ export function getDynamicNotifications(): ClientMatterNotification[] {
   return readJson<ClientMatterNotification[]>(CRM_NOTIFICATION_DYNAMIC_KEY, []);
 }
 
+/**
+ * Persistable/dynamic active notifications only.
+ * Combine with buildBillingNotificationsFromCatalog for invoice-backed rows.
+ */
 export function getActiveNotifications(): ClientMatterNotification[] {
   const completed = getCompletedNotificationIds();
 
@@ -133,7 +98,6 @@ export function addNotification(notification: ClientMatterNotification) {
     JSON.stringify([notification, ...existing]),
   );
 
-  // A re-raised notification should reappear even if it was completed before.
   const completed = getCompletedNotificationIds();
   if (completed.delete(notification.id)) {
     window.localStorage.setItem(
@@ -173,7 +137,17 @@ export function addPaymentReceivedNotification(input: {
     createdAt: input.createdAt,
     type: "payment_received",
     matterReference: input.matterReference,
+    clientName: input.clientName,
+    invoiceNumber: input.invoiceNumber,
     actionLabel: "View invoice",
-    actionHref: "/invoices",
+    actionHref: invoicesHref({ highlight: input.invoiceNumber }),
   });
+}
+
+export function receivablesNotificationHref(invoiceNumber?: string): string {
+  return receivablesHref(
+    invoiceNumber
+      ? { view: "overdue", highlight: invoiceNumber }
+      : { view: "overdue" },
+  );
 }
