@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { RevenueByClient } from "@/components/billing/RevenueByClient";
 import { PageHeader } from "@/components/ui/PageHeader";
 import {
@@ -18,6 +18,7 @@ import { resolvePeriodRange } from "@/lib/billing/billing-period";
 import {
   getManagedInvoicesSnapshot,
   getServerInvoicesSnapshot,
+  refreshInvoiceCatalog,
   subscribeInvoiceCatalog,
 } from "@/lib/billing/invoice-management-store";
 import { invoicesHref } from "@/lib/billing/routes";
@@ -35,6 +36,10 @@ type Props = {
 };
 
 export function RevenueByClientReport({ clientFilter }: Props) {
+  useEffect(() => {
+    void refreshInvoiceCatalog();
+  }, []);
+
   const allInvoices = useSyncExternalStore(
     subscribeInvoiceCatalog,
     getManagedInvoicesSnapshot,

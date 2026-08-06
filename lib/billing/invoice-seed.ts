@@ -1296,6 +1296,13 @@ export const INVOICE_STATUSES = [
   "Cancelled",
 ] as const;
 
-export function getInvoiceAttorneys(invoices: Invoice[] = INVOICE_SEED): string[] {
-  return Array.from(new Set(invoices.map((i) => i.attorney))).sort();
+/** Prefer pass-through live catalog; empty default (never seed). */
+export function getInvoiceAttorneys(invoices: Invoice[] = []): string[] {
+  return Array.from(
+    new Set(
+      invoices
+        .map((i) => i.attorney?.trim())
+        .filter((name): name is string => Boolean(name)),
+    ),
+  ).sort();
 }
