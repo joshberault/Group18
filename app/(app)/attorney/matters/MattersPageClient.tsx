@@ -27,9 +27,9 @@ export function MattersPageClient() {
           {matters.map((matter) => (
             <div key={matter.id} className="space-y-3">
               <MatterCard matter={matter} />
-              <Link href={`/attorney/matters/${matter.id}`}>
+              <Link href={`/matters/${matter.id}`}>
                 <Button variant="secondary" size="sm">
-                  View timeline & checklist
+                  Open matter detail
                 </Button>
               </Link>
             </div>

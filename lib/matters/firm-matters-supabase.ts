@@ -782,3 +782,18 @@ export function toParalegalAssignmentMatter(
     openDate: m.openDate === "—" ? new Date().toISOString().slice(0, 10) : m.openDate,
   };
 }
+
+export async function fetchSharedFirmMatterById(
+  matterId: string,
+  options: FetchFirmMattersOptions = {},
+): Promise<{ matter: SharedFirmMatter | null; error: string | null }> {
+  const result = await fetchSharedFirmMatters(options);
+  const matter =
+    result.matters.find(
+      (row) =>
+        row.id === matterId ||
+        row.matterNumber === matterId ||
+        row.title.toLowerCase() === matterId.toLowerCase(),
+    ) ?? null;
+  return { matter, error: result.error };
+}

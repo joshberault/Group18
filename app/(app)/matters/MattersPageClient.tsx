@@ -6,13 +6,11 @@ import { AccountingManagerMattersView } from "@/components/accounting-manager/ma
 import { BillingSpecialistMattersView } from "@/components/matters/BillingSpecialistMattersView";
 import { FirmAdministratorMattersView } from "@/components/matters/FirmAdministratorMattersView";
 import { ManagingPartnerMattersView } from "@/components/matters/ManagingPartnerMattersView";
+import { MatterRegisterList } from "@/components/matters/MatterRegisterList";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { MatterWorkspace } from "@/components/matters/MatterWorkspace";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { PARALEGAL_ASSIGNED_MATTERS } from "@/lib/paralegal/demo-data";
 
 function MattersPageContent() {
   const { selectedRole } = useDemoRole();
@@ -49,76 +47,19 @@ function MattersPageContent() {
       <div className="space-y-6">
         <PageHeader
           title="Matters"
-          description="Case status, documentation, requests, and messaging for assigned matters. Open/close/archive and fee changes remain restricted."
+          description="Open a matter for tasks, documents, client details, and case notes. Case work modules remain below."
         >
           <Link href="/attorney/matters">
             <Button variant="secondary">Open in Attorney Hub</Button>
           </Link>
         </PageHeader>
 
-        <MatterWorkspace />
+        <MatterRegisterList
+          title="Assigned matters"
+          description="Click a matter to open the shared matter detail screen."
+        />
 
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-            Assigned matter cards
-          </h2>
-          {PARALEGAL_ASSIGNED_MATTERS.map((matter) => (
-            <Card key={matter.id} padding="md">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                    {matter.matterNumber}
-                  </p>
-                  <h2 className="text-base font-semibold text-navy-900">
-                    {matter.title}
-                  </h2>
-                  <p className="mt-1 text-sm text-muted">
-                    {matter.clientName} · {matter.practiceArea} · Attorney{" "}
-                    {matter.attorneyName}
-                  </p>
-                  <p className="mt-2 text-sm text-navy-900">
-                    Scope: {matter.engagementScope}
-                  </p>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <Badge
-                    variant={
-                      matter.status === "on_hold" ? "warning" : "success"
-                    }
-                  >
-                    {matter.status.replaceAll("_", " ")}
-                  </Badge>
-                  <Badge
-                    variant={
-                      matter.conflictStatus === "possible_conflict"
-                        ? "danger"
-                        : matter.conflictStatus === "cleared"
-                          ? "success"
-                          : "warning"
-                    }
-                  >
-                    Conflict: {matter.conflictStatus.replaceAll("_", " ")}
-                  </Badge>
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Link href="/attorney/tasks">
-                  <Button size="sm" variant="secondary">
-                    Related tasks
-                  </Button>
-                </Link>
-                <Link href="/attorney/dashboard?focus=reviews">
-                  <Button size="sm" variant="ghost">
-                    Submit for attorney review
-                  </Button>
-                </Link>
-                <Button size="sm" variant="ghost" disabled title="Restricted">
-                  Close matter (restricted)
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <MatterWorkspace />
       </div>
     );
   }
@@ -128,12 +69,17 @@ function MattersPageContent() {
       <div className="space-y-6">
         <PageHeader
           title="Matters"
-          description="Case status, documentation, requests, and secure messaging for your assigned matters."
+          description="Open a matter for tasks, documents, client details, and case notes."
         >
           <Link href="/attorney/matters">
             <Button variant="secondary">View matter cards</Button>
           </Link>
         </PageHeader>
+
+        <MatterRegisterList
+          title="Your matters"
+          description="Click a matter to open the shared matter detail screen."
+        />
 
         <MatterWorkspace />
       </div>
