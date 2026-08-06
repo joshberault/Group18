@@ -878,7 +878,7 @@ export function ManagingPartnerMattersView() {
                   </Button>
                 </Link>
                 <Link
-                  href={invoicesHref({ matter: selected.matterNumber })}
+                  href={invoicesHref({ matterId: selected.id })}
                 >
                   <Button size="sm" variant="secondary">
                     Invoices

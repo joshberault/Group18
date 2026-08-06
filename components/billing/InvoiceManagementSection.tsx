@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BillingPeriodToolbar } from "@/components/billing/BillingPeriodToolbar";
 import { InvoiceDetailsModal } from "@/components/billing/InvoiceDetailsModal";
 import { RecordPaymentModal } from "@/components/billing/RecordPaymentModal";
@@ -104,11 +105,20 @@ function compareInvoices(a: Invoice, b: Invoice, key: SortKey): number {
 }
 
 export function InvoiceManagementSection({ invoices }: Props) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const autoOpenedMatterRef = useRef<string | null>(null);
   const [catalog, setCatalog] = useState<Invoice[]>(
     () => invoices ?? [],
   );
   const [generatedCount, setGeneratedCount] = useState(0);
   const [highlightNumber, setHighlightNumber] = useState<string | null>(null);
+  /** Firm matter UUID deep link from Matters → View Invoice. */
+  const [matterIdFilter, setMatterIdFilter] = useState<string | null>(null);
+  const [matterFilterLabel, setMatterFilterLabel] = useState<string | null>(
+    null,
+  );
   const [period, setPeriod] = useState<BillingPeriodState>(() =>
     createDefaultBillingPeriod(),
   );
@@ -265,98 +275,6 @@ export function InvoiceManagementSection({ invoices }: Props) {
 
     void reloadFromSupabase();
 
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const hl = params.get("highlight");
-      const view = params.get("view");
-      const clientParam = params.get("client");
-      const attorneyParam = params.get("attorney");
-      const statusParam = params.get("status");
-
-      if (hl) {
-        setHighlightNumber(hl);
-        setClientSearch("");
-        setAttorney("all");
-        setBillingMethod("all");
-        setStatus("all");
-        setStatusFilterLabel(null);
-        setOverdueOnly(false);
-        setSortKey("invoiceNumber");
-        setSortDir("desc");
-        setPage(1);
-      }
-      if (view === "completed" || view === "paid") {
-        setClientSearch("");
-        setAttorney("all");
-        setBillingMethod("all");
-        setStatus("Paid");
-        setStatusFilterLabel("Paid");
-        setOverdueOnly(false);
-        setSortKey("invoiceDate");
-        setSortDir("desc");
-        setPage(1);
-      }
-      if (view === "overdue") {
-        setClientSearch("");
-        setAttorney("all");
-        setBillingMethod("all");
-        setStatus("all");
-        setStatusFilterLabel("Overdue");
-        setOverdueOnly(true);
-        setSortKey("dueDate");
-        setSortDir("asc");
-        setPage(1);
-      }
-      if (statusParam) {
-        const parsed = parseInvoiceStatusParam(statusParam);
-        setClientSearch("");
-        setAttorney("all");
-        setBillingMethod("all");
-        setOverdueOnly(false);
-        if (parsed === "none") {
-          setStatus("none");
-          setStatusFilterLabel(statusParam.trim());
-        } else if (parsed) {
-          setStatus(parsed);
-          setStatusFilterLabel(parsed === "Cancelled" ? "Canceled" : parsed);
-        } else {
-          // Preserve paid deep-link shortcuts even if casing varies
-          const lower = statusParam.trim().toLowerCase();
-          if (lower === "paid") {
-            setStatus("Paid");
-            setStatusFilterLabel("Paid");
-          }
-        }
-        setSortKey("invoiceDate");
-        setSortDir("desc");
-        setPage(1);
-      }
-      if (clientParam && clientParam.trim()) {
-        setClientSearch(clientParam.trim());
-        setAttorney("all");
-        setBillingMethod("all");
-        setStatus("all");
-        setStatusFilterLabel(null);
-        setOverdueOnly(false);
-        setSortKey("invoiceDate");
-        setSortDir("desc");
-        setPage(1);
-      }
-      if (attorneyParam && attorneyParam.trim()) {
-        setClientSearch("");
-        setAttorney(attorneyParam.trim());
-        setBillingMethod("all");
-        setStatus("all");
-        setStatusFilterLabel(null);
-        setOverdueOnly(false);
-        setSortKey("invoiceDate");
-        setSortDir("desc");
-        setPage(1);
-      }
-    } catch {
-      /* ignore */
-    }
-
     window.addEventListener(INVOICES_UPDATED_EVENT, onCacheUpdated);
     window.addEventListener("focus", reload);
     document.addEventListener("visibilitychange", onVisible);
@@ -367,13 +285,158 @@ export function InvoiceManagementSection({ invoices }: Props) {
     };
   }, [invoices]);
 
+  /**
+   * Apply deep-link query params from Matters / dashboard.
+   * Uses Next searchParams so client navigations always re-apply filters.
+   * When matterId is present, do NOT also force client search (that hid invoices).
+   */
+  useEffect(() => {
+    const hl = searchParams.get("highlight");
+    const view = searchParams.get("view");
+    const clientParam = searchParams.get("client");
+    const attorneyParam = searchParams.get("attorney");
+    const statusParam = searchParams.get("status");
+    const matterIdParam =
+      searchParams.get("matterId") || searchParams.get("matter_id");
+    const matterLabelParam =
+      searchParams.get("matterName") || searchParams.get("matter");
+
+    if (matterIdParam && matterIdParam.trim()) {
+      setMatterIdFilter(matterIdParam.trim());
+      setMatterFilterLabel(matterLabelParam?.trim() || matterIdParam.trim());
+      setHighlightNumber(null);
+      setClientSearch("");
+      setAttorney("all");
+      setBillingMethod("all");
+      setStatus("all");
+      setStatusFilterLabel(null);
+      setOverdueOnly(false);
+      setPeriod(createDefaultBillingPeriod());
+      setSortKey("invoiceDate");
+      setSortDir("desc");
+      setPage(1);
+      autoOpenedMatterRef.current = null;
+      return;
+    }
+
+    if (matterLabelParam && matterLabelParam.trim()) {
+      setMatterIdFilter(null);
+      setMatterFilterLabel(matterLabelParam.trim());
+      setClientSearch("");
+      setPeriod(createDefaultBillingPeriod());
+      setPage(1);
+    } else {
+      setMatterIdFilter(null);
+      setMatterFilterLabel(null);
+    }
+
+    if (hl) {
+      setHighlightNumber(hl);
+      setMatterIdFilter(null);
+      setMatterFilterLabel(null);
+      setClientSearch("");
+      setAttorney("all");
+      setBillingMethod("all");
+      setStatus("all");
+      setStatusFilterLabel(null);
+      setOverdueOnly(false);
+      setSortKey("invoiceNumber");
+      setSortDir("desc");
+      setPage(1);
+    }
+    if (view === "completed" || view === "paid") {
+      setClientSearch("");
+      setAttorney("all");
+      setBillingMethod("all");
+      setStatus("Paid");
+      setStatusFilterLabel("Paid");
+      setOverdueOnly(false);
+      setSortKey("invoiceDate");
+      setSortDir("desc");
+      setPage(1);
+    }
+    if (view === "overdue") {
+      setClientSearch("");
+      setAttorney("all");
+      setBillingMethod("all");
+      setStatus("all");
+      setStatusFilterLabel("Overdue");
+      setOverdueOnly(true);
+      setSortKey("dueDate");
+      setSortDir("asc");
+      setPage(1);
+    }
+    if (statusParam) {
+      const parsed = parseInvoiceStatusParam(statusParam);
+      setClientSearch("");
+      setAttorney("all");
+      setBillingMethod("all");
+      setOverdueOnly(false);
+      if (parsed === "none") {
+        setStatus("none");
+        setStatusFilterLabel(statusParam.trim());
+      } else if (parsed) {
+        setStatus(parsed);
+        setStatusFilterLabel(parsed === "Cancelled" ? "Canceled" : parsed);
+      } else {
+        const lower = statusParam.trim().toLowerCase();
+        if (lower === "paid") {
+          setStatus("Paid");
+          setStatusFilterLabel("Paid");
+        }
+      }
+      setSortKey("invoiceDate");
+      setSortDir("desc");
+      setPage(1);
+    }
+    // Only apply client deep-link when not filtering a matter by UUID
+    if (clientParam && clientParam.trim() && !matterIdParam) {
+      setClientSearch(clientParam.trim());
+      setAttorney("all");
+      setBillingMethod("all");
+      setStatus("all");
+      setStatusFilterLabel(null);
+      setOverdueOnly(false);
+      setSortKey("invoiceDate");
+      setSortDir("desc");
+      setPage(1);
+    }
+    if (attorneyParam && attorneyParam.trim()) {
+      setClientSearch("");
+      setAttorney(attorneyParam.trim());
+      setBillingMethod("all");
+      setStatus("all");
+      setStatusFilterLabel(null);
+      setOverdueOnly(false);
+      setSortKey("invoiceDate");
+      setSortDir("desc");
+      setPage(1);
+    }
+  }, [searchParams]);
+
   const data = periodScoped;
   const attorneys = useMemo(() => getInvoiceAttorneys(data), [data]);
 
   const filteredSorted = useMemo(() => {
     const q = clientSearch.trim().toLowerCase();
+    const matterId = matterIdFilter?.trim().toLowerCase() || null;
+    const matterLabel = (matterFilterLabel || "").trim().toLowerCase();
     const rows = data.filter((invoice) => {
-      if (q) {
+      if (matterId) {
+        const invMatterId = (invoice.matterId || "").trim().toLowerCase();
+        const byId = Boolean(invMatterId) && invMatterId === matterId;
+        const legal = (invoice.legalMatter || "").trim().toLowerCase();
+        const byTitle =
+          Boolean(matterLabel) &&
+          (legal === matterLabel || legal.includes(matterLabel));
+        if (!byId && !byTitle) return false;
+        // Matter deep-link: do not further restrict by client search text
+      } else if (matterLabel && !q) {
+        const matterMatch = (invoice.legalMatter || "")
+          .toLowerCase()
+          .includes(matterLabel);
+        if (!matterMatch) return false;
+      } else if (q) {
         const clientMatch = invoice.client.toLowerCase().includes(q);
         const matterMatch = (invoice.legalMatter || "")
           .toLowerCase()
@@ -403,6 +466,8 @@ export function InvoiceManagementSection({ invoices }: Props) {
   }, [
     data,
     clientSearch,
+    matterIdFilter,
+    matterFilterLabel,
     attorney,
     billingMethod,
     status,
@@ -410,6 +475,21 @@ export function InvoiceManagementSection({ invoices }: Props) {
     sortKey,
     sortDir,
   ]);
+
+  // Matter → View Invoice: open details when exactly one match (or highlight)
+  useEffect(() => {
+    if (!matterIdFilter) return;
+    if (filteredSorted.length === 0) return;
+    if (autoOpenedMatterRef.current === matterIdFilter) return;
+    autoOpenedMatterRef.current = matterIdFilter;
+    if (filteredSorted.length === 1) {
+      setSelected(filteredSorted[0]);
+      setHighlightNumber(filteredSorted[0].invoiceNumber);
+    } else if (filteredSorted.length > 1) {
+      setHighlightNumber(filteredSorted[0].invoiceNumber);
+      setSelected(null);
+    }
+  }, [matterIdFilter, filteredSorted]);
 
   const totalPages = Math.max(1, Math.ceil(filteredSorted.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -459,10 +539,11 @@ export function InvoiceManagementSection({ invoices }: Props) {
     setOverdueOnly(false);
     setPage(1);
     try {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("status");
-      url.searchParams.delete("view");
-      window.history.replaceState({}, "", url.pathname + (url.search || ""));
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("status");
+      next.delete("view");
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
     } catch {
       /* ignore */
     }
@@ -480,22 +561,47 @@ export function InvoiceManagementSection({ invoices }: Props) {
             : status);
 
   const title =
-    attorney !== "all"
-      ? `Invoices — ${attorney}`
-      : clientSearch.trim()
-        ? `Invoices — ${clientSearch.trim()}`
-        : statusFilterActive
-          ? `Invoices — ${statusFilterDisplay}`
-          : "Invoice Management";
+    matterIdFilter || matterFilterLabel
+      ? `Invoices — ${matterFilterLabel || "Matter"}`
+      : attorney !== "all"
+        ? `Invoices — ${attorney}`
+        : clientSearch.trim()
+          ? `Invoices — ${clientSearch.trim()}`
+          : statusFilterActive
+            ? `Invoices — ${statusFilterDisplay}`
+            : "Invoice Management";
 
   const description =
-    attorney !== "all"
-      ? "Showing invoices for this attorney. Clear the attorney filter to see all invoices."
-      : clientSearch.trim()
-        ? "Showing invoices for this client. Clear the search box to see all invoices."
-        : statusFilterActive
-          ? `Showing ${statusFilterDisplay} invoices. Clear the status filter to see all invoices.`
-          : "Search, filter, sort, and page through firm invoices. Open any row for full billing detail.";
+    matterIdFilter || matterFilterLabel
+      ? `Showing all invoices for this matter from the shared catalog. Clear matter filter to see all invoices.`
+      : attorney !== "all"
+        ? "Showing invoices for this attorney. Clear the attorney filter to see all invoices."
+        : clientSearch.trim()
+          ? "Showing invoices for this client. Clear the search box to see all invoices."
+          : statusFilterActive
+            ? `Showing ${statusFilterDisplay} invoices. Clear the status filter to see all invoices.`
+            : "Search, filter, sort, and page through firm invoices. Open any row for full billing detail.";
+
+  function clearMatterFilter() {
+    setMatterIdFilter(null);
+    setMatterFilterLabel(null);
+    setClientSearch("");
+    setHighlightNumber(null);
+    setSelected(null);
+    setPage(1);
+    autoOpenedMatterRef.current = null;
+    try {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("matterId");
+      next.delete("matter_id");
+      next.delete("matterName");
+      next.delete("matter");
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    } catch {
+      /* ignore */
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -548,6 +654,24 @@ export function InvoiceManagementSection({ invoices }: Props) {
           </p>
           <Button size="sm" variant="secondary" onClick={clearStatusFilter}>
             Clear Filter
+          </Button>
+        </div>
+      ) : null}
+
+      {matterIdFilter || matterFilterLabel ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-navy-900/15 bg-navy-50 px-4 py-3"
+          role="status"
+        >
+          <p className="text-sm font-medium text-navy-900">
+            Filtered by matter: {matterFilterLabel || matterIdFilter}
+            <span className="ml-2 font-normal text-muted">
+              ({filteredSorted.length} invoice
+              {filteredSorted.length === 1 ? "" : "s"})
+            </span>
+          </p>
+          <Button size="sm" variant="secondary" onClick={clearMatterFilter}>
+            Clear Matter Filter
           </Button>
         </div>
       ) : null}

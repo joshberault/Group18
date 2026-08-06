@@ -690,8 +690,8 @@ export function AccountingManagerMattersView() {
                 onClick={() =>
                   router.push(
                     invoicesHref({
-                      client: selectedMatter.client,
-                      matter: selectedMatter.matterName,
+                      matterId: selectedMatter.id,
+                      matterName: selectedMatter.matterName,
                     }),
                   )
                 }

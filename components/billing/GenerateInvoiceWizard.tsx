@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GenerateInvoicePreview } from "@/components/billing/GenerateInvoicePreview";
 import type {
   FinalizedInvoiceRecord,
@@ -175,6 +175,8 @@ export function GenerateInvoiceWizard() {
   const [expandedTimeIds, setExpandedTimeIds] = useState<Set<string>>(
     new Set(),
   );
+  /** Process Matters → Create Invoice deep link once clients are available. */
+  const deepLinkHandledRef = useRef(false);
 
   const reloadMattersForClient = useCallback(
     async (firmClient: GenerateClient | null) => {
@@ -182,7 +184,11 @@ export function GenerateInvoiceWizard() {
         setFirmMatters([]);
         setMattersMessage(null);
         setMattersLoading(false);
-        return;
+        return {
+          matters: [] as GenerateMatter[],
+          source: "empty" as CatalogSource,
+          message: null as string | null,
+        };
       }
       setMattersLoading(true);
       setMattersMessage(null);
@@ -190,6 +196,7 @@ export function GenerateInvoiceWizard() {
       setFirmMatters(catalog.matters);
       setMattersMessage(catalog.message);
       setMattersLoading(false);
+      return catalog;
     },
     [],
   );
@@ -498,7 +505,10 @@ export function GenerateInvoiceWizard() {
     );
   }
 
-  async function selectMatter(base: GenerateMatter) {
+  async function selectMatter(
+    base: GenerateMatter,
+    options?: { attorneyOverride?: string | null },
+  ) {
     setMatterWipLoading(true);
     setMatterWipMessage(null);
     setExpandedTimeIds(new Set());
@@ -510,7 +520,14 @@ export function GenerateInvoiceWizard() {
     setMessages([]);
     setSuccessNote(null);
     setStatus("Draft");
-    setMatter({ ...base, timeEntries: [], expenses: [] });
+    const withAttorney =
+      options?.attorneyOverride && options.attorneyOverride.trim()
+        ? {
+            ...base,
+            responsibleAttorney: options.attorneyOverride.trim(),
+          }
+        : base;
+    setMatter({ ...withAttorney, timeEntries: [], expenses: [] });
 
     const billedTime = getInvoicedTimeEntryIds();
     const billedExp = getInvoicedExpenseIds();
@@ -518,12 +535,34 @@ export function GenerateInvoiceWizard() {
     setLockedExpenseIds(billedExp);
 
     const [result, retainer] = await Promise.all([
-      hydrateMatterWithModuleWip(base),
-      fetchMatterRetainerBalance(base.id),
+      hydrateMatterWithModuleWip(withAttorney),
+      fetchMatterRetainerBalance(withAttorney.id),
     ]);
     setMatterWipLoading(false);
+    const hydrated =
+      options?.attorneyOverride && options.attorneyOverride.trim()
+        ? {
+            ...result.matter,
+            responsibleAttorney: options.attorneyOverride.trim(),
+          }
+        : result.matter;
     setMatterWipMessage(result.message);
-    setMatter(result.matter);
+    setMatter(hydrated);
+
+    const unbilledCount =
+      hydrated.timeEntries.filter(
+        (t) => isTimeApproved(t) && !t.billed && !billedTime.has(t.id),
+      ).length +
+      hydrated.expenses.filter(
+        (e) => e.approved && !e.billed && !billedExp.has(e.id),
+      ).length;
+    if (unbilledCount === 0) {
+      setSuccessNote(
+        result.message ||
+          "There are currently no new approved unbilled time entries or expenses for this matter. You can still create a manual invoice with lines you add later, or finish with retainer/fees as needed.",
+      );
+    }
+
     setMatterRetainerBalance(retainer.balance);
     setRetainerSourceNote(
       retainer.message
@@ -536,17 +575,125 @@ export function GenerateInvoiceWizard() {
       setRetainerToApply(Math.min(prepaid, retainer.balance));
     }
 
-    const timeIds = result.matter.timeEntries
+    const timeIds = hydrated.timeEntries
       .filter(
         (t) => isTimeApproved(t) && !t.billed && !billedTime.has(t.id),
       )
       .map((t) => t.id);
-    const expenseIds = result.matter.expenses
+    const expenseIds = hydrated.expenses
       .filter((e) => e.approved && !e.billed && !billedExp.has(e.id))
       .map((e) => e.id);
     setSelectedTimeIds(new Set(timeIds));
     setSelectedExpenseIds(new Set(expenseIds));
   }
+
+  /** Deep-link from Matters: ?clientId=&matterId=&attorney= */
+  useEffect(() => {
+    if (clientsLoading || deepLinkHandledRef.current || clients.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function applyDeepLink() {
+      let params: URLSearchParams;
+      try {
+        params = new URLSearchParams(window.location.search);
+      } catch {
+        deepLinkHandledRef.current = true;
+        return;
+      }
+
+      const clientIdParam =
+        params.get("clientId") || params.get("client_id") || params.get("client");
+      const matterIdParam =
+        params.get("matterId") || params.get("matter_id") || params.get("matter");
+      const attorneyParam = params.get("attorney");
+
+      if (!clientIdParam && !matterIdParam) {
+        deepLinkHandledRef.current = true;
+        return;
+      }
+
+      deepLinkHandledRef.current = true;
+
+      const found = clients.find(
+        (c) =>
+          c.id === clientIdParam ||
+          c.clientId === clientIdParam ||
+          (clientIdParam &&
+            c.name.toLowerCase() === clientIdParam.toLowerCase()),
+      );
+
+      if (!found) {
+        setMessages([
+          "Could not preselect client from the Matters deep link. Choose a client manually.",
+        ]);
+        return;
+      }
+
+      const enriched = await enrichClientWithRetainerBalance(found);
+      if (cancelled) return;
+
+      setClients((list) =>
+        list.map((c) => (c.id === enriched.id ? enriched : c)),
+      );
+      setClient(enriched);
+      setSelectedClientId(enriched.id);
+      setAutofillName(enriched.name);
+      setAutofillClientId(enriched.clientId);
+      setAutofillContact(enriched.billingContact);
+      setAutofillMethod(enriched.billingMethod);
+      setCompleteAmount(String(enriched.trustRetainerBalance));
+      setMatter(null);
+      setMatterWipMessage(null);
+      setMatterRetainerBalance(0);
+
+      const catalog = await reloadMattersForClient(enriched);
+      if (cancelled) return;
+
+      if (!matterIdParam) {
+        setStep(1);
+        setSuccessNote(
+          `${enriched.name} is selected from Matters. Choose a legal matter to continue.`,
+        );
+        return;
+      }
+
+      const matterMatch =
+        catalog.matters.find((m) => m.id === matterIdParam) ||
+        catalog.matters.find(
+          (m) =>
+            m.matterNumber.toLowerCase() === matterIdParam.toLowerCase() ||
+            m.matterName.toLowerCase() === matterIdParam.toLowerCase(),
+        );
+
+      if (!matterMatch) {
+        setStep(1);
+        setMessages([
+          "Matter from the deep link was not found for this client. Select a matter below.",
+        ]);
+        return;
+      }
+
+      await selectMatter(matterMatch, {
+        attorneyOverride: attorneyParam,
+      });
+      if (cancelled) return;
+      setStep(2);
+      setSuccessNote(
+        (prev) =>
+          prev ||
+          `${enriched.name} · ${matterMatch.matterName} preselected from Matters. Approved unbilled time and expenses are loaded (already invoiced lines stay locked).`,
+      );
+    }
+
+    void applyDeepLink();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot deep link after first client load
+  }, [clientsLoading, clients, reloadMattersForClient]);
 
   function selectAllApprovedTime() {
     setSelectedTimeIds(new Set(approvedUnbilledTime.map((t) => t.id)));
