@@ -87,7 +87,7 @@ function closeTaskVariant(status: string) {
 
 export function RevenueLedgerView() {
   const { selectedRole } = useDemoRole();
-  const { data: workspace, loading, error, refresh } = useSupabaseQuery(
+  const { data: workspace, loading, error, warning, refresh } = useSupabaseQuery(
     fetchRevenueLedgerWorkspace,
     [],
   );
@@ -271,6 +271,11 @@ export function RevenueLedgerView() {
 
   return (
     <>
+      {warning ? (
+        <Card className="mb-4 border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          {warning}
+        </Card>
+      ) : null}
       <PageHeader
         title="Revenue & General Ledger"
         description="Journal entries, revenue recognition, chart of accounts, general ledger, trial balance, adjustments, and month-end close."

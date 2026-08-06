@@ -70,7 +70,7 @@ export function computeDashboardMetricsForPeriod(
     getOutstandingReceivables(invoicesInPeriod, asOf),
   );
 
-  return {
+  const result = {
     summary: {
       totalInvoices: invoicesInPeriod.length,
       outstandingReceivable: periodAr.totalOutstanding,
@@ -82,4 +82,5 @@ export function computeDashboardMetricsForPeriod(
     revenueByClient: buildRevenueByClientFromInvoices(invoicesInPeriod),
     invoicesInPeriod,
   };
+  return result;
 }

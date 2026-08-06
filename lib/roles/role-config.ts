@@ -3,7 +3,7 @@ import {
   isAccountingManagerExclusivePath,
   isAccountingManagerRoute,
 } from "@/lib/navigation/accounting-manager-nav";
-import { CLIENT_NAV_ITEMS } from "@/lib/navigation/client-nav";
+import { CLIENT_NAV_ITEMS, isClientPortalRoute } from "@/lib/navigation/client-nav";
 import { PROSPECTIVE_CLIENT_NAV_ITEMS } from "@/lib/navigation/prospective-client-nav";
 import { NAV_ITEMS, getNavItemsForRole, type NavItem, type RouteKey } from "@/lib/navigation";
 import type { UserRole } from "@/lib/types";
@@ -205,7 +205,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   client: {
     displayName: USER_ROLE_LABELS.client,
-    defaultRoute: "/client-portal/account-summary",
+    defaultRoute: "/client-portal",
     allowedRoutes: ["client_portal"],
     dashboardTitle: "Client Portal",
     dashboardDescription:
@@ -240,33 +240,18 @@ export function hasPermission(role: UserRole, permission: Permission): boolean {
 }
 
 export function pathnameToRouteKey(pathname: string): RouteKey | null {
-  if (pathname === "/client-portal" || pathname.startsWith("/client-portal/")) {
-    return "client_portal";
-  }
-
-  const match = NAV_ITEMS.filter(
+  const match = NAV_ITEMS.find(
     (item) =>
       pathname === item.href || pathname.startsWith(`${item.href}/`),
-  ).sort((a, b) => b.href.length - a.href.length)[0];
+  );
   return match?.routeKey ?? null;
 }
 
 function canAccessStandardRoute(role: UserRole, pathname: string): boolean {
-  // Client portal hub + feature pages: clients use sidebar tabs; staff still
-  // open features from the Client Portal hub card grid.
-  if (pathname === "/client-portal" || pathname.startsWith("/client-portal/")) {
-    return (
-      role === "client" ||
-      role === "managing_partner" ||
-      role === "firm_administrator"
-    );
-  }
-
-  // Prefer the longest matching href when several NAV_ITEMS could match.
-  const matchingItem = NAV_ITEMS.filter(
+  const matchingItem = NAV_ITEMS.find(
     (item) =>
       pathname === item.href || pathname.startsWith(`${item.href}/`),
-  ).sort((a, b) => b.href.length - a.href.length)[0];
+  );
 
   if (matchingItem) {
     return matchingItem.roles?.includes(role) ?? false;
@@ -289,6 +274,10 @@ function canAccessStandardRoute(role: UserRole, pathname: string): boolean {
 }
 
 export function canAccessRoute(role: UserRole, pathname: string): boolean {
+  if (isClientPortalRoute(pathname)) {
+    return role === "client" || role === "firm_administrator";
+  }
+
   if (role === "accounting_manager") {
     return isAccountingManagerRoute(pathname);
   }
