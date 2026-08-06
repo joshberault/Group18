@@ -261,6 +261,7 @@ export function BillingDashboard({ data }: Props) {
           eyebrow="Receivables"
           label="Total outstanding"
           value={formatCurrency(outstandingReceivable)}
+          detail="Open A/R firm-wide"
           tone="attention"
           icon={CircleDollarSign}
           actionLabel="View Accounts"
@@ -279,6 +280,7 @@ export function BillingDashboard({ data }: Props) {
           eyebrow="Overdue"
           label="Total overdue"
           value={formatInteger(overdueInvoices)}
+          detail="Open overdue firm-wide"
           tone={overdueInvoices > 0 ? "attention" : "default"}
           icon={AlertTriangle}
           actionLabel="View Overdue"

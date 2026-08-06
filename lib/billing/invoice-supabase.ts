@@ -1,4 +1,5 @@
 import { createClientSafe } from "@/lib/supabase/client";
+import { normalizeBillingDate } from "@/lib/billing/billing-period";
 import type {
   BillingMethod,
   ClientInfo,
@@ -319,8 +320,12 @@ function mapRowToInvoice(row: DbInvoiceRow): Invoice {
     legalMatter: notes.legalMatter || "",
     attorney: notes.attorney || "",
     billingMethod: notes.billingMethod || mapDbBillingToUi(row.billing_type),
-    invoiceDate: row.invoice_date,
-    dueDate: row.due_date,
+    invoiceDate:
+      normalizeBillingDate(row.invoice_date) ??
+      String(row.invoice_date ?? "").slice(0, 10),
+    dueDate:
+      normalizeBillingDate(row.due_date) ??
+      String(row.due_date ?? "").slice(0, 10),
     totalAmount,
     amountPaid,
     remainingBalance,

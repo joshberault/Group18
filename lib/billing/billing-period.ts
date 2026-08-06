@@ -4,6 +4,7 @@
  */
 
 export type BillingPeriodPreset =
+  | "all_time"
   | "this_month"
   | "last_month"
   | "last_quarter"
@@ -107,6 +108,12 @@ export function resolvePeriodRange(
   const today = new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate());
 
   switch (preset) {
+    case "all_time":
+      // Wide inclusive range so historical Supabase invoices (any year) count.
+      return {
+        start: "2000-01-01",
+        end: toIsoDate(today),
+      };
     case "this_month": {
       return {
         start: toIsoDate(startOfMonth(today)),
@@ -128,7 +135,7 @@ export function resolvePeriodRange(
         end: toIsoDate(today),
       };
     case "custom": {
-      const fallback = resolvePeriodRange("this_month", today);
+      const fallback = resolvePeriodRange("all_time", today);
       const start = custom?.start && parseIsoDate(custom.start)
         ? custom.start
         : fallback.start;
@@ -138,14 +145,14 @@ export function resolvePeriodRange(
       return start <= end ? { start, end } : { start: end, end: start };
     }
     default:
-      return resolvePeriodRange("this_month", today);
+      return resolvePeriodRange("all_time", today);
   }
 }
 
 export function createDefaultBillingPeriod(asOf = new Date()): BillingPeriodState {
-  const range = resolvePeriodRange("this_month", asOf);
+  const range = resolvePeriodRange("all_time", asOf);
   return {
-    preset: "this_month",
+    preset: "all_time",
     range,
     customStart: range.start,
     customEnd: range.end,
@@ -172,6 +179,9 @@ export function formatPeriodLabel(
   const end = parseIsoDate(range.end);
   if (!start || !end) return range.start;
 
+  if (preset === "all_time") {
+    return "All time";
+  }
   if (preset === "this_month") {
     return new Intl.DateTimeFormat("en-US", {
       month: "long",
@@ -199,6 +209,7 @@ export const PERIOD_PRESET_OPTIONS: {
   id: BillingPeriodPreset;
   label: string;
 }[] = [
+  { id: "all_time", label: "All Time" },
   { id: "this_month", label: "This Month" },
   { id: "last_month", label: "Last Month" },
   { id: "last_quarter", label: "Last Quarter" },
