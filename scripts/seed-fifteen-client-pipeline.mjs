@@ -48,6 +48,19 @@ const PRACTICE = {
   ip: "135b6bf2-fa11-4c9b-9e1d-84012059c3a8",
 };
 
+/** Lead attorney profile per practice area (matches specialty_attorney_profiles migration). */
+const ATTORNEY_BY_PRACTICE = {
+  [PRACTICE.corporate]: "bbbb0101-0001-4001-8001-000000000001",
+  [PRACTICE.employment]: "bbbb0102-0001-4001-8001-000000000002",
+  [PRACTICE.litigation]: PROFILE_ID,
+  [PRACTICE.realEstate]: "bbbb0103-0001-4001-8001-000000000003",
+  [PRACTICE.ip]: "bbbb0101-0001-4001-8001-000000000001",
+};
+
+function leadAttorneyForPracticeAreaId(practiceAreaId) {
+  return ATTORNEY_BY_PRACTICE[practiceAreaId] ?? PROFILE_ID;
+}
+
 function loadSql(name) {
   return readFileSync(resolve(root, "supabase/migrations", name), "utf8");
 }
@@ -575,7 +588,7 @@ async function seed(sb) {
 
   const assignments = matters.map((m) => ({
     matter_id: m.id,
-    profile_id: PROFILE_ID,
+    profile_id: leadAttorneyForPracticeAreaId(m.practice_area_id),
     role_on_matter: "lead_attorney",
   }));
   await sb.from("matter_assignments").insert(assignments);

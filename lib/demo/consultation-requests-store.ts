@@ -1,17 +1,38 @@
 import type { CaseTypeId } from "@/lib/client-portal/case-task-lists";
-import { CASE_TYPE_LABELS } from "@/lib/client-portal/case-task-lists";
 import { PARALEGAL_ASSIGNED_MATTERS } from "@/lib/paralegal/demo-data";
 
 export const CONSULTATION_LEGAL_SERVICE_OPTIONS = [
-  ...Object.entries(CASE_TYPE_LABELS).map(([value, label]) => ({
-    value: value as CaseTypeId | "other",
-    label,
-  })),
-  { value: "other" as const, label: "Other" },
+  { value: "corporate_business", label: "Corporate / Business" },
+  { value: "employment", label: "Employment" },
+  { value: "litigation", label: "Litigation" },
+  { value: "real_estate", label: "Real Estate" },
+  { value: "other", label: "Other" },
 ] as const;
 
 export type ConsultationLegalServiceId =
   (typeof CONSULTATION_LEGAL_SERVICE_OPTIONS)[number]["value"];
+
+export const CONSULTATION_LEGAL_SERVICE_LABELS: Record<
+  ConsultationLegalServiceId,
+  string
+> = {
+  corporate_business: "Corporate / Business",
+  employment: "Employment",
+  litigation: "Litigation",
+  real_estate: "Real Estate",
+  other: "Other",
+};
+
+/** Map intake categories to firm case types for demo matter routing. */
+const CONSULTATION_TO_CASE_TYPE: Record<
+  Exclude<ConsultationLegalServiceId, "other">,
+  CaseTypeId
+> = {
+  corporate_business: "corporate_business_advisory",
+  employment: "employment_litigation_employee",
+  litigation: "commercial_litigation",
+  real_estate: "commercial_real_estate",
+};
 
 export type ConsultationContactMethod = "email" | "phone_call" | "text_message";
 
@@ -98,7 +119,7 @@ export function formatConsultationDetails(
     .map((id) =>
       id === "other"
         ? `Other${payload.otherLegalServiceDetails ? `: ${payload.otherLegalServiceDetails}` : ""}`
-        : CASE_TYPE_LABELS[id],
+        : CONSULTATION_LEGAL_SERVICE_LABELS[id],
     )
     .join(", ");
 
@@ -133,11 +154,13 @@ export function resolveConsultationMatter(
   legalServices: ConsultationLegalServiceId[],
 ): { matterId: string; matterNumber: string; matterName: string } {
   const primary = legalServices.find(
-    (service): service is CaseTypeId => service !== "other",
+    (service): service is Exclude<ConsultationLegalServiceId, "other"> =>
+      service !== "other",
   );
   if (primary) {
+    const caseType = CONSULTATION_TO_CASE_TYPE[primary];
     const match = PARALEGAL_ASSIGNED_MATTERS.find(
-      (matter) => matter.caseType === primary,
+      (matter) => matter.caseType === caseType,
     );
     if (match) {
       return {
