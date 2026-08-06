@@ -57,9 +57,12 @@ const ALL_ROLES: UserRole[] = [
   "billing_specialist",
   "firm_administrator",
   "client",
+  "prospective_client",
 ];
 
-const STAFF: UserRole[] = ALL_ROLES.filter((r) => r !== "client");
+const STAFF: UserRole[] = ALL_ROLES.filter(
+  (r) => r !== "client" && r !== "prospective_client",
+);
 const ATTORNEY_TEAM: UserRole[] = ["managing_partner", "attorney", "paralegal"];
 const BILLING_TEAM: UserRole[] = [
   "managing_partner",
@@ -70,6 +73,7 @@ const BILLING_TEAM: UserRole[] = [
 /**
  * Sidebar navigation with demo-role visibility.
  * Admin/Staff Information is Firm Administrator only (Person 5).
+ * Prospective Client and Client use dedicated nav files via getNavigationForRole.
  */
 export const NAV_ITEMS: NavItem[] = [
   {
@@ -78,7 +82,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/dashboard",
     icon: LayoutDashboard,
     description: "Firm overview and key metrics",
-    roles: ALL_ROLES,
+    roles: [...STAFF, "prospective_client"],
   },
   {
     routeKey: "analytics",

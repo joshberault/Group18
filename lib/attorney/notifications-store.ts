@@ -17,6 +17,7 @@ export type AttorneyNotificationType =
   | "document_deletion"
   | "calendar_entry"
   | "request_fulfilled"
+  | "request_received"
   | "message_received"
   | "calendar_reminder";
 
@@ -237,9 +238,27 @@ export function addAttorneyRequestReceivedNotification(input: {
     title: "New request received",
     message: `${input.sentBy} sent “${input.requestTitle}” for ${input.matterName}.`,
     createdAt: new Date().toISOString(),
-    type: "request_fulfilled",
+    type: "request_received",
     matterNumber: input.matterNumber,
     actionLabel: "Review request",
+    actionHref: "/matters",
+  });
+}
+
+export function addAttorneyConsultationRequestNotification(input: {
+  sentBy: string;
+  caseTypes: string;
+  matterName: string;
+  matterNumber: string;
+}) {
+  persistNotification({
+    id: `attorney-consultation-${Date.now()}`,
+    title: "New consultation request",
+    message: `${input.sentBy} submitted a consultation request (${input.caseTypes}) for ${input.matterName}.`,
+    createdAt: new Date().toISOString(),
+    type: "request_received",
+    matterNumber: input.matterNumber,
+    actionLabel: "Open requests",
     actionHref: "/matters",
   });
 }
