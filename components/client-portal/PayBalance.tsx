@@ -43,6 +43,7 @@ import {
   createPaymentIdempotencyKey,
   processPaymentOnce,
 } from "@/lib/client-portal/payment-controls";
+import { recordClientBadgeEvent } from "@/lib/client-portal/badges";
 import {
   clientAccountSummary,
   invoiceCharges,
@@ -680,6 +681,7 @@ export function PayBalance() {
                     amount: Number(recurringAmount),
                   });
                   refreshBillingState();
+                  recordClientBadgeEvent("payment_plan_setup");
                   setStep("sent");
                   return;
                 }
@@ -707,6 +709,10 @@ export function PayBalance() {
                   invoiceApplied: result.invoiceApplied,
                   trustCredit: result.trustCredit,
                 });
+                if (!result.alreadyProcessed) {
+                  recordClientBadgeEvent("payment_completed");
+                  recordClientBadgeEvent("payment_on_time");
+                }
                 setStep("sent");
               }}
             >
