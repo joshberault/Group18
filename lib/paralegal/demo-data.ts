@@ -1,4 +1,6 @@
 import type { FirmClient, ConflictCheckStatus } from "@/lib/clients/types";
+import type { CaseTypeId } from "@/lib/client-portal/case-task-lists";
+import { CASE_TYPE_LABELS } from "@/lib/client-portal/case-task-lists";
 
 /** Fixed demo paralegal identity (matches role-config DEMO_IDENTITIES.paralegal). */
 export const DEMO_PARALEGAL = {
@@ -49,6 +51,8 @@ export interface ParalegalAssignmentMatter {
   title: string;
   clientId: string;
   clientName: string;
+  /** Practice-area case type used for Case Status major task lists. */
+  caseType: CaseTypeId;
   practiceArea: string;
   attorneyName: string;
   attorneyId: string;
@@ -158,7 +162,8 @@ export const PARALEGAL_ASSIGNED_MATTERS: ParalegalAssignmentMatter[] = [
     title: "Chen v. Apex Supply Dispute",
     clientId: "client-chen",
     clientName: "Chen Manufacturing LLC",
-    practiceArea: "Litigation",
+    caseType: "commercial_litigation",
+    practiceArea: CASE_TYPE_LABELS.commercial_litigation,
     attorneyName: "Avery Counsel",
     attorneyId: "attorney-avery",
     paralegalNames: ["Parker Legal", "Riley Docket"],
@@ -173,7 +178,8 @@ export const PARALEGAL_ASSIGNED_MATTERS: ParalegalAssignmentMatter[] = [
     title: "Santos Wrongful Termination",
     clientId: "client-santos",
     clientName: "Maria Santos",
-    practiceArea: "Employment",
+    caseType: "employment_litigation_employee",
+    practiceArea: CASE_TYPE_LABELS.employment_litigation_employee,
     attorneyName: "Avery Counsel",
     attorneyId: "attorney-avery",
     paralegalNames: ["Parker Legal"],
@@ -188,7 +194,8 @@ export const PARALEGAL_ASSIGNED_MATTERS: ParalegalAssignmentMatter[] = [
     title: "Northside Asset Purchase",
     clientId: "client-northside",
     clientName: "Northside Medical Group",
-    practiceArea: "Corporate",
+    caseType: "mergers_and_acquisitions",
+    practiceArea: CASE_TYPE_LABELS.mergers_and_acquisitions,
     attorneyName: "Morgan Counsel",
     attorneyId: "attorney-morgan",
     paralegalNames: ["Parker Legal", "Jordan Brief"],
@@ -203,7 +210,8 @@ export const PARALEGAL_ASSIGNED_MATTERS: ParalegalAssignmentMatter[] = [
     title: "Hale Contract Review",
     clientId: "client-hale",
     clientName: "Thomas Hale",
-    practiceArea: "Corporate",
+    caseType: "contract_drafting",
+    practiceArea: CASE_TYPE_LABELS.contract_drafting,
     attorneyName: "Avery Counsel",
     attorneyId: "attorney-avery",
     paralegalNames: ["Parker Legal"],

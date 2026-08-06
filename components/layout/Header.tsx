@@ -6,6 +6,7 @@ import {
   Bell,
   CalendarClock,
   Check,
+  ClipboardList,
   FileX2,
   Menu,
   MessageSquare,
@@ -22,6 +23,12 @@ import {
   getActiveNotificationCount,
   NOTIFICATION_UPDATE_EVENT,
 } from "@/lib/client-portal/notifications-store";
+import {
+  completeParalegalNotification,
+  getActiveParalegalNotifications,
+  PARALEGAL_NOTIFICATION_UPDATE_EVENT,
+  type ParalegalNotification,
+} from "@/lib/paralegal/notifications-store";
 import { USER_ROLE_LABELS, USER_ROLES, type UserRole } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
 import { FirmNotificationsMenu } from "./FirmNotificationsMenu";
@@ -35,17 +42,33 @@ interface HeaderProps {
   className?: string;
 }
 
+type FeedNotification = {
+  id: string;
+  title: string;
+  message: string;
+  matterNumber?: string;
+  actionLabel: string;
+  actionHref: string;
+  type:
+    | AttorneyNotification["type"]
+    | ParalegalNotification["type"];
+};
+
 export function Header({ onMenuClick, className }: HeaderProps) {
   const router = useRouter();
   const { selectedRole, setSelectedRole, identity } = useDemoRole();
   const [attorneyNotifications, setAttorneyNotifications] = useState<
     AttorneyNotification[]
   >([]);
+  const [paralegalNotifications, setParalegalNotifications] = useState<
+    ParalegalNotification[]
+  >([]);
   const [clientNotificationCount, setClientNotificationCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const refreshNotifications = useCallback(() => {
     setAttorneyNotifications(getActiveAttorneyNotifications());
+    setParalegalNotifications(getActiveParalegalNotifications());
     setClientNotificationCount(getActiveNotificationCount());
   }, []);
 
@@ -60,6 +83,10 @@ export function Header({ onMenuClick, className }: HeaderProps) {
       refreshNotifications,
     );
     window.addEventListener(
+      PARALEGAL_NOTIFICATION_UPDATE_EVENT,
+      refreshNotifications,
+    );
+    window.addEventListener(
       ATTORNEY_CALENDAR_UPDATE_EVENT,
       refreshNotifications,
     );
@@ -68,6 +95,10 @@ export function Header({ onMenuClick, className }: HeaderProps) {
       window.clearInterval(reminderRefresh);
       window.removeEventListener(
         ATTORNEY_NOTIFICATION_UPDATE_EVENT,
+        refreshNotifications,
+      );
+      window.removeEventListener(
+        PARALEGAL_NOTIFICATION_UPDATE_EVENT,
         refreshNotifications,
       );
       window.removeEventListener(
@@ -99,24 +130,43 @@ export function Header({ onMenuClick, className }: HeaderProps) {
     }
   }
 
+  const feedNotifications: FeedNotification[] =
+    selectedRole === "attorney"
+      ? attorneyNotifications
+      : selectedRole === "paralegal"
+        ? paralegalNotifications
+        : [];
+
   const visibleNotificationCount =
     selectedRole === "attorney"
       ? attorneyNotifications.length
-      : selectedRole === "client"
-        ? clientNotificationCount
-        : 0;
+      : selectedRole === "paralegal"
+        ? paralegalNotifications.length
+        : selectedRole === "client"
+          ? clientNotificationCount
+          : 0;
 
-  function notificationIcon(type: AttorneyNotification["type"]) {
+  const usesRoleFeed =
+    selectedRole === "attorney" ||
+    selectedRole === "paralegal" ||
+    selectedRole === "client";
+
+  function notificationIcon(type: FeedNotification["type"]) {
     if (type === "document_deletion") return FileX2;
-    if (type === "calendar_entry" || type === "calendar_reminder") {
+    if (
+      type === "calendar_entry" ||
+      type === "calendar_reminder" ||
+      type === "calendar_decision"
+    ) {
       return CalendarClock;
     }
     if (type === "request_fulfilled") return Send;
+    if (type === "request_received") return ClipboardList;
     return MessageSquare;
   }
 
   function handleNotificationBell() {
-    if (selectedRole === "attorney") {
+    if (selectedRole === "attorney" || selectedRole === "paralegal") {
       setNotificationsOpen((current) => !current);
       return;
     }
@@ -125,8 +175,12 @@ export function Header({ onMenuClick, className }: HeaderProps) {
     }
   }
 
-  function reviewAttorneyNotification(notification: AttorneyNotification) {
-    completeAttorneyNotification(notification.id);
+  function reviewFeedNotification(notification: FeedNotification) {
+    if (selectedRole === "attorney") {
+      completeAttorneyNotification(notification.id);
+    } else if (selectedRole === "paralegal") {
+      completeParalegalNotification(notification.id);
+    }
     refreshNotifications();
     if (notification.actionHref) router.push(notification.actionHref);
     setNotificationsOpen(false);
@@ -165,7 +219,7 @@ export function Header({ onMenuClick, className }: HeaderProps) {
           />
         </div>
 
-        {selectedRole === "attorney" || selectedRole === "client" ? (
+        {usesRoleFeed ? (
           <div className="relative">
             <Button
               variant="ghost"
@@ -176,7 +230,9 @@ export function Header({ onMenuClick, className }: HeaderProps) {
                   : ""
               }`}
               aria-expanded={
-                selectedRole === "attorney" ? notificationsOpen : undefined
+                selectedRole === "attorney" || selectedRole === "paralegal"
+                  ? notificationsOpen
+                  : undefined
               }
               onClick={handleNotificationBell}
             >
@@ -188,73 +244,76 @@ export function Header({ onMenuClick, className }: HeaderProps) {
               )}
             </Button>
 
-            {selectedRole === "attorney" && notificationsOpen && (
-              <div className="absolute right-0 top-12 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl">
-                <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-                  <div>
-                    <p className="text-sm font-semibold text-navy-900">
-                      Attorney notifications
-                    </p>
-                    <p className="text-xs text-muted">
-                      {attorneyNotifications.length} item
-                      {attorneyNotifications.length === 1 ? "" : "s"} requiring
-                      review
-                    </p>
+            {(selectedRole === "attorney" || selectedRole === "paralegal") &&
+              notificationsOpen && (
+                <div className="absolute right-0 top-12 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl">
+                  <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-semibold text-navy-900">
+                        {selectedRole === "attorney"
+                          ? "Attorney notifications"
+                          : "Paralegal notifications"}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {feedNotifications.length} item
+                        {feedNotifications.length === 1 ? "" : "s"} requiring
+                        review
+                      </p>
+                    </div>
+                    <Bell className="h-5 w-5 text-navy-900" />
                   </div>
-                  <Bell className="h-5 w-5 text-navy-900" />
-                </div>
 
-                {attorneyNotifications.length === 0 ? (
-                  <div className="px-5 py-8 text-center">
-                    <Check className="mx-auto h-7 w-7 text-green-700" />
-                    <p className="mt-2 text-sm font-medium text-navy-900">
-                      You’re all caught up
-                    </p>
-                  </div>
-                ) : (
-                  <ul className="max-h-[28rem] space-y-1 overflow-y-auto p-2">
-                    {attorneyNotifications.map((notification) => {
-                      const Icon = notificationIcon(notification.type);
-                      return (
-                        <li
-                          key={notification.id}
-                          className="rounded-xl border border-gray-100 px-3 py-3"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-navy-900/5 text-navy-900">
-                              <Icon className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-navy-900">
-                                {notification.title}
-                              </p>
-                              <p className="mt-1 text-xs leading-5 text-muted">
-                                {notification.message}
-                              </p>
-                              {notification.matterNumber && (
-                                <p className="mt-1 text-xs font-medium text-navy-700">
-                                  Case # {notification.matterNumber}
+                  {feedNotifications.length === 0 ? (
+                    <div className="px-5 py-8 text-center">
+                      <Check className="mx-auto h-7 w-7 text-green-700" />
+                      <p className="mt-2 text-sm font-medium text-navy-900">
+                        You’re all caught up
+                      </p>
+                    </div>
+                  ) : (
+                    <ul className="max-h-[28rem] space-y-1 overflow-y-auto p-2">
+                      {feedNotifications.map((notification) => {
+                        const Icon = notificationIcon(notification.type);
+                        return (
+                          <li
+                            key={notification.id}
+                            className="rounded-xl border border-gray-100 px-3 py-3"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-navy-900/5 text-navy-900">
+                                <Icon className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-navy-900">
+                                  {notification.title}
                                 </p>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  reviewAttorneyNotification(notification)
-                                }
-                                className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-navy-900 hover:text-navy-700"
-                              >
-                                <Check className="h-3.5 w-3.5" />
-                                {notification.actionLabel}
-                              </button>
+                                <p className="mt-1 text-xs leading-5 text-muted">
+                                  {notification.message}
+                                </p>
+                                {notification.matterNumber && (
+                                  <p className="mt-1 text-xs font-medium text-navy-700">
+                                    Case # {notification.matterNumber}
+                                  </p>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    reviewFeedNotification(notification)
+                                  }
+                                  className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-navy-900 hover:text-navy-700"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                  {notification.actionLabel}
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
           </div>
         ) : (
           <FirmNotificationsMenu />

@@ -1,7 +1,13 @@
+import type { TaskOwner } from "@/lib/client-portal/case-task-lists";
+import { CASE_TYPE_TASK_LISTS } from "@/lib/client-portal/case-task-lists";
+import type { CaseTypeId } from "@/lib/client-portal/case-task-lists";
+import { PARALEGAL_ASSIGNED_MATTERS } from "@/lib/paralegal/demo-data";
+
 export const MATTER_WORKSPACE_UPDATE_EVENT = "matter-workspace-updated";
 
 const STATUS_KEY = "counselflow-matter-status-overrides";
 const DOCUMENTS_KEY = "counselflow-matter-documents";
+const DOCUMENTS_DELETED_KEY = "counselflow-matter-documents-deleted";
 const DOCUMENT_DELETION_REQUESTS_KEY =
   "counselflow-document-deletion-requests";
 const REQUESTS_KEY = "counselflow-matter-requests";
@@ -10,7 +16,8 @@ const MESSAGES_KEY = "counselflow-matter-messages";
 export type MatterStatusTask = {
   id: string;
   title: string;
-  owner: "Attorney" | "Paralegal" | "Client" | "Legal team";
+  description: string;
+  owner: TaskOwner;
   completed: boolean;
 };
 
@@ -81,56 +88,82 @@ export type MatterMessage = {
   sentAt: string;
 };
 
-const SEED_STATUSES: MatterCaseStatus[] = [
+function buildStatusFromCaseType(
+  matterId: string,
+  caseType: CaseTypeId,
+  meta: {
+    phase: string;
+    nextDeadline: string;
+    summary: string;
+    completedCount: number;
+  },
+): MatterCaseStatus {
+  const templates = CASE_TYPE_TASK_LISTS[caseType];
+  return {
+    matterId,
+    phase: meta.phase,
+    nextDeadline: meta.nextDeadline,
+    summary: meta.summary,
+    tasks: templates.map((task, index) => ({
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      owner: task.owner,
+      completed: index < meta.completedCount,
+    })),
+  };
+}
+
+const STATUS_META_BY_MATTER: Record<
+  string,
   {
-    matterId: "matter-1",
+    phase: string;
+    nextDeadline: string;
+    summary: string;
+    completedCount: number;
+  }
+> = {
+  "matter-1": {
     phase: "Discovery",
     nextDeadline: "2026-08-10",
     summary:
       "Written discovery is underway. The answer and supporting exhibits are being finalized.",
-    tasks: [
-      { id: "m1-1", title: "Finalize answer and exhibits", owner: "Attorney", completed: false },
-      { id: "m1-2", title: "Complete document index", owner: "Paralegal", completed: true },
-      { id: "m1-3", title: "Confirm discovery responses", owner: "Client", completed: false },
-    ],
+    completedCount: 3,
   },
-  {
-    matterId: "matter-2",
+  "matter-2": {
     phase: "Pre-suit negotiation",
     nextDeadline: "2026-08-14",
     summary:
       "The demand package is under attorney review before it is sent to opposing counsel.",
-    tasks: [
-      { id: "m2-1", title: "Review revised demand package", owner: "Attorney", completed: false },
-      { id: "m2-2", title: "Compile supporting records", owner: "Paralegal", completed: true },
-      { id: "m2-3", title: "Approve settlement parameters", owner: "Client", completed: false },
-    ],
+    completedCount: 2,
   },
-  {
-    matterId: "matter-3",
+  "matter-3": {
     phase: "Conflict review hold",
     nextDeadline: "2026-08-12",
     summary:
       "Substantive work is paused while the possible conflict is reviewed and cleared.",
-    tasks: [
-      { id: "m3-1", title: "Complete conflict review", owner: "Legal team", completed: false },
-      { id: "m3-2", title: "Preserve diligence materials", owner: "Paralegal", completed: true },
-      { id: "m3-3", title: "Confirm related parties", owner: "Client", completed: false },
-    ],
+    completedCount: 1,
   },
-  {
-    matterId: "matter-4",
+  "matter-4": {
     phase: "Contract review",
     nextDeadline: "2026-08-13",
     summary:
       "The first round of vendor-agreement comments is ready for client discussion.",
-    tasks: [
-      { id: "m4-1", title: "Review open contract terms", owner: "Attorney", completed: true },
-      { id: "m4-2", title: "Prepare comparison copy", owner: "Paralegal", completed: true },
-      { id: "m4-3", title: "Provide business direction", owner: "Client", completed: false },
-    ],
+    completedCount: 2,
   },
-];
+};
+
+const SEED_STATUSES: MatterCaseStatus[] = PARALEGAL_ASSIGNED_MATTERS.map(
+  (matter) => {
+    const meta = STATUS_META_BY_MATTER[matter.id] ?? {
+      phase: "Active",
+      nextDeadline: matter.openDate,
+      summary: matter.engagementScope,
+      completedCount: 0,
+    };
+    return buildStatusFromCaseType(matter.id, matter.caseType, meta);
+  },
+);
 
 const SEED_DOCUMENTS: MatterDocument[] = [
   {
@@ -275,9 +308,32 @@ function persist<T>(key: string, items: T[]) {
 
 export function getMatterStatuses(): MatterCaseStatus[] {
   const overrides = readArray<MatterCaseStatus>(STATUS_KEY);
-  const byMatter = new Map(SEED_STATUSES.map((item) => [item.matterId, item]));
-  for (const item of overrides) byMatter.set(item.matterId, item);
-  return [...byMatter.values()];
+  const overrideByMatter = new Map(
+    overrides.map((item) => [item.matterId, item]),
+  );
+
+  return SEED_STATUSES.map((seed) => {
+    const override = overrideByMatter.get(seed.matterId);
+    if (!override) return seed;
+
+    const hasMatchingTasks = override.tasks.some((task) =>
+      seed.tasks.some((seedTask) => seedTask.id === task.id),
+    );
+
+    return {
+      ...seed,
+      phase: override.phase || seed.phase,
+      nextDeadline: override.nextDeadline || seed.nextDeadline,
+      summary: override.summary || seed.summary,
+      tasks: seed.tasks.map((task) => {
+        if (!hasMatchingTasks) return task;
+        const overridden = override.tasks.find((item) => item.id === task.id);
+        return overridden
+          ? { ...task, completed: overridden.completed }
+          : task;
+      }),
+    };
+  });
 }
 
 export function saveMatterStatus(status: MatterCaseStatus) {
@@ -289,27 +345,73 @@ export function saveMatterStatus(status: MatterCaseStatus) {
 }
 
 export function getMatterDocuments() {
-  return mergeById(SEED_DOCUMENTS, readArray<MatterDocument>(DOCUMENTS_KEY));
+  const deleted = new Set(readArray<string>(DOCUMENTS_DELETED_KEY));
+  return mergeById(SEED_DOCUMENTS, readArray<MatterDocument>(DOCUMENTS_KEY)).filter(
+    (document) => !deleted.has(document.id),
+  );
 }
 
 export function addMatterDocument(document: MatterDocument) {
   const stored = readArray<MatterDocument>(DOCUMENTS_KEY);
+  const deleted = readArray<string>(DOCUMENTS_DELETED_KEY).filter(
+    (id) => id !== document.id,
+  );
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(DOCUMENTS_DELETED_KEY, JSON.stringify(deleted));
+  }
   persist(DOCUMENTS_KEY, [
     document,
     ...stored.filter((item) => item.id !== document.id),
   ]);
 }
 
+export function removeMatterDocument(documentId: string) {
+  if (typeof window === "undefined") return;
+  const deleted = new Set(readArray<string>(DOCUMENTS_DELETED_KEY));
+  deleted.add(documentId);
+  const stored = readArray<MatterDocument>(DOCUMENTS_KEY).filter(
+    (item) => item.id !== documentId,
+  );
+  window.localStorage.setItem(
+    DOCUMENTS_DELETED_KEY,
+    JSON.stringify([...deleted]),
+  );
+  persist(DOCUMENTS_KEY, stored);
+}
+
+const SEED_DOCUMENT_DELETION_REQUESTS: ClientDocumentDeletionRequest[] = [
+  {
+    id: "seed-deletion-matter-doc-1",
+    documentId: "matter-doc-1",
+    documentName: "Apex_Answer_Draft_v3.pdf",
+    documentType: "Court documents",
+    uploadedBy: "Parker Legal",
+    uploadedAt: "Aug 5, 2026, 2:20 PM",
+    sizeLabel: "842 KB",
+    matterName: "Chen v. Apex Supply Dispute",
+    matterNumber: "M-2401",
+    requestedBy: "Cameron Client",
+    reason: "This draft was replaced by a newer version and should be removed.",
+    requestedAt: "2026-08-05T16:40:00.000Z",
+    status: "pending",
+  },
+];
+
 export function getClientDocumentDeletionRequests() {
-  return readArray<ClientDocumentDeletionRequest>(
+  const stored = readArray<ClientDocumentDeletionRequest>(
     DOCUMENT_DELETION_REQUESTS_KEY,
-  ).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+  );
+  return mergeById(SEED_DOCUMENT_DELETION_REQUESTS, stored).sort((a, b) =>
+    b.requestedAt.localeCompare(a.requestedAt),
+  );
 }
 
 export function addClientDocumentDeletionRequest(
   request: ClientDocumentDeletionRequest,
 ) {
-  const stored = getClientDocumentDeletionRequests();
+  const stored = readArray<ClientDocumentDeletionRequest>(
+    DOCUMENT_DELETION_REQUESTS_KEY,
+  );
   persist(DOCUMENT_DELETION_REQUESTS_KEY, [
     request,
     ...stored.filter(
@@ -323,8 +425,8 @@ export function resolveClientDocumentDeletionRequest(
   decision: "approved" | "denied",
   resolvedBy: string,
 ) {
-  const stored = getClientDocumentDeletionRequests();
-  const request = stored.find((item) => item.id === id);
+  const all = getClientDocumentDeletionRequests();
+  const request = all.find((item) => item.id === id);
   if (!request) return null;
 
   const resolved: ClientDocumentDeletionRequest = {
@@ -333,10 +435,18 @@ export function resolveClientDocumentDeletionRequest(
     resolvedBy,
     resolvedAt: new Date().toISOString(),
   };
+  const stored = readArray<ClientDocumentDeletionRequest>(
+    DOCUMENT_DELETION_REQUESTS_KEY,
+  );
   persist(DOCUMENT_DELETION_REQUESTS_KEY, [
     resolved,
     ...stored.filter((item) => item.id !== id),
   ]);
+
+  if (decision === "approved") {
+    removeMatterDocument(request.documentId);
+  }
+
   return resolved;
 }
 

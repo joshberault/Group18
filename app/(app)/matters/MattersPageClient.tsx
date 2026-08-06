@@ -23,14 +23,19 @@ export function MattersPageClient() {
       <div className="space-y-6">
         <PageHeader
           title="Matters"
-          description="Assigned matters for Paralegal support. Open/close/archive and fee changes remain restricted."
+          description="Case status, documentation, requests, and messaging for assigned matters. Open/close/archive and fee changes remain restricted."
         >
           <Link href="/attorney/matters">
             <Button variant="secondary">Open in Attorney Hub</Button>
           </Link>
         </PageHeader>
 
+        <MatterWorkspace />
+
         <div className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+            Assigned matter cards
+          </h2>
           {PARALEGAL_ASSIGNED_MATTERS.map((matter) => (
             <Card key={matter.id} padding="md">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -88,8 +93,6 @@ export function MattersPageClient() {
             </Card>
           ))}
         </div>
-
-        <MatterWorkspace />
       </div>
     );
   }

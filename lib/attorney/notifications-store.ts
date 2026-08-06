@@ -1,6 +1,8 @@
 import {
   ATTORNEY_CALENDAR_TYPE_LABELS,
   getAttorneyCalendarEvents,
+  getConfirmedAttorneyCalendarEventIds,
+  getDeclinedAttorneyCalendarEventIds,
 } from "@/lib/attorney/calendar-store";
 import { PARALEGAL_ASSIGNED_MATTERS } from "@/lib/paralegal/demo-data";
 
@@ -59,8 +61,16 @@ function getMatterForCalendarEvent(matterName: string) {
 }
 
 function calendarEntryNotifications(): AttorneyNotification[] {
+  const confirmed = getConfirmedAttorneyCalendarEventIds();
+  const declined = getDeclinedAttorneyCalendarEventIds();
+
   return getAttorneyCalendarEvents()
-    .filter((event) => event.addedBy.role === "paralegal")
+    .filter(
+      (event) =>
+        event.addedBy.role === "paralegal" &&
+        !confirmed.has(event.id) &&
+        !declined.has(event.id),
+    )
     .map((event) => {
       const matter = getMatterForCalendarEvent(event.matterName);
       return {
@@ -208,6 +218,24 @@ export function addRequestFulfilledNotification(input: {
     id: `attorney-request-fulfilled-${Date.now()}`,
     title: "Client fulfilled a request",
     message: `${input.fulfilledBy} fulfilled “${input.requestTitle}” for ${input.matterName}.`,
+    createdAt: new Date().toISOString(),
+    type: "request_fulfilled",
+    matterNumber: input.matterNumber,
+    actionLabel: "Review request",
+    actionHref: "/matters",
+  });
+}
+
+export function addAttorneyRequestReceivedNotification(input: {
+  requestTitle: string;
+  sentBy: string;
+  matterName: string;
+  matterNumber: string;
+}) {
+  persistNotification({
+    id: `attorney-request-received-${Date.now()}`,
+    title: "New request received",
+    message: `${input.sentBy} sent “${input.requestTitle}” for ${input.matterName}.`,
     createdAt: new Date().toISOString(),
     type: "request_fulfilled",
     matterNumber: input.matterNumber,
