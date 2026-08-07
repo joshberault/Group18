@@ -4,6 +4,8 @@ import type {
   MatterActivationStatus,
   MatterEngagementStatus,
 } from "@/lib/matters/firm-portfolio";
+import { activateMatterForBillableWork } from "@/lib/matters/supabase-portfolio";
+import { isEngagementApproved } from "@/lib/pipeline/engagement-approval-store";
 
 export type MatterGateContext = {
   matterId: string;
@@ -182,10 +184,22 @@ export async function fetchMatterGateContext(
 export async function checkMatterBillable(
   matterId: string,
 ): Promise<MatterGateResult> {
-  const ctx = await fetchMatterGateContext(matterId);
+  let ctx = await fetchMatterGateContext(matterId);
   if (!ctx) {
     return { allowed: true, reason: null };
   }
+
+  const shouldActivate =
+    ctx.activationStatus === "draft" &&
+    (ctx.engagementStatus === "signed" || isEngagementApproved(matterId));
+
+  if (shouldActivate) {
+    const activation = await activateMatterForBillableWork(matterId);
+    if (activation.ok) {
+      ctx = (await fetchMatterGateContext(matterId)) ?? ctx;
+    }
+  }
+
   return evaluateMatterGate(ctx);
 }
 

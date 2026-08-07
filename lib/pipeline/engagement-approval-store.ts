@@ -46,17 +46,58 @@ export function fetchPendingEngagementApprovals(): EngagementApprovalRequest[] {
   return readAll().filter((row) => row.status === "pending");
 }
 
-export function approveEngagement(matterId: string): boolean {
+export function isEngagementApproved(matterId: string): boolean {
+  return readAll().some(
+    (row) => row.matterId === matterId && row.status === "approved",
+  );
+}
+
+export async function approveEngagement(matterId: string): Promise<boolean> {
   const rows = readAll();
   const index = rows.findIndex(
     (row) => row.matterId === matterId && row.status === "pending",
   );
   if (index < 0) return false;
+
+  const { activateMatterForBillableWork } = await import(
+    "@/lib/matters/supabase-portfolio"
+  );
+  const activation = await activateMatterForBillableWork(matterId);
+  if (!activation.ok) {
+    console.warn("Engagement approval persist failed:", activation.error);
+    return false;
+  }
+
   rows[index] = {
     ...rows[index],
     status: "approved",
     approvedAt: new Date().toISOString(),
   };
   writeAll(rows);
+
+  const { updateFirmPortfolioMatter } = await import(
+    "@/lib/matters/firm-portfolio-store"
+  );
+  updateFirmPortfolioMatter(matterId, {
+    activationStatus: "active",
+    engagementStatus: "signed",
+    needsPartnerReview: false,
+    partnerReviewReason: null,
+  });
+
   return true;
+}
+
+/** Reconcile locally approved engagements that are still draft in Supabase. */
+export async function syncApprovedEngagementsToSupabase(): Promise<void> {
+  const approved = readAll().filter((row) => row.status === "approved");
+  if (approved.length === 0) return;
+
+  const { activateMatterForBillableWork } = await import(
+    "@/lib/matters/supabase-portfolio"
+  );
+
+  await Promise.all(
+    approved.map((row) => activateMatterForBillableWork(row.matterId)),
+  );
 }

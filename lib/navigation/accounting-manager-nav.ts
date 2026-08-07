@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Receipt,
   Settings,
+  TrendingUp,
   Users,
   Wallet,
 } from "lucide-react";
@@ -27,6 +28,13 @@ export const ACCOUNTING_MANAGER_NAV_ITEMS: NavItem[] = [
     icon: LayoutDashboard,
     description:
       "Accounting KPIs, alerts, action items, deadlines, and reconciliation status",
+  },
+  {
+    routeKey: "analytics",
+    label: "Executive Analytics",
+    href: "/dashboard/analytics",
+    icon: TrendingUp,
+    description: "Revenue, profitability, and collections KPIs",
   },
   {
     routeKey: "clients",

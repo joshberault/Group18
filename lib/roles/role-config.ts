@@ -153,6 +153,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
     defaultRoute: "/dashboard",
     allowedRoutes: [
       "dashboard",
+      "analytics",
       "clients",
       "matters",
       "billing",

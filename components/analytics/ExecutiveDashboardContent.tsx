@@ -30,11 +30,14 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useExecutiveDashboard } from "@/hooks/useExecutiveDashboard";
 import { computeExecutiveKpiTrends } from "@/lib/analytics/dashboard-utils";
+import { ANALYTICS_ROLES } from "@/lib/analytics/types";
 import { formatCurrency } from "@/lib/utils/cn";
 
 export function ExecutiveDashboardContent() {
   const { selectedRole } = useDemoRole();
-  const isManagingPartner = selectedRole === "managing_partner";
+  const canViewEmbeddedReports = (
+    ANALYTICS_ROLES as readonly string[]
+  ).includes(selectedRole);
   const { data, matterHealthScores, loading, error, refresh } =
     useExecutiveDashboard();
 
@@ -244,7 +247,7 @@ export function ExecutiveDashboardContent() {
         </div>
       </section>
 
-      {isManagingPartner ? (
+      {canViewEmbeddedReports ? (
         <section className={analyticsSectionClass}>
           <AnalyticsSectionDivider
             title="Reports"

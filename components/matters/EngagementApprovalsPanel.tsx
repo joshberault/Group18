@@ -24,6 +24,7 @@ import { getMatterPermissions } from "@/lib/matters/permissions";
 import {
   approveEngagement,
   fetchPendingEngagementApprovals,
+  syncApprovedEngagementsToSupabase,
   type EngagementApprovalRequest,
 } from "@/lib/pipeline/engagement-approval-store";
 import {
@@ -49,7 +50,7 @@ export function EngagementApprovalsPanel({
 
   useEffect(() => {
     if (permissions.canApproveCreationRequest) {
-      load();
+      void syncApprovedEngagementsToSupabase().finally(load);
     }
   }, [permissions.canApproveCreationRequest]);
 
@@ -68,8 +69,9 @@ export function EngagementApprovalsPanel({
 
   if (!permissions.canApproveCreationRequest) return null;
 
-  function handleApprove(request: EngagementApprovalRequest) {
-    if (!approveEngagement(request.matterId)) {
+  async function handleApprove(request: EngagementApprovalRequest) {
+    const ok = await approveEngagement(request.matterId);
+    if (!ok) {
       setMessage("Unable to approve engagement.");
       return;
     }

@@ -137,3 +137,31 @@ export async function persistFirmPortfolioPatch(
 
   return { ok: true };
 }
+
+/** Opens a matter for time entry and billing after engagement is approved. */
+export async function activateMatterForBillableWork(
+  matterId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClientSafe();
+  if (!supabase) return { ok: false, error: "Supabase unavailable" };
+
+  const updates = {
+    activation_status: "active",
+    engagement_status: "signed",
+    needs_partner_review: false,
+    partner_review_reason: null,
+  };
+
+  const { error } = await supabase
+    .from("matters")
+    .update(updates)
+    .eq("id", matterId);
+
+  if (error) return { ok: false, error: error.message };
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("firm-portfolio-matters-updated"));
+  }
+
+  return { ok: true };
+}

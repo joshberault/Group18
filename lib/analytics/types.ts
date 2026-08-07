@@ -1,5 +1,5 @@
 /** Roles allowed to access analytics dashboards */
-export const ANALYTICS_ROLES = ["managing_partner"] as const;
+export const ANALYTICS_ROLES = ["managing_partner", "accounting_manager"] as const;
 
 export type RiskSeverity = "high" | "medium" | "low";
 

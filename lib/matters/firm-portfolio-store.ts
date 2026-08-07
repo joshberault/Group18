@@ -138,7 +138,13 @@ export function setMatterEngagementStatus(
   id: string,
   engagementStatus: MatterEngagementStatus,
 ): FirmPortfolioMatter[] {
-  return updateFirmPortfolioMatter(id, { engagementStatus });
+  const patch: MatterPatch = { engagementStatus };
+  if (engagementStatus === "signed") {
+    patch.activationStatus = "active";
+    patch.needsPartnerReview = false;
+    patch.partnerReviewReason = null;
+  }
+  return updateFirmPortfolioMatter(id, patch);
 }
 
 export function setMatterFeeTerms(
