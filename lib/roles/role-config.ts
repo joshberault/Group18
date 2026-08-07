@@ -381,6 +381,24 @@ export function getNavigationForRole(role: UserRole): NavItem[] {
       );
   }
 
+  // Paralegal: Calendar lives under Tasks & Deadlines (List | Calendar).
+  if (role === "paralegal") {
+    return items
+      .filter(
+        (item) =>
+          item.routeKey !== "calendar" && item.href !== "/attorney/calendar",
+      )
+      .map((item) =>
+        item.routeKey === "tasks"
+          ? {
+              ...item,
+              label: "Tasks & Deadlines",
+              description: "Task list and deadlines calendar",
+            }
+          : item,
+      );
+  }
+
   return items;
 }
 

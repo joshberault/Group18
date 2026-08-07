@@ -11,7 +11,6 @@ import {
   PauseCircle,
   Plus,
   Send,
-  UserRound,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { KPICard } from "@/components/ui/KPICard";
@@ -218,16 +217,6 @@ export function ParalegalDashboard() {
           <Link href="/attorney/dashboard?focus=reviews">
             <Button variant="secondary">
               <Send className="h-4 w-4" /> Request Attorney Review
-            </Button>
-          </Link>
-          <Link href="/attorney/dashboard?focus=issue">
-            <Button variant="secondary">
-              <AlertTriangle className="h-4 w-4" /> Flag an Issue
-            </Button>
-          </Link>
-          <Link href="/clients">
-            <Button variant="secondary">
-              <UserRound className="h-4 w-4" /> Report Client Information Change
             </Button>
           </Link>
         </div>
