@@ -29,6 +29,7 @@ import {
   setMatterFeeTerms,
 } from "@/lib/matters/firm-portfolio-store";
 import { queueEngagementApproval } from "@/lib/pipeline/engagement-approval-store";
+import { activateMatterForBillableWork } from "@/lib/matters/supabase-portfolio";
 import { cn } from "@/lib/utils/cn";
 
 const WIZARD_STEPS = ["Choose template", "Structured terms", "Review & apply"] as const;
@@ -230,10 +231,13 @@ export function EngagementTermsPanel({
       matterTitle: matter.title,
       clientName: matter.clientName,
     });
+    const activation = await activateMatterForBillableWork(matter.id);
     setAppliedTerms({ ...termsDraft });
     onMatterChange();
     onToast?.(
-      "Engagement terms applied. Firm Administrator can approve the engagement to activate billable work.",
+      activation.ok
+        ? "Engagement terms applied and matter activated for billable work."
+        : "Engagement terms applied. Firm Administrator can approve the engagement to activate billable work.",
     );
     setSaving(false);
     setStep(0);

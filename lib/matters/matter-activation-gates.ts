@@ -5,7 +5,10 @@ import type {
   MatterEngagementStatus,
 } from "@/lib/matters/firm-portfolio";
 import { activateMatterForBillableWork } from "@/lib/matters/supabase-portfolio";
-import { isEngagementApproved } from "@/lib/pipeline/engagement-approval-store";
+import {
+  isEngagementApproved,
+  syncApprovedEngagementsToSupabase,
+} from "@/lib/pipeline/engagement-approval-store";
 
 export type MatterGateContext = {
   matterId: string;
@@ -184,23 +187,52 @@ export async function fetchMatterGateContext(
 export async function checkMatterBillable(
   matterId: string,
 ): Promise<MatterGateResult> {
+  await syncApprovedEngagementsToSupabase();
+
   let ctx = await fetchMatterGateContext(matterId);
   if (!ctx) {
     return { allowed: true, reason: null };
   }
 
+  const engagementReadyForWork =
+    ctx.engagementStatus === "signed" ||
+    ctx.engagementStatus === "letter_sent" ||
+    isEngagementApproved(matterId);
+
   const shouldActivate =
     ctx.activationStatus === "draft" &&
-    (ctx.engagementStatus === "signed" || isEngagementApproved(matterId));
+    ctx.lifecycleStatus === "open" &&
+    !ctx.billingHold &&
+    ctx.conflictStatus === "cleared" &&
+    engagementReadyForWork;
 
   if (shouldActivate) {
     const activation = await activateMatterForBillableWork(matterId);
-    if (activation.ok) {
-      ctx = (await fetchMatterGateContext(matterId)) ?? ctx;
+    if (!activation.ok) {
+      return {
+        allowed: false,
+        reason:
+          activation.error ??
+          "Could not activate this matter for time entry. Check Supabase connectivity and try again.",
+      };
     }
+    ctx = (await fetchMatterGateContext(matterId)) ?? ctx;
   }
 
-  return evaluateMatterGate(ctx);
+  const result = evaluateMatterGate(ctx);
+  if (
+    !result.allowed &&
+    ctx.activationStatus === "draft" &&
+    ctx.engagementStatus === "not_started"
+  ) {
+    return {
+      allowed: false,
+      reason:
+        "Engagement terms are not set up yet. Open the matter workspace, apply engagement terms, or have Firm Administrator approve the engagement before recording time.",
+    };
+  }
+
+  return result;
 }
 
 export function evaluateMatterGateFromPortfolio(input: {
