@@ -684,7 +684,7 @@ export function RevenueLedgerView() {
           <div className="space-y-2">
             <p className="text-sm font-medium text-navy-900">Line Items</p>
             {jeLines.map((line) => (
-              <div key={line.id} className="grid gap-2 sm:grid-cols-12">
+              <div key={line.id} className="grid items-end gap-2 sm:grid-cols-12">
                 <div className="sm:col-span-3">
                   <Select
                     options={chartOfAccounts.map((a) => ({
@@ -730,7 +730,7 @@ export function RevenueLedgerView() {
                     step="0.01"
                   />
                 </div>
-                <div className="flex items-end sm:col-span-2">
+                <div className="sm:col-span-2">
                   <Button
                     size="sm"
                     variant="ghost"

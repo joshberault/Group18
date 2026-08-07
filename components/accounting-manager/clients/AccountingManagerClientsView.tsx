@@ -7,7 +7,6 @@ import {
   DollarSign,
   FileDown,
   Mail,
-  Search,
   Wallet,
 } from "lucide-react";
 import {
@@ -29,7 +28,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Drawer } from "@/components/ui/Drawer";
-import { Input } from "@/components/ui/Input";
+import { FilterSearchInput } from "@/components/ui/FilterSearchInput";
 import { Modal } from "@/components/ui/Modal";
 import { KPICard } from "@/components/ui/KPICard";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -368,16 +367,14 @@ export function AccountingManagerClientsView() {
             {filteredClients.length} of {amClients.length} clients shown
           </CardDescription>
         </CardHeader>
-        <div className="grid gap-4 px-6 pb-6 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="relative sm:col-span-2 lg:col-span-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <Input
+        <div className="grid items-end gap-4 px-6 pb-6 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="sm:col-span-2 lg:col-span-1">
+            <FilterSearchInput
               placeholder="Search clients..."
               value={filters.search}
               onChange={(e) =>
                 setFilters((prev) => ({ ...prev, search: e.target.value }))
               }
-              className="pl-9"
             />
           </div>
           <Select

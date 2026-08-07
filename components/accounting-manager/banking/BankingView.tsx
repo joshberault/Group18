@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Drawer } from "@/components/ui/Drawer";
+import { FilterSearchInput } from "@/components/ui/FilterSearchInput";
 import { Input } from "@/components/ui/Input";
 import { KPICard } from "@/components/ui/KPICard";
 import { Modal } from "@/components/ui/Modal";
@@ -260,14 +261,16 @@ export function BankingView() {
           </CardHeader>
           <div className="space-y-4 px-6 pb-6">
             {activeTab === "transactions" && (
-              <div className="flex flex-wrap gap-3">
-                <Input
-                  placeholder="Search payee or reference..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="max-w-xs"
-                />
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="max-w-xs flex-1">
+                  <FilterSearchInput
+                    placeholder="Search payee or reference..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
                 <Select
+                  label="Account"
                   options={[
                     { value: "all", label: "All accounts" },
                     ...bankAccounts.map((a) => ({
@@ -280,6 +283,7 @@ export function BankingView() {
                   className="max-w-xs"
                 />
                 <Select
+                  label="Type"
                   options={[
                     { value: "all", label: "All types" },
                     { value: "Deposit", label: "Deposit" },

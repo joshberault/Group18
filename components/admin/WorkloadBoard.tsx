@@ -209,7 +209,7 @@ export function WorkloadBoard() {
       </div>
 
       <Card padding="md">
-        <CardHeader className="gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <CardHeader className="gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <CardTitle>Workload board</CardTitle>
             <CardDescription>

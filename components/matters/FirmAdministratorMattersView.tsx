@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FileDown, Search } from "lucide-react";
+import { FileDown } from "lucide-react";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import {
   fetchSharedFirmMatters,
@@ -19,7 +19,7 @@ import { buildEngagementApprovalsUrl } from "@/lib/pipeline/contract-to-cash";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
+import { FilterSearchInput } from "@/components/ui/FilterSearchInput";
 import { KPICard } from "@/components/ui/KPICard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
@@ -150,10 +150,9 @@ export function FirmAdministratorMattersView() {
           <CardTitle>Matter Administration</CardTitle>
           <CardDescription>Staffing, engagement dates, and administrative status</CardDescription>
         </CardHeader>
-        <div className="flex flex-wrap gap-3 px-4 pb-4">
-          <div className="relative min-w-[200px] flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <Input className="pl-9" placeholder="Search matters…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="flex flex-wrap items-end gap-3 px-4 pb-4">
+          <div className="min-w-[200px] flex-1">
+            <FilterSearchInput placeholder="Search matters…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Select
             label="Admin status"

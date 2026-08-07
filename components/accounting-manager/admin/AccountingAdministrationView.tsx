@@ -476,8 +476,8 @@ export function AccountingAdministrationView() {
       {activeTab === "coa" && (
         <div className="space-y-4">
           <Card padding="md">
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
-              <div className="grid flex-1 gap-4 sm:grid-cols-3">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="grid flex-1 items-end gap-4 sm:grid-cols-3">
                 <Input
                   label="Search accounts"
                   placeholder="Number or name…"

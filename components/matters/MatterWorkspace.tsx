@@ -278,7 +278,7 @@ export function MatterWorkspace({
   return (
     <section aria-labelledby="matter-workspace-heading" className="space-y-6">
       <Card className="border-gold-500/30 bg-gradient-to-r from-navy-900 to-navy-800 text-white">
-        <div className="flex flex-col gap-5 p-1 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-5 p-1 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <Button
               type="button"

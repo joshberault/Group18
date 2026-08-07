@@ -7,13 +7,12 @@ import {
   AlertTriangle,
   Briefcase,
   Plus,
-  Search,
   UserX,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
+import { FilterSearchInput } from "@/components/ui/FilterSearchInput";
 import { KPICard } from "@/components/ui/KPICard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
@@ -391,11 +390,9 @@ export function ManagingPartnerMattersView() {
             Focus the firm portfolio without leaving engagement governance.
           </CardDescription>
         </CardHeader>
-        <div className="grid gap-3 p-6 md:grid-cols-2 xl:grid-cols-3">
-          <div className="relative md:col-span-2 xl:col-span-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <Input
-              className="pl-9"
+        <div className="grid items-end gap-3 p-6 md:grid-cols-2 xl:grid-cols-3">
+          <div className="md:col-span-2 xl:col-span-1">
+            <FilterSearchInput
               placeholder="Search matter, client, attorney…"
               value={filters.search}
               onChange={(e) =>
@@ -473,7 +470,7 @@ export function ManagingPartnerMattersView() {
               { value: "either", label: "Conflict or billing hold" },
             ]}
           />
-          <div className="flex items-end">
+          <div className="flex h-full min-h-[4.25rem] items-end pb-0.5">
             <label className="flex items-center gap-2 text-sm text-navy-900">
               <input
                 type="checkbox"

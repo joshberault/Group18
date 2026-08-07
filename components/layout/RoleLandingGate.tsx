@@ -1,11 +1,19 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getDefaultHomePath } from "@/lib/auth/role-routes";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
-import { DashboardContent } from "@/components/dashboard/DashboardContent";
 import { LoadingState } from "@/components/ui/LoadingState";
+
+const DashboardContent = dynamic(
+  () =>
+    import("@/components/dashboard/DashboardContent").then((m) => ({
+      default: m.DashboardContent,
+    })),
+  { loading: () => <LoadingState message="Loading dashboard…" /> },
+);
 
 /**
  * Role-aware landing at /dashboard.

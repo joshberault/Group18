@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Drawer } from "@/components/ui/Drawer";
+import { FilterSearchInput } from "@/components/ui/FilterSearchInput";
 import { Input } from "@/components/ui/Input";
 import { KPICard } from "@/components/ui/KPICard";
 import { Modal } from "@/components/ui/Modal";
@@ -329,15 +330,17 @@ export function ExpensesApView() {
         className="mb-6"
       />
 
-      <div className="mb-4 flex flex-wrap gap-3">
-        <Input
-          placeholder="Search..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
-        />
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <div className="max-w-xs flex-1">
+          <FilterSearchInput
+            placeholder="Search..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
         {activeTab === "vendor-bills" && (
           <Select
+            label="Status"
             options={[
               { value: "all", label: "All statuses" },
               { value: "Draft", label: "Draft" },

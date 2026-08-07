@@ -229,7 +229,7 @@ export function IntakeQueueView({ variant = "standalone" }: IntakeQueueViewProps
       </div>
       ) : null}
 
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="w-full max-w-xs">
           <Select
             label="Filter by status"

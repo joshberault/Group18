@@ -7,7 +7,6 @@ import {
   Ban,
   FileDown,
   PauseCircle,
-  Search,
   TrendingUp,
 } from "lucide-react";
 import type { AmMatterEntity } from "@/lib/mock-data/accounting-manager/entities";
@@ -24,7 +23,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Drawer } from "@/components/ui/Drawer";
-import { Input } from "@/components/ui/Input";
+import { FilterSearchInput } from "@/components/ui/FilterSearchInput";
 import { KPICard } from "@/components/ui/KPICard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
@@ -385,16 +384,14 @@ export function AccountingManagerMattersView() {
               : `${filteredMatters.length} of ${matters.length} matters shown`}
           </CardDescription>
         </CardHeader>
-        <div className="grid gap-4 px-6 pb-6 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="relative sm:col-span-2">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <Input
+        <div className="grid items-end gap-4 px-6 pb-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="sm:col-span-2">
+            <FilterSearchInput
               placeholder="Search matters, clients..."
               value={filters.search}
               onChange={(e) =>
                 setFilters((prev) => ({ ...prev, search: e.target.value }))
               }
-              className="pl-9"
             />
           </div>
           <Select
@@ -455,7 +452,7 @@ export function AccountingManagerMattersView() {
               { value: "Billing Hold", label: "Billing Hold" },
             ]}
           />
-          <div className="flex items-end">
+          <div className="flex h-full min-h-[4.25rem] items-end pb-0.5">
             <label className="flex items-center gap-2 text-sm text-navy-900">
               <input
                 type="checkbox"
