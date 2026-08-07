@@ -45,7 +45,7 @@ export async function fetchRevenueLedgerWorkspace(): Promise<
       supabase.from("journal_entry_lines").select("*"),
       supabase.from("revenue_recognition_items").select("*"),
       supabase.from("chart_of_accounts").select("*").eq("is_active", true),
-      supabase.from("month_end_close_tasks").select("*"),
+      supabase.from("month_end_close_tasks").select("*").order("due_date"),
       supabase.from("clients").select("id, name"),
       supabase.from("matters").select("id, title"),
     ]);
@@ -55,7 +55,10 @@ export async function fetchRevenueLedgerWorkspace(): Promise<
   }
 
   const linesByEntry = new Map<string, JournalEntryLine[]>();
-  for (const line of linesRes.data ?? []) {
+  const rawLines = [...(linesRes.data ?? [])].sort(
+    (a, b) => asNumber(a.sort_order) - asNumber(b.sort_order),
+  );
+  for (const line of rawLines) {
     const eid = line.journal_entry_id as string;
     const arr = linesByEntry.get(eid) ?? [];
     arr.push({
@@ -104,14 +107,63 @@ export async function fetchRevenueLedgerWorkspace(): Promise<
     period: (r.period_label as string) ?? "",
   }));
 
-  const trialBalance: TrialBalanceRow[] = (coaRes.data ?? []).map((a) => ({
-    id: a.id as string,
-    accountCode: a.account_code as string,
-    accountName: a.account_name as string,
-    accountType: a.account_type as TrialBalanceRow["accountType"],
-    debit: 0,
-    credit: 0,
-  }));
+  const postedLines = journalEntries
+    .filter((e) => e.status === "Posted")
+    .flatMap((e) =>
+      e.lines.map((line) => ({
+        entryDate: e.date,
+        entryNumber: e.entryNumber,
+        line,
+      })),
+    )
+    .sort((a, b) => {
+      const dateCmp = a.entryDate.localeCompare(b.entryDate);
+      if (dateCmp !== 0) return dateCmp;
+      return a.entryNumber.localeCompare(b.entryNumber);
+    });
+
+  const balanceByAccount = new Map<string, number>();
+  const glLines: GlLine[] = postedLines.map((row, index) => {
+    const { line, entryDate, entryNumber } = row;
+    const prior = balanceByAccount.get(line.accountCode) ?? 0;
+    const balance = prior + line.debit - line.credit;
+    balanceByAccount.set(line.accountCode, balance);
+    return {
+      id: `gl-${line.id}-${index}`,
+      date: entryDate,
+      entryNumber,
+      accountCode: line.accountCode,
+      accountName: line.accountName,
+      description: line.description,
+      debit: line.debit,
+      credit: line.credit,
+      balance,
+    };
+  });
+
+  const trialTotalsByAccount = new Map<string, { debit: number; credit: number }>();
+  for (const row of postedLines) {
+    const current = trialTotalsByAccount.get(row.line.accountCode) ?? {
+      debit: 0,
+      credit: 0,
+    };
+    current.debit += row.line.debit;
+    current.credit += row.line.credit;
+    trialTotalsByAccount.set(row.line.accountCode, current);
+  }
+
+  const trialBalance: TrialBalanceRow[] = (coaRes.data ?? []).map((a) => {
+    const code = a.account_code as string;
+    const totals = trialTotalsByAccount.get(code) ?? { debit: 0, credit: 0 };
+    return {
+      id: a.id as string,
+      accountCode: code,
+      accountName: a.account_name as string,
+      accountType: a.account_type as TrialBalanceRow["accountType"],
+      debit: totals.debit,
+      credit: totals.credit,
+    };
+  });
 
   const closeTasks: CloseTask[] = (tasksRes.data ?? []).map((t) => ({
     id: t.id as string,
@@ -123,21 +175,62 @@ export async function fetchRevenueLedgerWorkspace(): Promise<
     dependencies: (t.dependencies as string[]) ?? [],
   }));
 
-  const pendingJe = journalEntries.filter((j) => j.status === "Draft").length;
+  const draftJe = journalEntries.filter((j) => j.status === "Draft").length;
+  const deferredRevenue = revenueItems.reduce((sum, item) => sum + item.deferredAmount, 0);
+  const recognizedRevenue = revenueItems.reduce(
+    (sum, item) => sum + item.recognizedAmount,
+    0,
+  );
+  const incompleteCloseTasks = closeTasks.filter((t) => t.status !== "Complete").length;
+  const completeCloseTasks = closeTasks.filter((t) => t.status === "Complete").length;
+  const closeProgress =
+    closeTasks.length > 0
+      ? Math.round((completeCloseTasks / closeTasks.length) * 100)
+      : 0;
+  const trialDebitTotal = trialBalance.reduce((sum, row) => sum + row.debit, 0);
+  const trialCreditTotal = trialBalance.reduce((sum, row) => sum + row.credit, 0);
+  const trialBalanced = trialDebitTotal === trialCreditTotal && trialDebitTotal > 0;
+
   const kpis: GlSummaryKpi[] = [
     {
-      id: "pending-je",
-      title: "Pending Journal Entries",
-      value: String(pendingJe),
-      supportingText: "Awaiting approval or posting",
-      warning: pendingJe > 0,
+      id: "revenue-mtd",
+      title: "Revenue MTD",
+      value: `$${recognizedRevenue.toLocaleString()}`,
+      supportingText: "August 2026",
     },
     {
-      id: "close-tasks",
-      title: "Month-End Tasks",
-      value: String(closeTasks.filter((t) => t.status !== "Complete").length),
-      supportingText: "Incomplete close checklist items",
-      warning: true,
+      id: "deferred-revenue",
+      title: "Deferred Revenue",
+      value: `$${deferredRevenue.toLocaleString()}`,
+      supportingText: `${revenueItems.filter((item) => item.deferredAmount > 0).length} matters with unearned fees`,
+      warning: deferredRevenue > 0,
+    },
+    {
+      id: "draft-entries",
+      title: "Draft Journal Entries",
+      value: String(draftJe),
+      supportingText: "Awaiting review",
+      warning: draftJe > 0,
+    },
+    {
+      id: "close-progress",
+      title: "Month-End Close",
+      value: `${closeProgress}%`,
+      supportingText: `${completeCloseTasks} of ${closeTasks.length} tasks complete`,
+      warning: incompleteCloseTasks > 0,
+    },
+    {
+      id: "trial-balance",
+      title: "Trial Balance",
+      value: trialBalanced ? "Balanced" : "Out of Balance",
+      supportingText: trialBalanced ? "Debits = Credits" : "Review posted entries",
+      warning: !trialBalanced,
+    },
+    {
+      id: "pending-je",
+      title: "Posted Journal Entries",
+      value: String(journalEntries.filter((j) => j.status === "Posted").length),
+      supportingText: "Posted to general ledger",
     },
   ];
 
@@ -151,7 +244,7 @@ export async function fetchRevenueLedgerWorkspace(): Promise<
       kpis,
       journalEntries,
       revenueItems,
-      glLines: [],
+      glLines,
       trialBalance,
       closeTasks,
       chartOfAccounts,

@@ -29,6 +29,7 @@ import {
 import { Toast } from "@/components/ui/Toast";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import {
+  completeCloseTask,
   fetchRevenueLedgerWorkspace,
   postJournalEntry,
   useSupabaseQuery,
@@ -139,7 +140,7 @@ export function RevenueLedgerView() {
     const debits = trialBalance.reduce((s, r) => s + r.debit, 0);
     const credits = trialBalance.reduce((s, r) => s + r.credit, 0);
     return { debits, credits, balanced: debits === credits };
-  }, []);
+  }, [trialBalance]);
 
   const closeProgress = useMemo(() => {
     const complete = tasks.filter((t) => t.status === "Complete").length;
@@ -232,12 +233,18 @@ export function RevenueLedgerView() {
   };
 
   const completeTask = (task: CloseTask) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === task.id ? { ...t, status: "Complete" as const } : t,
-      ),
-    );
-    setToast(`"${task.task}" marked complete`);
+    void (async () => {
+      const result = await completeCloseTask({
+        taskId: task.id,
+        actor: { name: "Alex Morgan", role: selectedRole },
+      });
+      if (result.ok) {
+        setToast(`"${task.task}" marked complete`);
+        await refresh();
+      } else {
+        setToast(result.error ?? "Failed to complete task");
+      }
+    })();
   };
 
   const handleExportTrialBalance = () => {
