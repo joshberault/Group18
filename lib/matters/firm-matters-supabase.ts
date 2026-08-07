@@ -805,6 +805,8 @@ function mapEngagementStatus(
   raw: string | null | undefined,
 ): MatterEngagementStatus {
   const t = (raw ?? "").toLowerCase();
+  if (t === "pending") return "not_started";
+  if (t === "not_required") return "signed";
   if (
     t === "not_started" ||
     t === "letter_sent" ||

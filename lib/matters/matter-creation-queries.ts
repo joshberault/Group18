@@ -57,19 +57,6 @@ function isMissingTableError(error: { code?: string; message?: string } | null):
   );
 }
 
-function isGovernanceColumnError(message: string | undefined): boolean {
-  const lower = (message ?? "").toLowerCase();
-  return (
-    lower.includes("activation_status") ||
-    lower.includes("engagement_status") ||
-    lower.includes("billing_hold") ||
-    lower.includes("needs_partner_review") ||
-    lower.includes("partner_review_reason") ||
-    lower.includes("matters_engagement_status_check") ||
-    lower.includes("matters_activation_status_check")
-  );
-}
-
 function notifyPortfolioUpdated() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("firm-portfolio-matters-updated"));
@@ -380,36 +367,60 @@ function buildMatterInsertRow(payload: StoredMatterRequestPayload) {
   };
 }
 
+function legacyMatterInsertRow(
+  row: ReturnType<typeof buildMatterInsertRow>,
+): Record<string, unknown> {
+  return {
+    client_id: row.client_id,
+    practice_area_id: row.practice_area_id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    billing_type: row.billing_type,
+    hourly_rate: row.hourly_rate,
+    fixed_fee_amount: row.fixed_fee_amount,
+    retainer_amount: row.retainer_amount,
+    retainer_balance: row.retainer_balance,
+    expense_terms: row.expense_terms,
+    // Legacy text CHECK: pending | signed | not_required
+    engagement_status: "pending",
+    activation_status: row.activation_status,
+    billing_hold: row.billing_hold,
+    needs_partner_review: row.needs_partner_review,
+    partner_review_reason: row.partner_review_reason,
+  };
+}
+
 async function createMatterFromPayload(
   supabase: NonNullable<ReturnType<typeof createClientSafe>>,
   payload: StoredMatterRequestPayload,
 ): Promise<string> {
   const row = buildMatterInsertRow(payload);
 
-  let { data: matter, error } = await supabase
-    .from("matters")
-    .insert(row)
-    .select("id")
-    .single();
+  const attempts: Record<string, unknown>[] = [
+    row,
+    { ...row, engagement_status: "pending" },
+    legacyMatterInsertRow(row),
+  ];
 
-  if (error && isGovernanceColumnError(error.message)) {
-    const {
-      activation_status: _activationStatus,
-      engagement_status: _engagementStatus,
-      billing_hold: _billingHold,
-      needs_partner_review: _needsPartnerReview,
-      partner_review_reason: _partnerReviewReason,
-      ...legacyRow
-    } = row;
-    ({ data: matter, error } = await supabase
+  let matter: { id: string } | null = null;
+  let lastError: { message?: string } | null = null;
+
+  for (const attempt of attempts) {
+    const { data, error } = await supabase
       .from("matters")
-      .insert(legacyRow)
+      .insert(attempt)
       .select("id")
-      .single());
+      .single();
+    if (!error && data) {
+      matter = data;
+      break;
+    }
+    lastError = error;
   }
 
-  if (error || !matter) {
-    throw new Error(error?.message ?? "Unable to create matter.");
+  if (!matter) {
+    throw new Error(lastError?.message ?? "Unable to create matter.");
   }
 
   const matterId = String(matter.id);

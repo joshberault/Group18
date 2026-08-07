@@ -29,6 +29,7 @@ const MIGRATIONS = [
   "20260806230000_matter_lifecycle_governance.sql",
   "20260807010000_engagement_templates.sql",
   "20260807020000_client_audit_log.sql",
+  "20260807040000_align_matter_engagement_status.sql",
 ];
 
 if (urls.length === 0) {

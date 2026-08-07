@@ -41,6 +41,23 @@ export async function createMatterFromIntake(
     ...governancePayload,
   });
 
+  if (insertError?.message?.includes("matters_engagement_status_check")) {
+    ({ error: insertError } = await supabase.from("matters").insert({
+      id: matterId,
+      client_id: input.clientId,
+      practice_area_id: input.practiceAreaId,
+      title: input.title.trim() || "New matter",
+      description: input.description?.trim() || null,
+      status: "open",
+      billing_type: input.billingType,
+      activation_status: "draft",
+      engagement_status: "pending",
+      billing_hold: false,
+      needs_partner_review: true,
+      partner_review_reason: governancePayload.partner_review_reason,
+    }));
+  }
+
   if (
     insertError?.message?.toLowerCase().includes("activation_status") ||
     insertError?.message?.toLowerCase().includes("engagement_status")
