@@ -28,7 +28,7 @@ import { JobApplicationsPanel } from "@/components/admin/JobApplicationsPanel";
 import { ParalegalDashboard } from "@/components/dashboard/ParalegalDashboard";
 import { AttorneyDashboard } from "@/components/dashboard/AttorneyDashboard";
 import { ProspectiveClientDashboard } from "@/components/dashboard/ProspectiveClientDashboard";
-import { FirmOperationsQueues } from "@/components/dashboard/FirmOperationsQueues";
+import { FirmOperationsQueueCards } from "@/components/dashboard/FirmOperationsQueueCards";
 import { AccountingManagerDashboard } from "@/components/accounting-manager/dashboard/AccountingManagerDashboard";
 import { RiskCenterContent } from "@/components/analytics/RiskCenterContent";
 import { BillingPeriodToolbar } from "@/components/billing/BillingPeriodToolbar";
@@ -102,6 +102,7 @@ const MANAGING_PARTNER_KPI_HREFS = {
   outstandingAR: "/receivables",
   trustFunds: "/accounting/trust",
   monthlyCollections: "/dashboard/analytics",
+  overdueInvoices: invoicesHref({ view: "overdue" }),
 } as const;
 
 const BILLING_SPECIALIST_QUICK_ACTIONS = [
@@ -473,81 +474,175 @@ export function DashboardContent() {
           <div className="mb-6">
             <JobApplicationsPanel />
           </div>
-          <FirmOperationsQueues />
         </AdminDataProvider>
       )}
 
-      {role === "managing_partner" && (
+      {isManagingPartner || isFirmAdministrator ? (
         <AdminDataProvider>
-          <FirmOperationsQueues />
+          <div
+            className={
+              isManagingPartner
+                ? "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+                : isFirmAdministrator
+                  ? "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7"
+                  : isBillingSpecialist
+                    ? "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3"
+                    : "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+            }
+          >
+            <DashboardKpiCard
+              title="Active Matters"
+              value={activeMattersValue}
+              subtitle={activeMattersSubtitle}
+              icon={Briefcase}
+              href={firmKpiHref("activeMatters")}
+              interactive={kpiInteractive}
+              variant="success"
+              showViewDetailsLink={!isManagingPartner}
+            />
+            <DashboardKpiCard
+              title="Unbilled Time"
+              value={unbilledTimeValue}
+              subtitle={unbilledTimeSubtitle}
+              icon={Clock}
+              href={firmKpiHref("unbilledTime")}
+              interactive={kpiInteractive}
+              showViewDetailsLink={!isManagingPartner}
+            />
+            {isManagingPartner ? (
+              <>
+                <DashboardKpiCard
+                  title="Trust Funds Held"
+                  value={trustFundsValue}
+                  subtitle={trustFundsSubtitle}
+                  icon={Landmark}
+                  href={firmKpiHref("trustFunds")}
+                  interactive={kpiInteractive}
+                  showViewDetailsLink={false}
+                />
+                <DashboardKpiCard
+                  title="Overdue Invoices"
+                  value={String(overdueMetrics.count)}
+                  subtitle={`${formatCurrency(overdueMetrics.amount)} overdue`}
+                  icon={AlertTriangle}
+                  href={MANAGING_PARTNER_KPI_HREFS.overdueInvoices}
+                  interactive={kpiInteractive}
+                  showViewDetailsLink={false}
+                />
+                <FirmOperationsQueueCards />
+              </>
+            ) : (
+              <>
+                <DashboardKpiCard
+                  title="Outstanding A/R"
+                  value={outstandingArValue}
+                  subtitle={outstandingArSubtitle}
+                  icon={DollarSign}
+                  href={firmKpiHref("outstandingAR")}
+                  interactive={kpiInteractive}
+                  showViewDetailsLink={!isManagingPartner}
+                />
+                <DashboardKpiCard
+                  title="Trust Funds Held"
+                  value={trustFundsValue}
+                  subtitle={trustFundsSubtitle}
+                  icon={Landmark}
+                  href={firmKpiHref("trustFunds")}
+                  interactive={kpiInteractive}
+                  showViewDetailsLink={!isManagingPartner}
+                />
+                <DashboardKpiCard
+                  title="Monthly Collections"
+                  value={formatCurrency(monthlyCollectionsKpiValue)}
+                  subtitle={monthlyCollectionsSubtitle}
+                  trend={usesLiveFirmKpis ? undefined : "+8.2% vs. last month"}
+                  icon={TrendingUp}
+                  href={firmKpiHref("monthlyCollections")}
+                  interactive={kpiInteractive}
+                  showViewDetailsLink={!isManagingPartner}
+                />
+                {isFirmAdministrator ? <FirmOperationsQueueCards /> : null}
+              </>
+            )}
+            {isBillingSpecialist ? (
+              <DashboardKpiCard
+                title="Overdue Invoices"
+                value={String(overdueMetrics.count)}
+                subtitle={`${formatCurrency(overdueMetrics.amount)} overdue`}
+                icon={AlertTriangle}
+                href={BILLING_SPECIALIST_KPI_HREFS.overdueInvoices}
+                interactive
+              />
+            ) : null}
+          </div>
         </AdminDataProvider>
-      )}
-
-      <div
-        className={
-          isBillingSpecialist
-            ? "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3"
-            : "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
-        }
-      >
-        <DashboardKpiCard
-          title="Active Matters"
-          value={activeMattersValue}
-          subtitle={activeMattersSubtitle}
-          icon={Briefcase}
-          href={firmKpiHref("activeMatters")}
-          interactive={kpiInteractive}
-          variant="success"
-          showViewDetailsLink={!isManagingPartner}
-        />
-        <DashboardKpiCard
-          title="Unbilled Time"
-          value={unbilledTimeValue}
-          subtitle={unbilledTimeSubtitle}
-          icon={Clock}
-          href={firmKpiHref("unbilledTime")}
-          interactive={kpiInteractive}
-          showViewDetailsLink={!isManagingPartner}
-        />
-        <DashboardKpiCard
-          title="Outstanding A/R"
-          value={outstandingArValue}
-          subtitle={outstandingArSubtitle}
-          icon={DollarSign}
-          href={firmKpiHref("outstandingAR")}
-          interactive={kpiInteractive}
-          showViewDetailsLink={!isManagingPartner}
-        />
-        <DashboardKpiCard
-          title="Trust Funds Held"
-          value={trustFundsValue}
-          subtitle={trustFundsSubtitle}
-          icon={Landmark}
-          href={firmKpiHref("trustFunds")}
-          interactive={kpiInteractive}
-          showViewDetailsLink={!isManagingPartner}
-        />
-        <DashboardKpiCard
-          title="Monthly Collections"
-          value={formatCurrency(monthlyCollectionsKpiValue)}
-          subtitle={monthlyCollectionsSubtitle}
-          trend={usesLiveFirmKpis ? undefined : "+8.2% vs. last month"}
-          icon={TrendingUp}
-          href={firmKpiHref("monthlyCollections")}
-          interactive={kpiInteractive}
-          showViewDetailsLink={!isManagingPartner}
-        />
-        {isBillingSpecialist ? (
+      ) : (
+        <div
+          className={
+            isBillingSpecialist
+              ? "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3"
+              : "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+          }
+        >
           <DashboardKpiCard
-            title="Overdue Invoices"
-            value={String(overdueMetrics.count)}
-            subtitle={`${formatCurrency(overdueMetrics.amount)} overdue`}
-            icon={AlertTriangle}
-            href={BILLING_SPECIALIST_KPI_HREFS.overdueInvoices}
-            interactive
+            title="Active Matters"
+            value={activeMattersValue}
+            subtitle={activeMattersSubtitle}
+            icon={Briefcase}
+            href={firmKpiHref("activeMatters")}
+            interactive={kpiInteractive}
+            variant="success"
+            showViewDetailsLink={!isManagingPartner}
           />
-        ) : null}
-      </div>
+          <DashboardKpiCard
+            title="Unbilled Time"
+            value={unbilledTimeValue}
+            subtitle={unbilledTimeSubtitle}
+            icon={Clock}
+            href={firmKpiHref("unbilledTime")}
+            interactive={kpiInteractive}
+            showViewDetailsLink={!isManagingPartner}
+          />
+          <DashboardKpiCard
+            title="Outstanding A/R"
+            value={outstandingArValue}
+            subtitle={outstandingArSubtitle}
+            icon={DollarSign}
+            href={firmKpiHref("outstandingAR")}
+            interactive={kpiInteractive}
+            showViewDetailsLink={!isManagingPartner}
+          />
+          <DashboardKpiCard
+            title="Trust Funds Held"
+            value={trustFundsValue}
+            subtitle={trustFundsSubtitle}
+            icon={Landmark}
+            href={firmKpiHref("trustFunds")}
+            interactive={kpiInteractive}
+            showViewDetailsLink={!isManagingPartner}
+          />
+          <DashboardKpiCard
+            title="Monthly Collections"
+            value={formatCurrency(monthlyCollectionsKpiValue)}
+            subtitle={monthlyCollectionsSubtitle}
+            trend={usesLiveFirmKpis ? undefined : "+8.2% vs. last month"}
+            icon={TrendingUp}
+            href={firmKpiHref("monthlyCollections")}
+            interactive={kpiInteractive}
+            showViewDetailsLink={!isManagingPartner}
+          />
+          {isBillingSpecialist ? (
+            <DashboardKpiCard
+              title="Overdue Invoices"
+              value={String(overdueMetrics.count)}
+              subtitle={`${formatCurrency(overdueMetrics.amount)} overdue`}
+              icon={AlertTriangle}
+              href={BILLING_SPECIALIST_KPI_HREFS.overdueInvoices}
+              interactive
+            />
+          ) : null}
+        </div>
+      )}
 
       {isManagingPartner ? (
         <div className="mb-6">

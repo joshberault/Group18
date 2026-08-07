@@ -81,7 +81,13 @@ function typeLabel(type: ApprovalType) {
   return TYPE_LABELS[type] ?? type;
 }
 
-export function ApprovalQueue() {
+interface ApprovalQueueProps {
+  /** When embedded in a full-screen dashboard modal, hide the live-data banner. */
+  variant?: "standalone" | "embedded";
+}
+
+export function ApprovalQueue({ variant = "standalone" }: ApprovalQueueProps) {
+  const isEmbedded = variant === "embedded";
   const { selectedRole } = useDemoRole();
   const isManagingPartner = selectedRole === "managing_partner";
   const { data, loading, error, refresh } = useAdminData();
@@ -491,11 +497,13 @@ export function ApprovalQueue() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
-        Approval Queue uses current Supabase requests. Decisions update local
-        page state only. Original submitted details are preserved after review.
-      </div>
+      {!isEmbedded ? (
+        <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
+          <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
+          Approval Queue uses current Supabase requests. Decisions update local
+          page state only. Original submitted details are preserved after review.
+        </div>
+      ) : null}
 
       {successMessage && (
         <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">

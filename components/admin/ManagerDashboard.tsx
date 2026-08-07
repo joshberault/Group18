@@ -10,6 +10,7 @@ import {
   UserMinus,
 } from "lucide-react";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
+import { FirmOperationsQueueCards } from "@/components/dashboard/FirmOperationsQueueCards";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -104,7 +105,7 @@ export function ManagerDashboard() {
         {dataset.referenceDate}.
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
         <Link href="/admin/workload" className="block h-full">
           <KPICard
             title="Over Capacity"
@@ -150,6 +151,7 @@ export function ManagerDashboard() {
             className="h-full transition hover:border-gold-500"
           />
         </Link>
+        <FirmOperationsQueueCards />
       </div>
 
       <Card padding="md">
