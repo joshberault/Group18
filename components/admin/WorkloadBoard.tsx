@@ -31,14 +31,7 @@ import {
   uniquePracticeAreas,
   workloadBoardClassificationLabel,
 } from "@/lib/admin/calculations";
-import {
-  ADMIN_REFERENCE_DATE,
-  ADMIN_UI_FLAGS,
-  MOCK_ASSIGNMENTS,
-  MOCK_EMPLOYEES,
-  MOCK_PRODUCTIVITY,
-  MOCK_VACATIONS,
-} from "@/lib/admin/mock-data";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 import type {
   AdminWorkloadBoardRow,
   EmploymentStatus,
@@ -46,7 +39,16 @@ import type {
   WorkloadBoardSortKey,
   WorkloadLeaveDisplay,
 } from "@/lib/admin/types";
+import { USER_ROLE_LABELS } from "@/lib/types";
 import { ProductivityMetrics } from "@/components/admin/ProductivityMetrics";
+import { UtilizationSummaryWidget } from "@/components/admin/UtilizationSummaryWidget";
+
+/** Role filter options for legal staffing on the Workload Board. */
+const WORKLOAD_ROLE_FILTERS = [
+  USER_ROLE_LABELS.attorney,
+  USER_ROLE_LABELS.managing_partner,
+  USER_ROLE_LABELS.paralegal,
+] as const;
 
 function classificationVariant(c: WorkloadBoardClassification) {
   if (c === "over_capacity") return "danger" as const;
@@ -63,7 +65,7 @@ function statusLabel(status: EmploymentStatus) {
 }
 
 export function WorkloadBoard() {
-  const [hasError, setHasError] = useState(ADMIN_UI_FLAGS.forceError);
+  const { data, loading, error, refresh } = useAdminData();
   const [nameFilter, setNameFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [practiceFilter, setPracticeFilter] = useState("all");
@@ -80,34 +82,42 @@ export function WorkloadBoard() {
   const [sortKey, setSortKey] = useState<WorkloadBoardSortKey>("workload_high");
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  /**
-   * Workload recalculates from mock assignment + leave data on this page.
-   * Assignment edits on /admin/assignments use separate local state and are not
-   * shared here until Supabase (or shared client store) is wired.
-   */
   const rows = useMemo(
     () =>
       buildWorkloadBoardRows(
-        MOCK_EMPLOYEES,
-        MOCK_ASSIGNMENTS,
-        MOCK_VACATIONS,
-        ADMIN_REFERENCE_DATE,
+        data?.employees ?? [],
+        data?.assignments ?? [],
+        data?.vacations ?? [],
+        data?.referenceDate ?? "",
       ),
-    [],
+    [data],
   );
 
-  const roleOptions = useMemo(
-    () =>
-      [...new Set(MOCK_EMPLOYEES.map((e) => e.roleLabel))].sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [],
-  );
+  const roleOptions = useMemo(() => {
+    const fromData = new Set(
+      (data?.employees ?? [])
+        .filter(
+          (e) =>
+            e.roleKey === "attorney" ||
+            e.roleKey === "managing_partner" ||
+            e.roleKey === "paralegal",
+        )
+        .map((e) => e.roleLabel),
+    );
+    // Always offer Attorney, Managing Partner, and Paralegal in the Role filter.
+    for (const label of WORKLOAD_ROLE_FILTERS) fromData.add(label);
+    return [...fromData].sort((a, b) => a.localeCompare(b));
+  }, [data?.employees]);
 
-  const practiceOptions = useMemo(
-    () => uniquePracticeAreas(MOCK_EMPLOYEES),
-    [],
-  );
+  const practiceOptions = useMemo(() => {
+    const legalStaff = (data?.employees ?? []).filter(
+      (e) =>
+        e.roleKey === "attorney" ||
+        e.roleKey === "managing_partner" ||
+        e.roleKey === "paralegal",
+    );
+    return uniquePracticeAreas(legalStaff);
+  }, [data?.employees]);
 
   const filtered = useMemo(() => {
     const next = rows.filter((row) => {
@@ -166,26 +176,24 @@ export function WorkloadBoard() {
     setSortKey("workload_high");
   }
 
-  if (ADMIN_UI_FLAGS.forceLoading) {
+  if (loading) {
     return <LoadingState message="Loading workload board..." />;
   }
 
-  if (hasError) {
+  if (error || !data) {
     return (
       <Card className="border-red-200 bg-red-50" padding="lg">
         <CardHeader>
           <CardTitle className="text-red-800">Unable to load workload</CardTitle>
           <CardDescription className="text-red-700">
-            Local mock workload data could not be loaded.
+            {error ?? "Live firm data could not be loaded."}
           </CardDescription>
         </CardHeader>
         <Button
           variant="secondary"
-          onClick={() => {
-            setHasError(false);
-          }}
+          onClick={() => void refresh()}
         >
-          Retry with mock data
+          Retry
         </Button>
       </Card>
     );
@@ -194,11 +202,10 @@ export function WorkloadBoard() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Mock data:</strong>{" "}
-        Workload % = open estimated assignment hours ÷ weekly capacity. Actual
-        hours are shown separately and are not mixed into the percentage.
-        Assignment changes on the Assignments page use separate local state and
-        will persist here after Supabase integration.
+        <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
+        Workload for attorneys, managing partners, and paralegals. Workload % =
+        open estimated assignment hours ÷ weekly capacity. Actual hours are
+        shown separately and are not mixed into the percentage.
       </div>
 
       <Card padding="md">
@@ -208,7 +215,7 @@ export function WorkloadBoard() {
             <CardDescription>
               Available &lt;60% · Balanced 60–89% · Near Capacity 90–100% · Over
               Capacity &gt;100% · Unavailable = inactive or current approved
-              leave. Reference date {ADMIN_REFERENCE_DATE}.
+              leave. Reference date {data.referenceDate}.
             </CardDescription>
           </div>
           <Select
@@ -464,7 +471,9 @@ export function WorkloadBoard() {
         )}
       </Card>
 
-      <ProductivityMetrics metrics={MOCK_PRODUCTIVITY} />
+      <UtilizationSummaryWidget />
+
+      <ProductivityMetrics metrics={data.productivity} />
 
       <p className="text-xs text-muted">
         Assignment links include <code>employeeId</code> (and{" "}

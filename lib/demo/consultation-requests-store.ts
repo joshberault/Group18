@@ -1,17 +1,38 @@
 import type { CaseTypeId } from "@/lib/client-portal/case-task-lists";
-import { CASE_TYPE_LABELS } from "@/lib/client-portal/case-task-lists";
 import { PARALEGAL_ASSIGNED_MATTERS } from "@/lib/paralegal/demo-data";
 
 export const CONSULTATION_LEGAL_SERVICE_OPTIONS = [
-  ...Object.entries(CASE_TYPE_LABELS).map(([value, label]) => ({
-    value: value as CaseTypeId | "other",
-    label,
-  })),
-  { value: "other" as const, label: "Other" },
+  { value: "corporate_business", label: "Corporate / Business" },
+  { value: "employment", label: "Employment" },
+  { value: "litigation", label: "Litigation" },
+  { value: "real_estate", label: "Real Estate" },
+  { value: "other", label: "Other" },
 ] as const;
 
 export type ConsultationLegalServiceId =
   (typeof CONSULTATION_LEGAL_SERVICE_OPTIONS)[number]["value"];
+
+export const CONSULTATION_LEGAL_SERVICE_LABELS: Record<
+  ConsultationLegalServiceId,
+  string
+> = {
+  corporate_business: "Corporate / Business",
+  employment: "Employment",
+  litigation: "Litigation",
+  real_estate: "Real Estate",
+  other: "Other",
+};
+
+/** Map intake categories to firm case types for demo matter routing. */
+const CONSULTATION_TO_CASE_TYPE: Record<
+  Exclude<ConsultationLegalServiceId, "other">,
+  CaseTypeId
+> = {
+  corporate_business: "corporate_business_advisory",
+  employment: "employment_litigation_employee",
+  litigation: "commercial_litigation",
+  real_estate: "commercial_real_estate",
+};
 
 export type ConsultationContactMethod = "email" | "phone_call" | "text_message";
 
@@ -30,8 +51,37 @@ export type ConsultationRequestPayload = {
   legalServices: ConsultationLegalServiceId[];
   otherLegalServiceDetails?: string;
   availability: ConsultationAvailability[];
-  additionalInfo?: string;
+  additionalInfo: string;
 };
+
+export type IntakeRequestStatus =
+  | "submitted"
+  | "screened"
+  | "consultation_scheduled"
+  | "declined"
+  | "no_hire"
+  | "converted";
+
+export const INTAKE_STATUS_LABELS: Record<IntakeRequestStatus, string> = {
+  submitted: "Submitted",
+  screened: "Screened",
+  consultation_scheduled: "Consultation scheduled",
+  declined: "Declined",
+  no_hire: "No hire",
+  converted: "Converted",
+};
+
+export const ACTIVE_INTAKE_STATUSES: IntakeRequestStatus[] = [
+  "submitted",
+  "screened",
+  "consultation_scheduled",
+];
+
+export const TERMINAL_INTAKE_STATUSES: IntakeRequestStatus[] = [
+  "declined",
+  "no_hire",
+  "converted",
+];
 
 export type ConsultationRequestRecord = ConsultationRequestPayload & {
   id: string;
@@ -41,8 +91,36 @@ export type ConsultationRequestRecord = ConsultationRequestPayload & {
   matterId: string;
   matterNumber: string;
   matterName: string;
-  status: "pending" | "completed";
+  status: IntakeRequestStatus;
+  declineReason?: string | null;
+  statusNote?: string | null;
+  convertedClientId?: string | null;
+  convertedMatterId?: string | null;
+  statusUpdatedAt?: string | null;
 };
+
+function normalizeIntakeStatus(raw: string): IntakeRequestStatus {
+  if (raw === "pending") return "submitted";
+  if (raw === "completed") return "screened";
+  if (
+    raw === "submitted" ||
+    raw === "screened" ||
+    raw === "consultation_scheduled" ||
+    raw === "declined" ||
+    raw === "no_hire" ||
+    raw === "converted"
+  ) {
+    return raw;
+  }
+  return "submitted";
+}
+
+function normalizeRecord(record: ConsultationRequestRecord): ConsultationRequestRecord {
+  return {
+    ...record,
+    status: normalizeIntakeStatus(record.status),
+  };
+}
 
 export const CONSULTATION_REQUESTS_KEY = "counselflow-consultation-requests";
 export const CONSULTATION_REQUESTS_UPDATE_EVENT =
@@ -78,17 +156,48 @@ function persist(records: ConsultationRequestRecord[]) {
 }
 
 export function getConsultationRequests(): ConsultationRequestRecord[] {
-  return readArray<ConsultationRequestRecord>(CONSULTATION_REQUESTS_KEY).sort(
-    (a, b) => b.createdAt.localeCompare(a.createdAt),
+  return readArray<ConsultationRequestRecord>(CONSULTATION_REQUESTS_KEY)
+    .map(normalizeRecord)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function getActiveIntakeRequests(): ConsultationRequestRecord[] {
+  return getConsultationRequests().filter((item) =>
+    ACTIVE_INTAKE_STATUSES.includes(item.status),
   );
 }
 
 export function getConsultationRequestsForAssignee(
   assignee: "attorney" | "paralegal",
 ): ConsultationRequestRecord[] {
-  return getConsultationRequests().filter(
-    (item) => item.assignedTo === assignee && item.status === "pending",
-  );
+  return getActiveIntakeRequests().filter((item) => item.assignedTo === assignee);
+}
+
+export function updateIntakeRequest(
+  id: string,
+  patch: Partial<
+    Pick<
+      ConsultationRequestRecord,
+      | "status"
+      | "declineReason"
+      | "statusNote"
+      | "convertedClientId"
+      | "convertedMatterId"
+    >
+  >,
+): ConsultationRequestRecord | null {
+  const records = getConsultationRequests();
+  const index = records.findIndex((item) => item.id === id);
+  if (index < 0) return null;
+
+  const updated: ConsultationRequestRecord = {
+    ...records[index],
+    ...patch,
+    statusUpdatedAt: new Date().toISOString(),
+  };
+  records[index] = updated;
+  persist(records);
+  return updated;
 }
 
 export function formatConsultationDetails(
@@ -98,7 +207,7 @@ export function formatConsultationDetails(
     .map((id) =>
       id === "other"
         ? `Other${payload.otherLegalServiceDetails ? `: ${payload.otherLegalServiceDetails}` : ""}`
-        : CASE_TYPE_LABELS[id],
+        : CONSULTATION_LEGAL_SERVICE_LABELS[id],
     )
     .join(", ");
 
@@ -121,23 +230,21 @@ export function formatConsultationDetails(
     `Preferred contact: ${contactLabel}`,
     `Legal services: ${services}`,
     `Availability:\n${availability}`,
-    payload.additionalInfo?.trim()
-      ? `Additional information: ${payload.additionalInfo.trim()}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
+    `Additional information: ${payload.additionalInfo.trim()}`,
+  ].join("\n");
 }
 
 export function resolveConsultationMatter(
   legalServices: ConsultationLegalServiceId[],
 ): { matterId: string; matterNumber: string; matterName: string } {
   const primary = legalServices.find(
-    (service): service is CaseTypeId => service !== "other",
+    (service): service is Exclude<ConsultationLegalServiceId, "other"> =>
+      service !== "other",
   );
   if (primary) {
+    const caseType = CONSULTATION_TO_CASE_TYPE[primary];
     const match = PARALEGAL_ASSIGNED_MATTERS.find(
-      (matter) => matter.caseType === primary,
+      (matter) => matter.caseType === caseType,
     );
     if (match) {
       return {
@@ -187,7 +294,7 @@ export function addConsultationRequestRecord(
       route === "paralegal"
         ? "Consultation Intake — Other"
         : matter.matterName,
-    status: "pending",
+    status: "submitted",
   };
 
   const existing = getConsultationRequests();

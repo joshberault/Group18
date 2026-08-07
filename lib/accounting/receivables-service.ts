@@ -7,6 +7,7 @@ import type {
   ArSummaryKpi,
   ArWriteOffRequest,
   AgingBucket,
+  CollectionEscalationStage,
   CollectionStatus,
 } from "@/lib/mock-data/ar-oversight";
 import {
@@ -29,6 +30,20 @@ function toAgingBucket(days: number): AgingBucket {
   if (days <= 60) return "31–60 Days";
   if (days <= 90) return "61–90 Days";
   return "90+ Days";
+}
+
+function parseEscalationStage(
+  value: unknown,
+): CollectionEscalationStage {
+  const stage = String(value ?? "reminder");
+  if (
+    stage === "internal_review" ||
+    stage === "write_off_requested" ||
+    stage === "external_collections"
+  ) {
+    return stage;
+  }
+  return "reminder";
 }
 
 function mapCollectionStatus(
@@ -131,6 +146,9 @@ export async function fetchReceivablesWorkspace(): Promise<
 
       return {
         id: inv.id as string,
+        invoiceId: inv.id as string,
+        clientId: inv.client_id as string,
+        matterId: (inv.matter_id as string) ?? "",
         invoiceNumber: inv.invoice_number as string,
         client: clientNames.get(inv.client_id as string) ?? "",
         matter: matterNames.get(inv.matter_id as string) ?? "",
@@ -153,6 +171,8 @@ export async function fetchReceivablesWorkspace(): Promise<
         office: (profile?.office as string) ?? "Chicago",
         isException,
         exceptionTypes,
+        escalationStage: parseEscalationStage(inv.escalation_stage),
+        externalCollectionsApproved: Boolean(inv.external_collections_approved),
         detail: {
           matterNumber: "",
           paymentHistory: `Paid $${asNumber(inv.amount_paid).toLocaleString()}`,

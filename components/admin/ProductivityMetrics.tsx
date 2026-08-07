@@ -108,10 +108,9 @@ export function ProductivityMetrics({
       <CardHeader>
         <CardTitle>Attorney utilization</CardTitle>
         <CardDescription>
-          Management view of actual hours worked versus available capacity.
-          Assigned (estimated) hours are listed separately and are not mixed into
-          utilization. Mock data — will be replaced by Supabase queries. Cost
-          rates are not shown.
+          Management view of billable hours versus available capacity. Pro bono
+          (non-billable) hours are shown separately. Assigned hours are estimated
+          load — not mixed into utilization. Cost rates are not shown.
         </CardDescription>
       </CardHeader>
       <Table>
@@ -120,7 +119,8 @@ export function ProductivityMetrics({
             <TableHead>Attorney</TableHead>
             <TableHead>Practice area</TableHead>
             <TableHead>Assigned hrs (estimated)</TableHead>
-            <TableHead>Actual hrs worked</TableHead>
+            <TableHead>Actual billable hrs</TableHead>
+            <TableHead>Pro bono hrs</TableHead>
             <TableHead>Available hrs</TableHead>
             <TableHead>Utilization</TableHead>
             <TableHead>Capacity</TableHead>
@@ -141,6 +141,7 @@ export function ProductivityMetrics({
               <TableCell>{row.practiceArea}</TableCell>
               <TableCell>{row.assignedHours}</TableCell>
               <TableCell>{row.actualHoursWorked}</TableCell>
+              <TableCell>{row.proBonoHours}</TableCell>
               <TableCell>{row.availableWorkHours}</TableCell>
               <TableCell>
                 <span

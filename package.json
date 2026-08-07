@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seed:pipeline": "node scripts/seed-fifteen-client-pipeline.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
@@ -24,8 +25,10 @@
     "@types/node": "^20.17.24",
     "@types/react": "^19.0.12",
     "@types/react-dom": "^19.0.4",
+    "dotenv": "^17.4.2",
     "eslint": "^9.22.0",
     "eslint-config-next": "^15.2.4",
+    "pg": "^8.22.0",
     "tailwindcss": "^4.0.14",
     "typescript": "^5.8.2"
   }

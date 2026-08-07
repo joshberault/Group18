@@ -3,7 +3,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import {
   Check,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Send,
@@ -12,6 +11,7 @@ import { addAttorneyConsultationRequestNotification } from "@/lib/attorney/notif
 import {
   addConsultationRequestRecord,
   buildConsultationTimeSlots,
+  CONSULTATION_LEGAL_SERVICE_LABELS,
   CONSULTATION_LEGAL_SERVICE_OPTIONS,
   formatConsultationDetails,
   formatUsPhoneDisplay,
@@ -24,7 +24,6 @@ import {
   type ConsultationContactMethod,
   type ConsultationLegalServiceId,
 } from "@/lib/demo/consultation-requests-store";
-import { CASE_TYPE_LABELS } from "@/lib/client-portal/case-task-lists";
 import { addMatterRequest } from "@/lib/matters/workspace-store";
 import { addParalegalConsultationRequestNotification } from "@/lib/paralegal/notifications-store";
 import { Button } from "@/components/ui/Button";
@@ -127,9 +126,6 @@ export function ProspectiveClientDashboard() {
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [datesContinued, setDatesContinued] = useState(false);
-  const [servicesContinued, setServicesContinued] = useState(false);
-  const [openTimeMenu, setOpenTimeMenu] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [calendarCursor, setCalendarCursor] = useState({ year: 2026, month: 7 });
 
@@ -138,8 +134,8 @@ export function ProspectiveClientDashboard() {
     [calendarCursor],
   );
 
-  const showOtherDetails =
-    servicesContinued && form.legalServices.includes("other");
+  const showOtherDetails = form.legalServices.includes("other");
+  const showTimePickers = form.selectedDates.length > 0;
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -156,9 +152,14 @@ export function ProspectiveClientDashboard() {
       const selected = current.legalServices.includes(service)
         ? current.legalServices.filter((item) => item !== service)
         : [...current.legalServices, service];
-      return { ...current, legalServices: selected };
+      return {
+        ...current,
+        legalServices: selected,
+        otherLegalServiceDetails: selected.includes("other")
+          ? current.otherLegalServiceDetails
+          : "",
+      };
     });
-    setServicesContinued(false);
     setError(null);
     setFieldErrors((current) => {
       const next = { ...current };
@@ -179,13 +180,14 @@ export function ProspectiveClientDashboard() {
       return {
         ...current,
         selectedDates: selected,
-        availability: current.availability.filter((slot) =>
-          selected.includes(slot.date),
-        ),
+        availability: selected.map((selectedDate) => {
+          const existing = current.availability.find(
+            (slot) => slot.date === selectedDate,
+          );
+          return existing ?? { date: selectedDate, times: [] };
+        }),
       };
     });
-    setDatesContinued(false);
-    setOpenTimeMenu(null);
     setError(null);
     setFieldErrors((current) => {
       const next = { ...current };
@@ -216,11 +218,9 @@ export function ProspectiveClientDashboard() {
 
       return {
         ...current,
-        availability: current.availability
-          .map((slot) =>
-            slot.date === dateKey ? { ...slot, times } : slot,
-          )
-          .filter((slot) => slot.times.length > 0),
+        availability: current.availability.map((slot) =>
+          slot.date === dateKey ? { ...slot, times } : slot,
+        ),
       };
     });
     setError(null);
@@ -229,41 +229,6 @@ export function ProspectiveClientDashboard() {
       delete next.availability;
       return next;
     });
-  }
-
-  function handleContinueDates() {
-    if (form.selectedDates.length === 0) {
-      setFieldErrors((current) => ({
-        ...current,
-        selectedDates: "Select at least one weekday date.",
-      }));
-      setError("Select available weekday dates, then continue.");
-      return;
-    }
-
-    setForm((current) => ({
-      ...current,
-      availability: current.selectedDates.map((date) => {
-        const existing = current.availability.find((slot) => slot.date === date);
-        return existing ?? { date, times: [] };
-      }),
-    }));
-    setDatesContinued(true);
-    setError(null);
-  }
-
-  function handleContinueServices() {
-    if (form.legalServices.length === 0) {
-      setFieldErrors((current) => ({
-        ...current,
-        legalServices: "Select at least one legal service.",
-      }));
-      setError("Select the legal service(s) needed, then continue.");
-      return;
-    }
-
-    setServicesContinued(true);
-    setError(null);
   }
 
   function validateBeforeSubmit(): boolean {
@@ -295,11 +260,6 @@ export function ProspectiveClientDashboard() {
       nextErrors.legalServices = "Select at least one legal service.";
     }
 
-    if (!servicesContinued) {
-      nextErrors.legalServices =
-        "Click Continue after selecting legal service(s).";
-    }
-
     if (
       form.legalServices.includes("other") &&
       !form.otherLegalServiceDetails.trim()
@@ -312,11 +272,6 @@ export function ProspectiveClientDashboard() {
       nextErrors.selectedDates = "Select at least one weekday date.";
     }
 
-    if (!datesContinued) {
-      nextErrors.selectedDates =
-        "Click Continue after selecting available dates.";
-    }
-
     const missingTimes = form.selectedDates.some((date) => {
       const slot = form.availability.find((item) => item.date === date);
       return !slot || slot.times.length === 0;
@@ -326,9 +281,13 @@ export function ProspectiveClientDashboard() {
         "Select one or more times for each available date.";
     }
 
+    if (!form.additionalInfo.trim()) {
+      nextErrors.additionalInfo = "Additional information is required.";
+    }
+
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
-      setError("Please complete the required fields before submitting.");
+      setError("Please complete all required fields before submitting.");
       return false;
     }
 
@@ -358,15 +317,13 @@ export function ProspectiveClientDashboard() {
         times:
           form.availability.find((slot) => slot.date === date)?.times ?? [],
       })),
-      additionalInfo: form.additionalInfo.trim() || undefined,
+      additionalInfo: form.additionalInfo.trim(),
     };
 
     const details = formatConsultationDetails(payload);
     const fullName = `${payload.firstName} ${payload.lastName}`;
     const caseTypeSummary = payload.legalServices
-      .map((id) =>
-        id === "other" ? "Other" : CASE_TYPE_LABELS[id],
-      )
+      .map((id) => CONSULTATION_LEGAL_SERVICE_LABELS[id])
       .join(", ");
     const submittedAt = Date.now();
 
@@ -418,7 +375,7 @@ export function ProspectiveClientDashboard() {
     return (
       <>
         <PageHeader
-          title="Dashboard"
+          title="Consultation Request Form"
           description="Your consultation request has been received."
         />
         <Card className="mx-auto max-w-2xl border-gold-500/30">
@@ -440,9 +397,6 @@ export function ProspectiveClientDashboard() {
               onClick={() => {
                 setSubmitted(false);
                 setForm(INITIAL_FORM);
-                setDatesContinued(false);
-                setServicesContinued(false);
-                setOpenTimeMenu(null);
                 setError(null);
                 setFieldErrors({});
                 setCalendarCursor({ year: 2026, month: 7 });
@@ -459,7 +413,7 @@ export function ProspectiveClientDashboard() {
   return (
     <>
       <PageHeader
-        title="Dashboard"
+        title="Consultation Request Form"
         description="Request a consultation with CounselFlow. Complete the intake form below."
       />
 
@@ -467,8 +421,8 @@ export function ProspectiveClientDashboard() {
         <CardHeader>
           <CardTitle>Consultation request</CardTitle>
           <CardDescription>
-            Please provide your contact information, the legal services you need,
-            and the dates and times you are available.
+            All fields are required. Provide your contact information, the legal
+            services you need, and the dates and times you are available.
           </CardDescription>
         </CardHeader>
 
@@ -537,23 +491,13 @@ export function ProspectiveClientDashboard() {
           </section>
 
           <section className="space-y-4">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-navy-700">
-                  Legal service needed
-                </h3>
-                <p className="mt-1 text-sm text-muted">
-                  Select all case types that apply.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={handleContinueServices}
-              >
-                Continue
-              </Button>
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-navy-700">
+                Legal service needed
+              </h3>
+              <p className="mt-1 text-sm text-muted">
+                Select all case types that apply.
+              </p>
             </div>
 
             <div
@@ -603,23 +547,13 @@ export function ProspectiveClientDashboard() {
           </section>
 
           <section className="space-y-4">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-navy-700">
-                  Dates available
-                </h3>
-                <p className="mt-1 text-sm text-muted">
-                  Select weekday dates on the calendar. Weekends are unavailable.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={handleContinueDates}
-              >
-                Continue
-              </Button>
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-navy-700">
+                Dates available
+              </h3>
+              <p className="mt-1 text-sm text-muted">
+                Select weekday dates on the calendar. Weekends are unavailable.
+              </p>
             </div>
 
             <div
@@ -730,7 +664,7 @@ export function ProspectiveClientDashboard() {
               <p className="text-xs text-red-600">{fieldErrors.selectedDates}</p>
             )}
 
-            {datesContinued && (
+            {showTimePickers && (
               <div className="space-y-3">
                 <div>
                   <h4 className="text-sm font-semibold text-navy-900">
@@ -746,7 +680,6 @@ export function ProspectiveClientDashboard() {
                   const selectedTimes =
                     form.availability.find((slot) => slot.date === dateKey)
                       ?.times ?? [];
-                  const open = openTimeMenu === dateKey;
 
                   return (
                     <div
@@ -757,53 +690,36 @@ export function ProspectiveClientDashboard() {
                         <p className="text-sm font-medium text-navy-900">
                           {DATE_FORMATTER.format(parseDateKey(dateKey))}
                         </p>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() =>
-                            setOpenTimeMenu((current) =>
-                              current === dateKey ? null : dateKey,
-                            )
-                          }
-                        >
-                          {selectedTimes.length > 0
-                            ? `${selectedTimes.length} time${selectedTimes.length === 1 ? "" : "s"} selected`
-                            : "Select times"}
-                          <ChevronDown className="h-4 w-4" />
-                        </Button>
+                        {selectedTimes.length > 0 && (
+                          <p className="text-xs text-muted">
+                            {selectedTimes.length} time
+                            {selectedTimes.length === 1 ? "" : "s"} selected
+                          </p>
+                        )}
                       </div>
 
-                      {selectedTimes.length > 0 && (
-                        <p className="mt-2 text-xs text-muted">
-                          {selectedTimes.join(", ")}
-                        </p>
-                      )}
-
-                      {open && (
-                        <div className="mt-3 grid max-h-48 grid-cols-2 gap-2 overflow-y-auto rounded-lg border border-gray-100 bg-surface p-3 sm:grid-cols-3">
-                          {TIME_SLOTS.map((time) => {
-                            const checked = selectedTimes.includes(time);
-                            return (
-                              <label
-                                key={time}
-                                className={cn(
-                                  "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-navy-900 hover:bg-white",
-                                  checked && "bg-white font-medium",
-                                )}
-                              >
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 rounded border-gray-300 text-navy-900 focus:ring-navy-700"
-                                  checked={checked}
-                                  onChange={() => toggleTime(dateKey, time)}
-                                />
-                                {time}
-                              </label>
-                            );
-                          })}
-                        </div>
-                      )}
+                      <div className="mt-3 grid max-h-48 grid-cols-2 gap-2 overflow-y-auto rounded-lg border border-gray-100 bg-surface p-3 sm:grid-cols-3">
+                        {TIME_SLOTS.map((time) => {
+                          const checked = selectedTimes.includes(time);
+                          return (
+                            <label
+                              key={time}
+                              className={cn(
+                                "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-navy-900 hover:bg-white",
+                                checked && "bg-white font-medium",
+                              )}
+                            >
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-gray-300 text-navy-900 focus:ring-navy-700"
+                                checked={checked}
+                                onChange={() => toggleTime(dateKey, time)}
+                              />
+                              {time}
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
@@ -821,13 +737,15 @@ export function ProspectiveClientDashboard() {
               Additional information
             </h3>
             <Textarea
-              label="Anything else you would like us to know (optional)"
+              label="Anything else you would like us to know"
               rows={5}
               value={form.additionalInfo}
               onChange={(event) =>
                 updateField("additionalInfo", event.target.value)
               }
+              error={fieldErrors.additionalInfo}
               placeholder="Share any additional details that may help our team prepare for your consultation."
+              required
             />
           </section>
 

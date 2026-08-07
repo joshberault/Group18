@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/Table";
-import { ADMIN_UI_FLAGS, MOCK_ROLE_PERMISSIONS } from "@/lib/admin/mock-data";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 import type {
   AdminPermissionKey,
   AdminRolePermission,
@@ -83,20 +83,23 @@ function permissionLabel(key: AdminPermissionKey): string {
 }
 
 export function RolePermissions() {
-  const [savedRoles, setSavedRoles] = useState<AdminRolePermission[]>(() =>
-    cloneRoles(MOCK_ROLE_PERMISSIONS),
-  );
-  const [draftRoles, setDraftRoles] = useState<AdminRolePermission[]>(() =>
-    cloneRoles(MOCK_ROLE_PERMISSIONS),
-  );
+  const { data, loading, error, refresh } = useAdminData();
+  const [savedRoles, setSavedRoles] = useState<AdminRolePermission[]>([]);
+  const [draftRoles, setDraftRoles] = useState<AdminRolePermission[]>([]);
   const [actingRoleKey, setActingRoleKey] = useState("firm_administrator");
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(
-    MOCK_ROLE_PERMISSIONS[0]?.id ?? null,
+    null,
   );
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [hasError, setHasError] = useState(ADMIN_UI_FLAGS.forceError);
+  useEffect(() => {
+    if (!data) return;
+    const roles = cloneRoles(data.rolePermissions);
+    setSavedRoles(roles);
+    setDraftRoles(cloneRoles(roles));
+    setSelectedRoleId(roles[0]?.id ?? null);
+  }, [data]);
 
   const actingRole = useMemo(
     () => savedRoles.find((r) => r.roleKey === actingRoleKey) ?? null,
@@ -144,7 +147,7 @@ export function RolePermissions() {
 
     if (!canEdit || !actingRole) {
       setActionError(
-        "Only a role with Manage Roles can edit permissions (local mock gate).",
+          "Only a role with Manage Roles can edit permissions.",
       );
       return;
     }
@@ -303,31 +306,31 @@ export function RolePermissions() {
     setDraftRoles(cloneRoles(next));
     setConfirmOpen(false);
     setSuccessMessage(
-      `Saved ${changes.length} permission change${changes.length === 1 ? "" : "s"} locally (mock data only).`,
+      `Saved ${changes.length} permission change${changes.length === 1 ? "" : "s"} locally.`,
     );
   }
 
-  if (ADMIN_UI_FLAGS.forceLoading) {
+  if (loading) {
     return <LoadingState message="Loading role permissions..." />;
   }
 
-  if (hasError) {
+  if (error || !data) {
     return (
       <Card className="border-red-200 bg-red-50" padding="lg">
         <CardHeader>
           <CardTitle className="text-red-800">Unable to load roles</CardTitle>
           <CardDescription className="text-red-700">
-            Local mock role permission data could not be loaded.
+            {error ?? "Live firm data could not be loaded."}
           </CardDescription>
         </CardHeader>
-        <Button variant="secondary" onClick={() => setHasError(false)}>
-          Retry with mock data
+        <Button variant="secondary" onClick={() => void refresh()}>
+          Retry
         </Button>
       </Card>
     );
   }
 
-  if (ADMIN_UI_FLAGS.forceEmpty || draftRoles.length === 0) {
+  if (draftRoles.length === 0) {
     return (
       <EmptyState
         title="No role permissions defined"
@@ -345,11 +348,11 @@ export function RolePermissions() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Mock data only:</strong>{" "}
+        <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
         Permission edits update local page state. This page does{" "}
         <strong>not</strong> create secure production access control.
-        Server-side enforcement and Supabase Row Level Security must be added
-        during integration.
+        Server-side enforcement remains required for secure production access
+        control.
       </div>
 
       {successMessage && (
@@ -381,7 +384,7 @@ export function RolePermissions() {
             </CardDescription>
           </div>
           <Select
-            label="Acting as (local mock)"
+            label="Acting as"
             value={actingRoleKey}
             onChange={(e) => {
               setActingRoleKey(e.target.value);
@@ -621,8 +624,8 @@ export function RolePermissions() {
         title="Confirm permission changes"
         description={
           hasHighRiskChanges
-            ? "High-risk permission changes are included. Confirm carefully — local mock only."
-            : "Review the summary, then confirm to update local mock state."
+            ? "High-risk permission changes are included. Confirm carefully."
+            : "Review the summary, then confirm to update local state."
         }
         className="max-w-xl"
       >
@@ -647,8 +650,7 @@ export function RolePermissions() {
             <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               <span>
-                This save may expose restricted internal information in the mock
-                matrix.
+                This save may expose restricted internal information.
               </span>
             </div>
           )}

@@ -6,6 +6,18 @@ export type MatterLifecycleStatus =
   | "closed"
   | "archived";
 
+export type MatterActivationStatus =
+  | "draft"
+  | "pending_activation"
+  | "active"
+  | "closed";
+
+export type MatterEngagementStatus =
+  | "not_started"
+  | "letter_sent"
+  | "signed"
+  | "declined";
+
 export type EngagementFeeType =
   | "hourly"
   | "flat"
@@ -23,6 +35,8 @@ export interface FirmPortfolioMatter {
   responsibleAttorney: string | null;
   originatingAttorney: string | null;
   status: MatterLifecycleStatus;
+  activationStatus: MatterActivationStatus;
+  engagementStatus: MatterEngagementStatus;
   feeType: EngagementFeeType;
   hourlyRate: number | null;
   flatFeeAmount: number | null;
@@ -51,6 +65,20 @@ export const LIFECYCLE_LABELS: Record<MatterLifecycleStatus, string> = {
   on_hold: "On hold",
   closed: "Closed",
   archived: "Archived",
+};
+
+export const ACTIVATION_LABELS: Record<MatterActivationStatus, string> = {
+  draft: "Draft",
+  pending_activation: "Pending activation",
+  active: "Active",
+  closed: "Closed",
+};
+
+export const ENGAGEMENT_STATUS_LABELS: Record<MatterEngagementStatus, string> = {
+  not_started: "Not started",
+  letter_sent: "Letter sent",
+  signed: "Signed",
+  declined: "Declined",
 };
 
 const OVERLOAD_OPEN_THRESHOLD = 2;

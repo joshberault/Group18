@@ -23,12 +23,13 @@ import {
   YAxis,
 } from "recharts";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { AdminDataProvider } from "@/components/admin/AdminDataProvider";
 import { JobApplicationsPanel } from "@/components/admin/JobApplicationsPanel";
 import { ParalegalDashboard } from "@/components/dashboard/ParalegalDashboard";
 import { AttorneyDashboard } from "@/components/dashboard/AttorneyDashboard";
 import { ProspectiveClientDashboard } from "@/components/dashboard/ProspectiveClientDashboard";
+import { FirmOperationsQueues } from "@/components/dashboard/FirmOperationsQueues";
 import { AccountingManagerDashboard } from "@/components/accounting-manager/dashboard/AccountingManagerDashboard";
-import { PendingTimeApprovalsPanel } from "@/components/time/PendingTimeApprovalsPanel";
 import { BillingPeriodToolbar } from "@/components/billing/BillingPeriodToolbar";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { KPICard } from "@/components/ui/KPICard";
@@ -463,14 +464,16 @@ export function DashboardContent() {
 
       {role === "firm_administrator" && (
         <div className="mb-6">
-          <JobApplicationsPanel />
+          <AdminDataProvider>
+            <JobApplicationsPanel />
+          </AdminDataProvider>
         </div>
       )}
 
-      {(role === "managing_partner" || role === "firm_administrator") && (
-        <div className="mb-6">
-          <PendingTimeApprovalsPanel adminLink={role === "firm_administrator"} />
-        </div>
+      {role === "managing_partner" && (
+        <AdminDataProvider>
+          <FirmOperationsQueues />
+        </AdminDataProvider>
       )}
 
       <div
@@ -487,6 +490,7 @@ export function DashboardContent() {
           icon={Briefcase}
           href={firmKpiHref("activeMatters")}
           interactive={kpiInteractive}
+          variant="success"
         />
         <DashboardKpiCard
           title="Unbilled Time"

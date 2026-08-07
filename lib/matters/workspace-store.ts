@@ -378,6 +378,59 @@ export function getMatterDocuments() {
   );
 }
 
+/** Seed shared matter documents for Supabase matter IDs on first detail view. */
+export function ensureMatterDocuments(
+  matterId: string,
+  meta: { clientName: string; practiceArea: string },
+) {
+  const existing = getMatterDocuments().filter((doc) => doc.matterId === matterId);
+  if (existing.length > 0) return existing;
+
+  const clientSlug = meta.clientName.replace(/\s+/g, "_").slice(0, 24);
+  const seeded: MatterDocument[] = [
+    {
+      id: `mdoc-${matterId}-eng`,
+      matterId,
+      name: `${clientSlug}_Engagement_Letter_Signed.pdf`,
+      documentType: "Engagement letter",
+      uploadedBy: "Parker Legal",
+      uploadedAt: "Jul 28, 2026, 10:00 AM",
+      sizeLabel: "412 KB",
+    },
+    {
+      id: `mdoc-${matterId}-evidence`,
+      matterId,
+      name: `${clientSlug}_Evidence_Packet.zip`,
+      documentType: "Evidence",
+      uploadedBy: "Parker Legal",
+      uploadedAt: "Aug 3, 2026, 3:45 PM",
+      sizeLabel: "8.4 MB",
+    },
+    {
+      id: `mdoc-${matterId}-diligence`,
+      matterId,
+      name: `${meta.practiceArea.replace(/\s+/g, "_")}_Diligence_Checklist.xlsx`,
+      documentType: "Diligence",
+      uploadedBy: "Parker Legal",
+      uploadedAt: "Aug 4, 2026, 11:20 AM",
+      sizeLabel: "156 KB",
+    },
+    {
+      id: `mdoc-${matterId}-contract`,
+      matterId,
+      name: `${clientSlug}_Master_Services_Agreement.docx`,
+      documentType: "Contract",
+      uploadedBy: "Avery Counsel",
+      uploadedAt: "Aug 5, 2026, 9:15 AM",
+      sizeLabel: "284 KB",
+    },
+  ];
+
+  const stored = readArray<MatterDocument>(DOCUMENTS_KEY);
+  persist(DOCUMENTS_KEY, [...seeded, ...stored]);
+  return seeded;
+}
+
 export function addMatterDocument(document: MatterDocument) {
   const stored = readArray<MatterDocument>(DOCUMENTS_KEY);
   const deleted = readArray<string>(DOCUMENTS_DELETED_KEY).filter(

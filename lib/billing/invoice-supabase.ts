@@ -265,7 +265,100 @@ function embedMatter(row: DbInvoiceRow): DbMatterEmbed {
   return Array.isArray(raw) ? (raw[0] ?? null) : raw;
 }
 
-function mapRowToInvoice(row: DbInvoiceRow): Invoice {
+function isPlaceholderAttorney(name: string | null | undefined): boolean {
+  const n = (name || "").trim().toLowerCase();
+  return (
+    !n ||
+    n === "assigned counsel" ||
+    n === "unassigned" ||
+    n === "—" ||
+    n === "-" ||
+    n === "n/a"
+  );
+}
+
+/** Prefer notes attorney, else mode of time-line attorney names. */
+function resolveAttorneyFromRow(
+  notesAttorney: string | undefined,
+  timeEntryAttorneys: string[],
+): string {
+  if (!isPlaceholderAttorney(notesAttorney)) {
+    return (notesAttorney || "").trim();
+  }
+  const counts = new Map<string, number>();
+  for (const raw of timeEntryAttorneys) {
+    const name = (raw || "").trim();
+    if (isPlaceholderAttorney(name)) continue;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  let best = "";
+  let bestCount = 0;
+  for (const [name, count] of counts) {
+    if (count > bestCount) {
+      best = name;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * Lead / responsible attorney names by matter_id from matter_assignments + profiles.
+ * Shared with firm matters display so Invoice Management matches Matters.
+ */
+export async function loadLeadAttorneysByMatterId(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  matterIds: string[],
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const unique = Array.from(
+    new Set(matterIds.map((id) => id.trim()).filter(Boolean)),
+  );
+  if (unique.length === 0) return map;
+
+  try {
+    const { data } = await supabase
+      .from("matter_assignments")
+      .select("matter_id, role_on_matter, profile:profiles(full_name)")
+      .in("matter_id", unique);
+
+    for (const row of data ?? []) {
+      const matterId = String(
+        (row as { matter_id?: string }).matter_id || "",
+      ).trim();
+      if (!matterId) continue;
+      const role = String(
+        (row as { role_on_matter?: string }).role_on_matter || "",
+      ).toLowerCase();
+      const profile = (
+        row as {
+          profile?:
+            | { full_name?: string | null }
+            | { full_name?: string | null }[]
+            | null;
+        }
+      ).profile;
+      const name = Array.isArray(profile)
+        ? (profile[0]?.full_name || "").trim()
+        : (profile?.full_name || "").trim();
+      if (!name) continue;
+      const prefer =
+        role === "lead_attorney" || role === "responsible_attorney";
+      if (prefer || !map.has(matterId)) {
+        map.set(matterId, name);
+      }
+    }
+  } catch {
+    /* leave empty */
+  }
+  return map;
+}
+
+function mapRowToInvoice(
+  row: DbInvoiceRow,
+  leadAttorneyByMatter?: Map<string, string>,
+): Invoice {
   const notes = parseNotes(row.notes);
   const linkedMatter = embedMatter(row);
   const matterTitle = (linkedMatter?.title || "").trim();
@@ -330,12 +423,27 @@ function mapRowToInvoice(row: DbInvoiceRow): Invoice {
     legalMatter /* fallback filled below */ ||
     "";
 
+  const matterId = row.matter_id;
+  const fromAssignment =
+    matterId && leadAttorneyByMatter
+      ? leadAttorneyByMatter.get(matterId)?.trim() || ""
+      : "";
+  const fromNotesAndLines = resolveAttorneyFromRow(
+    notes.attorney,
+    timeEntries.map((t) => t.attorney),
+  );
+  // Prefer live matter lead attorney so management filter/list stay current
+  const attorney =
+    (!isPlaceholderAttorney(fromAssignment) && fromAssignment) ||
+    fromNotesAndLines ||
+    "";
+
   return {
     id: row.id,
     invoiceNumber: row.invoice_number,
     client: notes.clientInfo?.name || clientName || "Client",
     legalMatter,
-    attorney: notes.attorney || "",
+    attorney,
     billingMethod: notes.billingMethod || mapDbBillingToUi(row.billing_type),
     invoiceDate:
       normalizeBillingDate(row.invoice_date) ??
@@ -647,8 +755,14 @@ export async function fetchInvoicesFromSupabase(): Promise<{
   }
 
   const rows = (data ?? []) as DbInvoiceRow[];
+  const matterIds = rows.map((r) => r.matter_id).filter(Boolean);
+  const leadAttorneyByMatter = await loadLeadAttorneysByMatterId(
+    supabase,
+    matterIds,
+  );
+
   const invoices = rows
-    .map(mapRowToInvoice)
+    .map((row) => mapRowToInvoice(row, leadAttorneyByMatter))
     .sort((a, b) => {
       const byNumber = b.invoiceNumber.localeCompare(a.invoiceNumber, undefined, {
         numeric: true,
@@ -723,7 +837,9 @@ export async function upsertInvoiceInSupabase(
       .eq("id", existingId)
       .maybeSingle();
     if (loaded.data) {
-      previousPayments = mapRowToInvoice(loaded.data as DbInvoiceRow).paymentHistory;
+      const row = loaded.data as DbInvoiceRow;
+      const leads = await loadLeadAttorneysByMatterId(supabase, [row.matter_id]);
+      previousPayments = mapRowToInvoice(row, leads).paymentHistory;
     }
   }
 
@@ -805,7 +921,11 @@ export async function upsertInvoiceInSupabase(
     };
   }
 
-  const mapped = mapRowToInvoice(full as DbInvoiceRow);
+  const fullRow = full as DbInvoiceRow;
+  const leads = await loadLeadAttorneysByMatterId(supabase, [
+    fullRow.matter_id,
+  ]);
+  const mapped = mapRowToInvoice(fullRow, leads);
   const { count } = await supabase
     .from("invoices")
     .select("id", { count: "exact", head: true });

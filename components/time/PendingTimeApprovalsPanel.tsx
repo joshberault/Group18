@@ -104,7 +104,7 @@ export function PendingTimeApprovalsPanel({
           <CardDescription>{description}</CardDescription>
         </div>
         {adminLink && (
-          <Link href="/admin/approvals">
+          <Link href="/dashboard/approvals">
             <Button variant="secondary" size="sm">
               Open full queue
             </Button>

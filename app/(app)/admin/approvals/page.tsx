@@ -1,6 +1,6 @@
-import { AdminDashboard } from "@/components/admin/AdminDashboard";
+import { redirect } from "next/navigation";
 
-/** Approval Queue — rendered inside the unified Admin dashboard. */
-export default function AdminApprovalsPage() {
-  return <AdminDashboard initialSection="approvals" />;
+/** Legacy route — approval queue lives on the Manager Dashboard. */
+export default function AdminApprovalsRedirectPage() {
+  redirect("/admin#approval-queue");
 }

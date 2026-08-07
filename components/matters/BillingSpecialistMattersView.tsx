@@ -10,6 +10,10 @@ import {
   type BillingSpecialistMatterRow,
 } from "@/lib/billing/billing-specialist-matters";
 import { INVOICES_UPDATED_EVENT } from "@/lib/billing/invoice-management-store";
+import {
+  generateInvoiceHref,
+  invoicesHref,
+} from "@/lib/billing/routes";
 import { formatCurrency } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -28,6 +32,26 @@ import {
   TableRow,
 } from "@/components/ui/Table";
 
+function createInvoicePath(row: BillingSpecialistMatterRow): string {
+  return generateInvoiceHref({
+    clientId: row.clientId || undefined,
+    matterId: row.id,
+    attorney:
+      row.billingAttorney && row.billingAttorney !== "—"
+        ? row.billingAttorney
+        : undefined,
+    matterName: row.matterName,
+  });
+}
+
+function viewInvoicesPath(row: BillingSpecialistMatterRow): string {
+  // Only matter UUID + display name — do not pass client (was wiping the filter).
+  return invoicesHref({
+    matterId: row.id,
+    matterName: row.matterName,
+  });
+}
+
 export function BillingSpecialistMattersView() {
   const router = useRouter();
   const [rows, setRows] = useState<BillingSpecialistMatterRow[]>([]);
@@ -38,6 +62,7 @@ export function BillingSpecialistMattersView() {
   const [selected, setSelected] = useState<BillingSpecialistMatterRow | null>(
     null,
   );
+  const [actionNote, setActionNote] = useState<string | null>(null);
 
   const loadRows = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
@@ -80,7 +105,7 @@ export function BillingSpecialistMattersView() {
   function exportCsv() {
     exportToCsv(
       "billing-matters.csv",
-      ["Matter", "Client", "Method", "Attorney", "UnbilledTime", "UnbilledExpenses", "PrebillStatus", "NextBilling"],
+      ["Matter", "Client", "Method", "Attorney", "UnbilledTime", "UnbilledExpenses", "PrebillStatus", "NextBilling", "InvoiceCount"],
       filtered.map((r) => [
         r.matterNumber,
         r.client,
@@ -90,8 +115,21 @@ export function BillingSpecialistMattersView() {
         String(r.unbilledExpenses),
         r.prebillStatus,
         r.nextBillingDate,
+        String(r.invoiceCount),
       ]),
     );
+  }
+
+  function goCreateInvoice(row: BillingSpecialistMatterRow) {
+    const unbilled = row.unbilledTime + row.unbilledExpenses;
+    if (unbilled <= 0) {
+      setActionNote(
+        "No new approved unbilled time or expenses for this matter. You can still open Create Invoice for a manual or fixed-fee invoice — only already-billed lines stay locked.",
+      );
+    } else {
+      setActionNote(null);
+    }
+    router.push(createInvoicePath(row));
   }
 
   return (
@@ -108,6 +146,12 @@ export function BillingSpecialistMattersView() {
           </Button>
         </div>
       </PageHeader>
+
+      {actionNote ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="status">
+          {actionNote}
+        </p>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <KPICard title="Ready for Prebill" value={loading ? "…" : String(kpis.ready)} subtitle="Awaiting invoice generation" />
@@ -185,8 +229,56 @@ export function BillingSpecialistMattersView() {
                   </Badge>
                 </TableCell>
                 <TableCell>{row.nextBillingDate}</TableCell>
-                <TableCell>
-                  <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setSelected(row); }}>Details</Button>
+                <TableCell className="align-middle">
+                  <div
+                    className={
+                      row.hasInvoices
+                        ? "grid w-[14.5rem] grid-cols-2 gap-1.5"
+                        : "flex w-[14.5rem] flex-col items-center gap-1.5"
+                    }
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      size="sm"
+                      type="button"
+                      className={
+                        row.hasInvoices
+                          ? "w-full justify-center whitespace-nowrap"
+                          : "min-w-[7.5rem] justify-center whitespace-nowrap"
+                      }
+                      onClick={() => goCreateInvoice(row)}
+                    >
+                      Create Invoice
+                    </Button>
+                    {row.hasInvoices ? (
+                      <Link
+                        href={viewInvoicesPath(row)}
+                        className="block min-w-0"
+                      >
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          type="button"
+                          className="w-full justify-center whitespace-nowrap"
+                        >
+                          View Invoice
+                        </Button>
+                      </Link>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      type="button"
+                      className={
+                        row.hasInvoices
+                          ? "col-span-2 w-full justify-center"
+                          : "w-full max-w-[14.5rem] justify-center"
+                      }
+                      onClick={() => setSelected(row)}
+                    >
+                      Details
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -203,6 +295,7 @@ export function BillingSpecialistMattersView() {
               <div><span className="text-muted">Cycle</span><p className="font-medium">{selected.billingCycle}</p></div>
               <div><span className="text-muted">Rate status</span><p className="font-medium">{selected.rateStatus}</p></div>
               <div><span className="text-muted">Last invoice</span><p className="font-medium">{selected.lastInvoice}</p></div>
+              <div><span className="text-muted">Invoices on file</span><p className="font-medium">{selected.invoiceCount}</p></div>
               {selected.hourlyRate != null ? (
                 <div><span className="text-muted">Hourly rate</span><p className="font-medium">{formatCurrency(selected.hourlyRate)}</p></div>
               ) : null}
@@ -210,9 +303,60 @@ export function BillingSpecialistMattersView() {
                 <div><span className="text-muted">Retainer balance</span><p className="font-medium">{formatCurrency(selected.retainerBalance)}</p></div>
               ) : null}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => router.push(`/billing?matter=${encodeURIComponent(selected.matterNumber)}`)}>Open Billing</Button>
-              <Button size="sm" variant="secondary" onClick={() => router.push(`/invoices/generate?matter=${encodeURIComponent(selected.matterNumber)}`)}>Generate Invoice</Button>
+            {selected.unbilledTime + selected.unbilledExpenses <= 0 ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                No new approved unbilled time or expenses for this matter. You can still create a
+                manual invoice; already-billed lines will not reappear as selectable WIP.
+              </p>
+            ) : null}
+            <div
+              className={
+                selected.hasInvoices
+                  ? "grid grid-cols-2 gap-2 sm:grid-cols-3"
+                  : "flex flex-col items-center gap-2 sm:flex-row sm:justify-center"
+              }
+            >
+              <Button
+                size="sm"
+                type="button"
+                className={
+                  selected.hasInvoices
+                    ? "w-full justify-center whitespace-nowrap"
+                    : "min-w-[7.5rem] justify-center whitespace-nowrap sm:w-auto"
+                }
+                onClick={() => goCreateInvoice(selected)}
+              >
+                Create Invoice
+              </Button>
+              {selected.hasInvoices ? (
+                <Link href={viewInvoicesPath(selected)} className="block min-w-0">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    type="button"
+                    className="w-full justify-center whitespace-nowrap"
+                  >
+                    View Invoice
+                  </Button>
+                </Link>
+              ) : null}
+              <Button
+                size="sm"
+                variant="secondary"
+                type="button"
+                className={
+                  selected.hasInvoices
+                    ? "w-full justify-center whitespace-nowrap"
+                    : "min-w-[7.5rem] justify-center whitespace-nowrap sm:w-auto"
+                }
+                onClick={() =>
+                  router.push(
+                    `/billing?matter=${encodeURIComponent(selected.matterNumber)}`,
+                  )
+                }
+              >
+                Open Billing
+              </Button>
             </div>
           </div>
         ) : null}

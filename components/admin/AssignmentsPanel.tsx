@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -23,19 +23,13 @@ import {
   calculateWorkloadPercentage,
   evaluateAssignmentConflicts,
   findDuplicateActiveAssignment,
+  getAttorneysAvailableForAssignment,
+  isAssignableLegalStaff,
   getVacationStatusLabel,
   uniquePracticeAreas,
 } from "@/lib/admin/calculations";
-import {
-  createMatterAssignment,
-  deleteMatterAssignment,
-  fetchAdminAssignmentsCatalog,
-  updateMatterAssignment,
-} from "@/lib/admin/assignments-supabase";
-import {
-  ADMIN_REFERENCE_DATE,
-  ADMIN_UI_FLAGS,
-} from "@/lib/admin/mock-data";
+import { ADMIN_REFERENCE_DATE } from "@/lib/admin/mock-data";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 import type {
   AdminAssignment,
   AdminEmployee,
@@ -43,9 +37,6 @@ import type {
   AssignmentPriority,
   AssignmentStatus,
 } from "@/lib/admin/types";
-
-/** Live staff profiles don't share mock vacation IDs — skip seed vacation checks. */
-const LIVE_VACATIONS: import("@/lib/admin/types").AdminVacation[] = [];
 
 type ModalMode =
   | "view"
@@ -86,23 +77,27 @@ const ROLE_OPTIONS = [
   "Lead Counsel",
   "Deal Counsel",
   "Supervising Partner",
+  "Managing Partner",
   "Partner",
   "IP Counsel",
   "Associate",
   "Of Counsel",
+  "Paralegal",
 ];
 
-function emptyForm(defaultMatterId = ""): AssignmentFormState {
-  const today = new Date().toISOString().slice(0, 10);
+function emptyForm(
+  matters: AdminMatter[] = [],
+  referenceDate = ADMIN_REFERENCE_DATE,
+): AssignmentFormState {
   return {
-    matterId: defaultMatterId,
+    matterId: matters.find((m) => m.status === "open")?.id ?? "",
     employeeId: "",
     roleOnMatter: "Lead Counsel",
     priority: "medium",
     status: "active",
-    assignedDate: today,
-    startDate: today,
-    dueDate: today,
+    assignedDate: referenceDate,
+    startDate: referenceDate,
+    dueDate: "2026-08-20",
     estimatedHours: "20",
     managerInstructions: "",
     cancelReason: "",
@@ -160,12 +155,8 @@ function workloadImpactLabel(
 }
 
 export function AssignmentsPanel() {
-  const [matters, setMatters] = useState<AdminMatter[]>([]);
-  const [employees, setEmployees] = useState<AdminEmployee[]>([]);
+  const { data, loading, error, refresh } = useAdminData();
   const [assignments, setAssignments] = useState<AdminAssignment[]>([]);
-  const [loadingCatalog, setLoadingCatalog] = useState(true);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const [searchMatter, setSearchMatter] = useState("");
   const [searchEmployee, setSearchEmployee] = useState("");
   const [practiceFilter, setPracticeFilter] = useState("all");
@@ -180,32 +171,29 @@ export function AssignmentsPanel() {
 
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [form, setForm] = useState<AssignmentFormState>(() => emptyForm());
+  const [form, setForm] = useState<AssignmentFormState>(emptyForm);
   const [errors, setErrors] = useState<FormErrors>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [hasError, setHasError] = useState<boolean>(ADMIN_UI_FLAGS.forceError);
   const [pendingSave, setPendingSave] = useState<AdminAssignment | null>(null);
 
-  const loadCatalog = useCallback(async () => {
-    setLoadingCatalog(true);
-    setCatalogError(null);
-    const result = await fetchAdminAssignmentsCatalog();
-    setMatters(result.matters);
-    setEmployees(result.employees);
-    setAssignments(result.assignments);
-    setCatalogError(result.error);
-    setHasError(ADMIN_UI_FLAGS.forceError || Boolean(result.error && result.matters.length === 0));
-    setLoadingCatalog(false);
-  }, []);
-
   useEffect(() => {
-    void loadCatalog();
-  }, [loadCatalog]);
+    if (data) setAssignments(data.assignments.map((row) => ({ ...row })));
+  }, [data]);
 
   const practiceAreas = useMemo(
-    () => uniquePracticeAreas(employees),
-    [employees],
+    () => uniquePracticeAreas(data?.employees ?? []),
+    [data?.employees],
   );
+
+  /** Assignees: attorneys, managing partners, and paralegals. */
+  const assignableEmployees = useMemo(() => {
+    const staff = (data?.employees ?? []).filter(isAssignableLegalStaff);
+    const preferred = getAttorneysAvailableForAssignment(staff);
+    const preferredIds = new Set(preferred.map((e) => e.id));
+    return [...preferred, ...staff.filter((e) => !preferredIds.has(e.id))].sort(
+      (a, b) => a.fullName.localeCompare(b.fullName),
+    );
+  }, [data?.employees]);
 
   const selected = useMemo(
     () => assignments.find((a) => a.id === selectedId) ?? null,
@@ -213,13 +201,13 @@ export function AssignmentsPanel() {
   );
 
   const selectedMatter = useMemo(
-    () => matters.find((m) => m.id === form.matterId),
-    [matters, form.matterId],
+    () => data?.matters.find((m) => m.id === form.matterId),
+    [data?.matters, form.matterId],
   );
 
   const selectedEmployee = useMemo(
-    () => employees.find((e) => e.id === form.employeeId),
-    [employees, form.employeeId],
+    () => data?.employees.find((e) => e.id === form.employeeId),
+    [data?.employees, form.employeeId],
   );
 
   const impactPreview = useMemo(() => {
@@ -235,7 +223,7 @@ export function AssignmentsPanel() {
       priorEstimatedHours: priorEst,
       startDate: form.startDate,
       dueDate: form.dueDate,
-      vacations: LIVE_VACATIONS,
+      vacations: data?.vacations ?? [],
     });
     const projectedAssigned = Math.max(
       0,
@@ -243,8 +231,8 @@ export function AssignmentsPanel() {
     );
     const vacationStatus = getVacationStatusLabel(
       selectedEmployee,
-      LIVE_VACATIONS,
-      ADMIN_REFERENCE_DATE,
+      data?.vacations ?? [],
+      data?.referenceDate ?? ADMIN_REFERENCE_DATE,
     );
     return {
       weeklyCapacity: selectedEmployee.weeklyCapacityHours,
@@ -328,9 +316,7 @@ export function AssignmentsPanel() {
   function openCreate() {
     setSelectedId(null);
     setPendingSave(null);
-    const defaultMatterId =
-      matters.find((m) => m.status === "open")?.id ?? matters[0]?.id ?? "";
-    setForm(emptyForm(defaultMatterId));
+    setForm(emptyForm(data?.matters, data?.referenceDate));
     setErrors({});
     setModalMode("create");
   }
@@ -426,9 +412,13 @@ export function AssignmentsPanel() {
       next.estimatedHours = "Estimated hours must be greater than zero.";
     }
 
-    const employee = employees.find((e) => e.id === form.employeeId);
+    const employee = data?.employees.find((e) => e.id === form.employeeId);
     if (employee && employee.status === "inactive") {
       next.employeeId = "Inactive employees cannot be assigned.";
+    }
+    if (employee && !isAssignableLegalStaff(employee)) {
+      next.employeeId =
+        "Only attorneys, managing partners, and paralegals can be assigned to matters.";
     }
 
     if (mode === "cancel" && !form.cancelReason.trim()) {
@@ -443,8 +433,8 @@ export function AssignmentsPanel() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
-    const matter = matters.find((m) => m.id === form.matterId);
-    const employee = employees.find((e) => e.id === form.employeeId);
+    const matter = data?.matters.find((m) => m.id === form.matterId);
+    const employee = data?.employees.find((e) => e.id === form.employeeId);
     if (!matter || !employee) {
       setErrors({ form: "Matter and employee are required." });
       return;
@@ -498,7 +488,7 @@ export function AssignmentsPanel() {
       priorEstimatedHours: priorEst,
       startDate: form.startDate,
       dueDate: form.dueDate,
-      vacations: LIVE_VACATIONS,
+      vacations: data?.vacations ?? [],
     });
 
     const pending = buildAssignmentFromForm(
@@ -522,54 +512,27 @@ export function AssignmentsPanel() {
       return;
     }
 
-    void commitSave(pending, mode);
+    commitSave(pending, mode);
   }
 
-  async function commitSave(
+  function commitSave(
     row: AdminAssignment,
     mode: "create" | "edit" | "reassign",
   ) {
-    setSaving(true);
-    setErrors({});
-
     if (mode === "create") {
-      const result = await createMatterAssignment({
-        matterId: row.matterId,
-        profileId: row.employeeId,
-        roleOnMatter: row.roleOnMatter,
-      });
-      if (result.error) {
-        setSaving(false);
-        setErrors({ form: result.error });
-        setModalMode("create");
-        return;
-      }
-      setSuccessMessage(
-        `Created assignment for ${row.attorneyName} on ${row.matterLabel}.`,
-      );
+      setAssignments((prev) => [row, ...prev]);
+      setSuccessMessage(`Created assignment for ${row.attorneyName} on ${row.matterLabel}.`);
     } else {
-      const result = await updateMatterAssignment({
-        id: row.id,
-        matterId: row.matterId,
-        profileId: row.employeeId,
-        roleOnMatter: row.roleOnMatter,
-      });
-      if (result.error) {
-        setSaving(false);
-        setErrors({ form: result.error });
-        setModalMode(mode);
-        return;
-      }
+      setAssignments((prev) =>
+        prev.map((item) => (item.id === row.id ? row : item)),
+      );
       setSuccessMessage(
         mode === "reassign"
           ? `Reassigned ${row.matterLabel} to ${row.attorneyName}.`
           : `Updated assignment ${row.matterReference}.`,
       );
     }
-
-    setSaving(false);
     closeModal();
-    await loadCatalog();
   }
 
   function resolveSaveMode(): "create" | "edit" | "reassign" {
@@ -595,8 +558,8 @@ export function AssignmentsPanel() {
     const merged = { ...form, ...flags };
     setForm(merged);
 
-    const matter = matters.find((m) => m.id === pendingSave.matterId);
-    const employee = employees.find((e) => e.id === pendingSave.employeeId);
+    const matter = data?.matters.find((m) => m.id === pendingSave.matterId);
+    const employee = data?.employees.find((e) => e.id === pendingSave.employeeId);
     if (!matter || !employee) {
       setErrors({ form: "Matter and employee are required." });
       return;
@@ -638,7 +601,7 @@ export function AssignmentsPanel() {
       priorEstimatedHours: priorEst,
       startDate: pendingSave.startDate,
       dueDate: pendingSave.dueDate,
-      vacations: LIVE_VACATIONS,
+      vacations: data?.vacations ?? [],
     });
 
     if (
@@ -654,7 +617,7 @@ export function AssignmentsPanel() {
       return;
     }
 
-    void commitSave(pendingSave, saveMode);
+    commitSave(pendingSave, saveMode);
   }
 
   function confirmClosedMatter() {
@@ -687,38 +650,43 @@ export function AssignmentsPanel() {
           ? {
               ...item,
               status: "completed",
-              completedDate: ADMIN_REFERENCE_DATE,
+              completedDate: data?.referenceDate ?? ADMIN_REFERENCE_DATE,
               actualHours: item.actualHours ?? item.estimatedHours,
             }
           : item,
       ),
     );
-    setSuccessMessage(`Marked ${row.matterLabel} complete on ${ADMIN_REFERENCE_DATE}.`);
+    setSuccessMessage(
+      `Marked ${row.matterLabel} complete on ${data?.referenceDate ?? ADMIN_REFERENCE_DATE}.`,
+    );
   }
 
-  async function confirmCancel() {
+  function confirmCancel() {
     const nextErrors = validateForm("cancel");
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0 || !selected) return;
-    setSaving(true);
-    const result = await deleteMatterAssignment(selected.id);
-    setSaving(false);
-    if (result.error) {
-      setErrors({ form: result.error });
-      return;
-    }
+    setAssignments((prev) =>
+      prev.map((item) =>
+        item.id === selected.id
+          ? {
+              ...item,
+              status: "canceled",
+              cancelReason: form.cancelReason.trim(),
+            }
+          : item,
+      ),
+    );
     setSuccessMessage(
-      `Removed assignment ${selected.matterReference} (${form.cancelReason.trim()}).`,
+      `Canceled assignment ${selected.matterReference}. Reason recorded; record was not deleted.`,
     );
     closeModal();
-    await loadCatalog();
   }
 
-  if (ADMIN_UI_FLAGS.forceLoading || loadingCatalog) {
-    return <LoadingState message="Loading assignments from Supabase..." />;
+  if (loading) {
+    return <LoadingState message="Loading assignments..." />;
   }
 
-  if (hasError) {
+  if (error || !data) {
     return (
       <Card className="border-red-200 bg-red-50" padding="lg">
         <CardHeader>
@@ -726,16 +694,12 @@ export function AssignmentsPanel() {
             Unable to load assignments
           </CardTitle>
           <CardDescription className="text-red-700">
-            {catalogError ||
-              "Could not load matters, employees, or assignments from Supabase."}
+            {error ?? "Live firm data could not be loaded."}
           </CardDescription>
         </CardHeader>
         <Button
           variant="secondary"
-          onClick={() => {
-            setHasError(false);
-            void loadCatalog();
-          }}
+          onClick={() => void refresh()}
         >
           Retry
         </Button>
@@ -750,14 +714,11 @@ export function AssignmentsPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-navy-800/10 bg-surface px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Live Supabase:</strong>{" "}
-        Matter and employee options come from firm <code>matters</code> and{" "}
-        <code>profiles</code>. Creating or updating an assignment writes to{" "}
-        <code>matter_assignments</code>.
-        {catalogError ? (
-          <span className="mt-1 block text-amber-800">Note: {catalogError}</span>
-        ) : null}
+      <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
+        <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
+        Assign attorneys, managing partners, and paralegals to matters from the
+        Supabase roster. Estimated hours (planned) are distinct from actual
+        hours (worked). Changes update local page state only.
       </div>
 
       {successMessage && (
@@ -782,12 +743,7 @@ export function AssignmentsPanel() {
               capacity and vacation checks.
             </CardDescription>
           </div>
-          <Button
-            onClick={openCreate}
-            disabled={matters.length === 0 || employees.length === 0}
-          >
-            Create assignment
-          </Button>
+          <Button onClick={openCreate}>Create assignment</Button>
         </CardHeader>
 
         <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -864,7 +820,7 @@ export function AssignmentsPanel() {
         {filtered.length === 0 ? (
           <EmptyState
             title="No assignments match your filters"
-            description="Clear filters or create a new assignment from the firm matter catalog."
+            description="Clear filters or create a new assignment from the mock matter catalog."
             moduleLabel="Admin · Assignments"
           />
         ) : (
@@ -890,7 +846,7 @@ export function AssignmentsPanel() {
             </TableHeader>
             <TableBody>
               {filtered.map((row) => {
-                const employee = employees.find(
+                const employee = data.employees.find(
                   (e) => e.id === row.employeeId,
                 );
                 const rowConflicts = employee
@@ -900,7 +856,7 @@ export function AssignmentsPanel() {
                       priorEstimatedHours: 0,
                       startDate: row.startDate,
                       dueDate: row.dueDate,
-                      vacations: LIVE_VACATIONS,
+                      vacations: data.vacations,
                     })
                   : null;
                 const rowWorkload = employee
@@ -1031,7 +987,7 @@ export function AssignmentsPanel() {
         isOpen={modalMode === "view" && !!selected}
         onClose={closeModal}
         title="Assignment details"
-        description="Work assignment detail from local mock data."
+        description="Work assignment detail from live firm data."
         className="max-w-2xl"
       >
         {selected && (
@@ -1106,27 +1062,47 @@ export function AssignmentsPanel() {
               label="Matter"
               value={form.matterId}
               error={errors.matterId}
-              disabled={saving || formMode === "edit"}
               onChange={(e) => updateField("matterId", e.target.value)}
-              options={[
-                { value: "", label: "Select matter" },
-                ...matters.map((m) => ({
-                  value: m.id,
-                  label: `${m.matterLabel} (${m.status})`,
-                })),
-              ]}
+              options={data.matters.map((m) => ({
+                value: m.id,
+                label: `${m.matterLabel} (${m.status})`,
+              }))}
             />
             <Select
               label="Assigned employee"
               value={form.employeeId}
               error={errors.employeeId}
-              disabled={saving}
-              onChange={(e) => updateField("employeeId", e.target.value)}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                const nextEmployee = assignableEmployees.find(
+                  (emp) => emp.id === nextId,
+                );
+                const defaultRole =
+                  nextEmployee?.roleKey === "paralegal"
+                    ? "Paralegal"
+                    : nextEmployee?.roleKey === "managing_partner"
+                      ? "Managing Partner"
+                      : null;
+                const shouldSuggestRole =
+                  !!defaultRole &&
+                  (form.roleOnMatter === "Lead Counsel" ||
+                    !form.roleOnMatter.trim());
+                setForm((prev) => ({
+                  ...prev,
+                  employeeId: nextId,
+                  roleOnMatter: shouldSuggestRole
+                    ? defaultRole
+                    : prev.roleOnMatter,
+                }));
+              }}
               options={[
-                { value: "", label: "Select employee" },
-                ...employees.map((e) => ({
+                {
+                  value: "",
+                  label: "Select attorney, managing partner, or paralegal",
+                },
+                ...assignableEmployees.map((e) => ({
                   value: e.id,
-                  label: `${e.fullName} · ${e.roleLabel}`,
+                  label: `${e.fullName} · ${e.roleLabel} (${e.status})`,
                 })),
               ]}
             />
@@ -1302,16 +1278,15 @@ export function AssignmentsPanel() {
           )}
 
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={closeModal} disabled={saving}>
+            <Button variant="secondary" onClick={closeModal}>
               Cancel
             </Button>
             <Button
-              disabled={saving || matters.length === 0 || employees.length === 0}
               onClick={() =>
                 attemptSave(formMode as "create" | "edit" | "reassign")
               }
             >
-              {saving ? "Saving…" : "Save assignment"}
+              Save assignment
             </Button>
           </div>
         </div>

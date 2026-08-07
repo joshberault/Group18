@@ -26,15 +26,8 @@ import {
   isApprovalAgingOverdue,
   sortApprovalsForQueue,
 } from "@/lib/admin/calculations";
-import {
-  ADMIN_REFERENCE_DATE,
-  ADMIN_UI_FLAGS,
-  MOCK_APPROVALS,
-  MOCK_ASSIGNMENTS,
-  MOCK_EMPLOYEES,
-  MOCK_MATTERS,
-  MOCK_VACATIONS,
-} from "@/lib/admin/mock-data";
+import { ADMIN_REFERENCE_DATE } from "@/lib/admin/mock-data";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { invoiceApprovedBillableTime } from "@/lib/billing/approved-time-billing";
 import {
   getMergedApprovals,
@@ -82,26 +75,44 @@ function typeLabel(type: ApprovalType) {
 }
 
 export function ApprovalQueue() {
-  const [approvals, setApprovals] = useState<AdminApproval[]>(() =>
-    getMergedApprovals().map((row) => ({ ...row })),
-  );
+  const { data, loading, error, refresh } = useAdminData();
+  const [approvals, setApprovals] = useState<AdminApproval[]>([]);
 
   useEffect(() => {
     return subscribeTimeWorkflow(() => {
       setApprovals((prev) => {
         const edited = new Map(prev.map((row) => [row.id, row]));
-        return getMergedApprovals().map((row) => edited.get(row.id) ?? row);
+        const sessionApprovals = getMergedApprovals().filter((row) =>
+          isDemoSessionApproval(row.id),
+        );
+        return [
+          ...(data?.approvals ?? []).map((row) => edited.get(row.id) ?? row),
+          ...sessionApprovals.map((row) => edited.get(row.id) ?? row),
+        ];
       });
     });
-  }, []);
-  const [employees, setEmployees] = useState<AdminEmployee[]>(() =>
-    MOCK_EMPLOYEES.map((row) => ({ ...row })),
-  );
-  const [vacations, setVacations] = useState<AdminVacation[]>(() =>
-    MOCK_VACATIONS.map((row) => ({ ...row })),
-  );
+  }, [data?.approvals]);
+  const [employees, setEmployees] = useState<AdminEmployee[]>([]);
+  const [vacations, setVacations] = useState<AdminVacation[]>([]);
 
-  const [actingReviewerId, setActingReviewerId] = useState("emp-001");
+  const [actingReviewerId, setActingReviewerId] = useState("");
+
+  useEffect(() => {
+    if (!data) return;
+    setEmployees(data.employees.map((row) => ({ ...row })));
+    setVacations(data.vacations.map((row) => ({ ...row })));
+    const sessionApprovals = getMergedApprovals().filter((row) =>
+      isDemoSessionApproval(row.id),
+    );
+    setApprovals([
+      ...data.approvals.map((row) => ({ ...row })),
+      ...sessionApprovals,
+    ]);
+    setActingReviewerId((prev) => {
+      if (prev && data.employees.some((e) => e.id === prev)) return prev;
+      return data.employees[0]?.id ?? "";
+    });
+  }, [data]);
   const [searchTitle, setSearchTitle] = useState("");
   const [searchRequester, setSearchRequester] = useState("");
   const [searchMatter, setSearchMatter] = useState("");
@@ -122,7 +133,6 @@ export function ApprovalQueue() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const processingLock = useRef(false);
-  const [hasError, setHasError] = useState(ADMIN_UI_FLAGS.forceError);
 
   const actingReviewer = useMemo(
     () => employees.find((e) => e.id === actingReviewerId),
@@ -308,7 +318,7 @@ export function ApprovalQueue() {
       selected.timeEntryBillable
     ) {
       const employee = employees.find((row) => row.id === selected.employeeId);
-      const matter = MOCK_MATTERS.find((row) => row.id === selected.matterId);
+      const matter = data?.matters.find((row) => row.id === selected.matterId);
       if (!employee || !matter) {
         setActionError(
           "The employee or matter record needed to create the invoice was not found.",
@@ -320,7 +330,7 @@ export function ApprovalQueue() {
         approval: selected,
         employee,
         matter,
-        invoiceDate: ADMIN_REFERENCE_DATE,
+        invoiceDate: data?.referenceDate ?? ADMIN_REFERENCE_DATE,
       });
       if (!billingResult.ok) {
         setActionError(billingResult.error);
@@ -331,7 +341,7 @@ export function ApprovalQueue() {
 
     processingLock.current = true;
     setProcessingId(selected.id);
-    const reviewedAt = `${ADMIN_REFERENCE_DATE}T18:00:00Z`;
+    const reviewedAt = `${data?.referenceDate ?? ADMIN_REFERENCE_DATE}T18:00:00Z`;
     const title = selected.title;
     const reviewerName = actingReviewer.fullName;
 
@@ -425,7 +435,7 @@ export function ApprovalQueue() {
       selected.employeeId,
       selected.vacationStartDate,
       selected.vacationEndDate,
-      MOCK_ASSIGNMENTS,
+      data?.assignments ?? [],
     );
     const overlapVacation = hasOverlappingApprovedVacation(
       selected.employeeId,
@@ -436,29 +446,26 @@ export function ApprovalQueue() {
     const coverageProblem =
       !selected.backupEmployeeId && conflicts.length > 0;
     return { conflicts, overlapVacation, coverageProblem };
-  }, [selected, vacations]);
+  }, [data?.assignments, selected, vacations]);
 
-  if (ADMIN_UI_FLAGS.forceLoading) {
+  if (loading) {
     return <LoadingState message="Loading approval queue..." />;
   }
 
-  if (hasError) {
+  if (error || !data) {
     return (
       <Card className="border-red-200 bg-red-50" padding="lg">
         <CardHeader>
           <CardTitle className="text-red-800">Unable to load approvals</CardTitle>
           <CardDescription className="text-red-700">
-            Local mock approval data could not be loaded.
+            {error ?? "Live firm data could not be loaded."}
           </CardDescription>
         </CardHeader>
         <Button
           variant="secondary"
-          onClick={() => {
-            setHasError(false);
-            setApprovals(MOCK_APPROVALS.map((row) => ({ ...row })));
-          }}
+          onClick={() => void refresh()}
         >
-          Retry with mock data
+          Retry
         </Button>
       </Card>
     );
@@ -467,8 +474,8 @@ export function ApprovalQueue() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Mock data:</strong>{" "}
-        Approval Queue uses existing admin mock requests. Decisions update local
+        <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
+        Approval Queue uses current Supabase requests. Decisions update local
         page state only. Original submitted details are preserved after review.
       </div>
 

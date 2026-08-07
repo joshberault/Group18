@@ -34,6 +34,8 @@ export interface FirmClient {
   conflict_flag: boolean;
   created_at: string;
   updated_at: string;
+  /** Lead attorney from matter_assignments (most recent matter, or comma-separated if multiple). */
+  assigned_attorney_name?: string | null;
 }
 
 export interface ClientScheduleEvent {

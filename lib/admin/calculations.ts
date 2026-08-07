@@ -272,8 +272,20 @@ export function deriveCapacityStatus(
   return "available";
 }
 
+/**
+ * Attorneys, managing partners, and paralegals can be staffed on matter
+ * assignments.
+ */
+export function isAssignableLegalStaff(employee: AdminEmployee): boolean {
+  return (
+    employee.isAttorney ||
+    employee.roleKey === "managing_partner" ||
+    employee.roleKey === "paralegal"
+  );
+}
+
 export function isAvailableAttorney(employee: AdminEmployee): boolean {
-  if (!employee.isAttorney) return false;
+  if (!isAssignableLegalStaff(employee)) return false;
   return deriveCapacityStatus(employee) === "available";
 }
 
@@ -290,7 +302,7 @@ export function buildProductivityMetrics(
   mattersClosedByEmployee: Record<string, number> = {},
 ): AdminProductivityMetric[] {
   return employees
-    .filter((e) => e.isAttorney && e.status !== "inactive")
+    .filter((e) => isAssignableLegalStaff(e) && e.status !== "inactive")
     .map((employee) => {
       const capacityStatus = deriveCapacityStatus(employee);
       const utilizationRate = calculateUtilizationRate(
@@ -310,6 +322,7 @@ export function buildProductivityMetrics(
         utilizationRate,
         mattersClosed: mattersClosedByEmployee[employee.id] ?? 0,
         capacityStatus,
+        proBonoHours: employee.proBonoHoursWorked ?? 0,
       };
     });
 }
@@ -320,7 +333,7 @@ export function buildWorkloadItems(
   pendingApprovalsByEmployee: Record<string, number> = {},
 ): AdminWorkloadItem[] {
   return employees
-    .filter((e) => e.isAttorney && e.status !== "inactive")
+    .filter((e) => isAssignableLegalStaff(e) && e.status !== "inactive")
     .map((employee) => {
       const capacityStatus = deriveCapacityStatus(employee);
       const utilizationRate = calculateUtilizationRate(
@@ -799,7 +812,7 @@ export function buildWorkloadBoardRows(
   vacations: AdminVacation[],
   referenceDate: string,
 ): AdminWorkloadBoardRow[] {
-  return employees.map((employee) => {
+  return employees.filter(isAssignableLegalStaff).map((employee) => {
     const openAssignments = getOpenAssignmentsForEmployee(
       employee.id,
       assignments,
@@ -973,12 +986,15 @@ const PRIORITY_RANK: Record<AttentionPriority, number> = {
   normal: 2,
 };
 
-/** Available for assignment: active attorney, not on leave, workload below 90%. */
+/**
+ * Available for assignment: active attorney or paralegal, not on leave,
+ * workload below 90%.
+ */
 export function getAttorneysAvailableForAssignment(
   employees: AdminEmployee[],
 ): AdminEmployee[] {
   return employees.filter((employee) => {
-    if (!employee.isAttorney) return false;
+    if (!isAssignableLegalStaff(employee)) return false;
     if (employee.status !== "active") return false;
     const pct = calculateWorkloadPercentage(
       employee.assignedHours,
@@ -1092,7 +1108,7 @@ export function buildAttentionItems(input: {
         subjectHref: `/admin/employees/${approval.employeeId}`,
         dateOrAge: `${countBusinessDaysAge(approval.submittedAt, referenceDate)} business days`,
         actionLabel: "Review Approval",
-        actionHref: "/admin/approvals",
+        actionHref: "/dashboard/approvals",
         sortAgeDays: countBusinessDaysAge(
           approval.submittedAt,
           referenceDate,
@@ -1115,7 +1131,7 @@ export function buildAttentionItems(input: {
             subjectHref: `/admin/employees/${approval.employeeId}`,
             dateOrAge: `${approval.vacationStartDate} → ${approval.vacationEndDate}`,
             actionLabel: "Review Coverage",
-            actionHref: "/admin/approvals",
+            actionHref: "/dashboard/approvals",
             sortAgeDays: countBusinessDaysAge(
               approval.submittedAt,
               referenceDate,
@@ -1131,7 +1147,7 @@ export function buildAttentionItems(input: {
             subjectHref: `/admin/employees/${approval.employeeId}`,
             dateOrAge: "No backup employee listed",
             actionLabel: "Review Coverage",
-            actionHref: "/admin/approvals",
+            actionHref: "/dashboard/approvals",
             sortAgeDays: countBusinessDaysAge(
               approval.submittedAt,
               referenceDate,
@@ -1148,10 +1164,10 @@ export function buildAttentionItems(input: {
         priority: "high",
         issue: "Approval pending more than 3 business days",
         subjectLabel: approval.title,
-        subjectHref: "/admin/approvals",
+        subjectHref: "/dashboard/approvals",
         dateOrAge: `${age} business days`,
         actionLabel: "Review Approval",
-        actionHref: "/admin/approvals",
+        actionHref: "/dashboard/approvals",
         sortAgeDays: age,
       });
     }
@@ -1368,7 +1384,7 @@ export function buildUpcomingLeaveCoverage(input: {
         reviewHref:
           coverageStatus === "Missing coverage" ||
           coverageStatus === "Deadline conflict"
-            ? "/admin/approvals"
+            ? "/dashboard/approvals"
             : "/admin/workload",
       };
     })

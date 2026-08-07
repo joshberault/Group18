@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
+import { AdminDataProvider } from "@/components/admin/AdminDataProvider";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -15,7 +16,7 @@ export function AdminAccessGate({ children }: { children: React.ReactNode }) {
   const { role, setRole } = useDemoRole();
 
   if (role === "firm_administrator") {
-    return <>{children}</>;
+    return <AdminDataProvider>{children}</AdminDataProvider>;
   }
 
   return (
@@ -28,8 +29,8 @@ export function AdminAccessGate({ children }: { children: React.ReactNode }) {
           Firm Administrator demo role required
         </CardTitle>
         <CardDescription className="text-navy-800">
-          Admin/Staff Information (employees, matters, assignments, approvals,
-          workload, and roles) is available under the{" "}
+          Admin/Staff Information (employees, assignments, workload, and roles)
+          is available under the{" "}
           <strong>Firm Administrator</strong> demo role. Your current demo role
           is <strong>{USER_ROLE_LABELS[role]}</strong>.
         </CardDescription>

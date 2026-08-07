@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Pause, Play, Square } from "lucide-react";
 import { useAttorneyData } from "@/components/attorney/AttorneyDataProvider";
+import { checkMatterBillable } from "@/lib/matters/matter-activation-gates";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
@@ -103,7 +104,7 @@ export function TimerWidget() {
     });
   }
 
-  function stopAndSave() {
+  async function stopAndSave() {
     const elapsedMs =
       timer.accumulatedMs +
       (timer.running && timer.startedAt ? Date.now() - timer.startedAt : 0);
@@ -111,6 +112,12 @@ export function TimerWidget() {
 
     if (!timer.matterId || !timer.description.trim()) {
       setSavedMessage("Select a matter and add a description before saving.");
+      return;
+    }
+
+    const gate = await checkMatterBillable(timer.matterId);
+    if (!gate.allowed) {
+      setSavedMessage(gate.reason ?? "Time entry is blocked for this matter.");
       return;
     }
 

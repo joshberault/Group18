@@ -3,7 +3,7 @@ import {
   isAccountingManagerExclusivePath,
   isAccountingManagerRoute,
 } from "@/lib/navigation/accounting-manager-nav";
-import { CLIENT_NAV_ITEMS } from "@/lib/navigation/client-nav";
+import { CLIENT_NAV_ITEMS, isClientPortalRoute } from "@/lib/navigation/client-nav";
 import { PROSPECTIVE_CLIENT_NAV_ITEMS } from "@/lib/navigation/prospective-client-nav";
 import { NAV_ITEMS, getNavItemsForRole, type NavItem, type RouteKey } from "@/lib/navigation";
 import type { UserRole } from "@/lib/types";
@@ -47,7 +47,6 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
       "clients",
       "matters",
       "attorney_hub",
-      "time",
       "tasks",
       "calendar",
       "notes",
@@ -61,7 +60,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
     ],
     dashboardTitle: "Managing Partner Dashboard",
     dashboardDescription:
-      "Firm-wide revenue, collections, and profitability at a glance.",
+      "Firm-wide revenue, collections, profitability, and approval queue.",
     permissions: [
       "view_firm_dashboard",
       "manage_clients",
@@ -125,7 +124,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   billing_specialist: {
     displayName: USER_ROLE_LABELS.billing_specialist,
-    defaultRoute: "/dashboard",
+    defaultRoute: "/billing",
     allowedRoutes: [
       "dashboard",
       "clients",
@@ -184,17 +183,18 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   },
   firm_administrator: {
     displayName: USER_ROLE_LABELS.firm_administrator,
-    defaultRoute: "/dashboard",
+    defaultRoute: "/admin",
     allowedRoutes: [
       "dashboard",
+      "administration",
       "clients",
       "matters",
       "tasks",
       "reports",
     ],
-    dashboardTitle: "Firm Administration Dashboard",
+    dashboardTitle: "Manager Dashboard",
     dashboardDescription:
-      "Operational oversight across clients, staff, and firm settings.",
+      "Staff, matters, assignments, workload, and roles.",
     permissions: [
       "manage_clients",
       "manage_matters",
@@ -216,7 +216,7 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
     displayName: USER_ROLE_LABELS.prospective_client,
     defaultRoute: "/dashboard",
     allowedRoutes: ["dashboard"],
-    dashboardTitle: "Consultation Request",
+    dashboardTitle: "Consultation Request Form",
     dashboardDescription:
       "Tell us about your legal needs and request a consultation.",
     permissions: [],
@@ -240,33 +240,18 @@ export function hasPermission(role: UserRole, permission: Permission): boolean {
 }
 
 export function pathnameToRouteKey(pathname: string): RouteKey | null {
-  if (pathname === "/client-portal" || pathname.startsWith("/client-portal/")) {
-    return "client_portal";
-  }
-
-  const match = NAV_ITEMS.filter(
+  const match = NAV_ITEMS.find(
     (item) =>
       pathname === item.href || pathname.startsWith(`${item.href}/`),
-  ).sort((a, b) => b.href.length - a.href.length)[0];
+  );
   return match?.routeKey ?? null;
 }
 
 function canAccessStandardRoute(role: UserRole, pathname: string): boolean {
-  // Client portal hub + feature pages: clients use sidebar tabs; staff still
-  // open features from the Client Portal hub card grid.
-  if (pathname === "/client-portal" || pathname.startsWith("/client-portal/")) {
-    return (
-      role === "client" ||
-      role === "managing_partner" ||
-      role === "firm_administrator"
-    );
-  }
-
-  // Prefer the longest matching href when several NAV_ITEMS could match.
-  const matchingItem = NAV_ITEMS.filter(
+  const matchingItem = NAV_ITEMS.find(
     (item) =>
       pathname === item.href || pathname.startsWith(`${item.href}/`),
-  ).sort((a, b) => b.href.length - a.href.length)[0];
+  );
 
   if (matchingItem) {
     return matchingItem.roles?.includes(role) ?? false;
@@ -289,6 +274,31 @@ function canAccessStandardRoute(role: UserRole, pathname: string): boolean {
 }
 
 export function canAccessRoute(role: UserRole, pathname: string): boolean {
+  if (isClientPortalRoute(pathname)) {
+    return role === "client" || role === "firm_administrator";
+  }
+
+  // Client demo uses portal tabs only — not the firm Dashboard.
+  if (
+    role === "client" &&
+    (pathname === "/dashboard" || pathname.startsWith("/dashboard/"))
+  ) {
+    return false;
+  }
+
+  // Managing Partner does not use the Time & Expenses module.
+  if (
+    role === "managing_partner" &&
+    (pathname === "/attorney/time" ||
+      pathname.startsWith("/attorney/time/") ||
+      pathname === "/attorney/expenses" ||
+      pathname.startsWith("/attorney/expenses/") ||
+      pathname === "/time" ||
+      pathname.startsWith("/time/"))
+  ) {
+    return false;
+  }
+
   if (role === "accounting_manager") {
     return isAccountingManagerRoute(pathname);
   }
@@ -296,6 +306,17 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
   // Prospective Client demo is Dashboard-only (consultation request form).
   if (role === "prospective_client") {
     return pathname === "/dashboard" || pathname === "/dashboard/";
+  }
+
+  if (pathname === "/intake" || pathname.startsWith("/intake/")) {
+    return role === "managing_partner" || role === "firm_administrator";
+  }
+
+  if (
+    pathname === "/dashboard/approvals" ||
+    pathname.startsWith("/dashboard/approvals/")
+  ) {
+    return role === "managing_partner" || role === "firm_administrator";
   }
 
   // Billing Specialist may open Client Trust Accounts from the firm Dashboard KPI.
@@ -327,7 +348,20 @@ export function getNavigationForRole(role: UserRole): NavItem[] {
     return PROSPECTIVE_CLIENT_NAV_ITEMS;
   }
 
-  return getNavItemsForRole(role);
+  const items = getNavItemsForRole(role);
+
+  // Managing Partner demo: never show Time & Expenses or Client Portal.
+  if (role === "managing_partner") {
+    return items.filter(
+      (item) =>
+        item.routeKey !== "time" &&
+        item.routeKey !== "client_portal" &&
+        item.href !== "/attorney/time" &&
+        !item.href.startsWith("/client-portal"),
+    );
+  }
+
+  return items;
 }
 
 export function isValidDemoRole(value: string): value is UserRole {

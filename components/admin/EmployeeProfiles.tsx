@@ -25,15 +25,7 @@ import {
   getVacationStatusLabel,
   uniquePracticeAreas,
 } from "@/lib/admin/calculations";
-import {
-  ADMIN_REFERENCE_DATE,
-  ADMIN_UI_FLAGS,
-  MOCK_APPROVALS,
-  MOCK_ASSIGNMENTS,
-  MOCK_EMPLOYEES,
-  MOCK_ROLE_PERMISSIONS,
-  MOCK_VACATIONS,
-} from "@/lib/admin/mock-data";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 import type { EmploymentStatus, WorkloadCapacityStatus } from "@/lib/admin/types";
 
 function statusVariant(status: EmploymentStatus) {
@@ -49,6 +41,7 @@ function statusLabel(status: EmploymentStatus) {
 }
 
 export function EmployeeProfiles() {
+  const { data, loading, error, refresh } = useAdminData();
   const [searchName, setSearchName] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [practiceFilter, setPracticeFilter] = useState("all");
@@ -60,12 +53,12 @@ export function EmployeeProfiles() {
   >("all");
 
   const practiceAreas = useMemo(
-    () => uniquePracticeAreas(MOCK_EMPLOYEES),
-    [],
+    () => uniquePracticeAreas(data?.employees ?? []),
+    [data?.employees],
   );
 
   const filtered = useMemo(() => {
-    return MOCK_EMPLOYEES.filter((employee) => {
+    return (data?.employees ?? []).filter((employee) => {
       if (
         searchName &&
         !employee.fullName.toLowerCase().includes(searchName.toLowerCase())
@@ -87,7 +80,14 @@ export function EmployeeProfiles() {
       }
       return true;
     }).sort((a, b) => a.fullName.localeCompare(b.fullName));
-  }, [searchName, roleFilter, practiceFilter, statusFilter, workloadFilter]);
+  }, [
+    data?.employees,
+    searchName,
+    roleFilter,
+    practiceFilter,
+    statusFilter,
+    workloadFilter,
+  ]);
 
   function clearFilters() {
     setSearchName("");
@@ -97,19 +97,22 @@ export function EmployeeProfiles() {
     setWorkloadFilter("all");
   }
 
-  if (ADMIN_UI_FLAGS.forceLoading) {
+  if (loading) {
     return <LoadingState message="Loading employee profiles..." />;
   }
 
-  if (ADMIN_UI_FLAGS.forceError) {
+  if (error || !data) {
     return (
       <Card className="border-red-200 bg-red-50" padding="lg">
         <CardHeader>
           <CardTitle className="text-red-800">Unable to load employees</CardTitle>
           <CardDescription className="text-red-700">
-            Local mock employee data could not be loaded for this page.
+            {error ?? "Live firm data could not be loaded for this page."}
           </CardDescription>
         </CardHeader>
+        <Button variant="secondary" onClick={() => void refresh()}>
+          Retry
+        </Button>
       </Card>
     );
   }
@@ -117,18 +120,18 @@ export function EmployeeProfiles() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Mock data:</strong>{" "}
-        Employee Profiles use existing admin mock records. Open a profile for
-        assignments, approvals, leave, and productivity. Add/edit lives under
-        Attorney Management — not duplicated here.
+        <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
+        Employee Profiles are loaded from the Supabase{" "}
+        <code className="rounded bg-white/70 px-1">profiles</code> table for
+        every internal role.
       </div>
 
       <Card padding="md">
         <CardHeader>
           <CardTitle>Employee profiles</CardTitle>
           <CardDescription>
-            Search and filter the staff roster, then open a profile for workload
-            and productivity detail.
+            Search and filter the firm roster, then open a profile for role and
+            capacity detail.
           </CardDescription>
         </CardHeader>
 
@@ -145,7 +148,7 @@ export function EmployeeProfiles() {
             onChange={(e) => setRoleFilter(e.target.value)}
             options={[
               { value: "all", label: "All roles" },
-              ...MOCK_ROLE_PERMISSIONS.map((role) => ({
+              ...data.rolePermissions.map((role) => ({
                 value: role.roleKey,
                 label: role.roleLabel,
               })),
@@ -228,16 +231,16 @@ export function EmployeeProfiles() {
                 );
                 const activeAssignments = countActiveAssignmentsForEmployee(
                   employee.id,
-                  MOCK_ASSIGNMENTS,
+                  data.assignments,
                 );
                 const pendingApprovals = countPendingApprovalsForEmployee(
                   employee.id,
-                  MOCK_APPROVALS,
+                  data.approvals,
                 );
                 const vacation = getVacationStatusLabel(
                   employee,
-                  MOCK_VACATIONS,
-                  ADMIN_REFERENCE_DATE,
+                  data.vacations,
+                  data.referenceDate,
                 );
 
                 return (

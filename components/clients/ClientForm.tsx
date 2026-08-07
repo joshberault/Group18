@@ -8,12 +8,15 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
 import type { ClientFormValues, ConflictCheckStatus } from "@/lib/clients/types";
 import { CONFLICT_STATUS_LABELS } from "@/lib/clients/types";
+import type { UserRole } from "@/lib/types";
 import type { ClientPermissions } from "@/lib/clients/permissions";
+import { canEditClientField } from "@/lib/clients/permissions";
 import { validateClientForm, hasFormErrors } from "@/lib/clients/format";
 
 interface ClientFormProps {
   initialValues: ClientFormValues;
   permissions: ClientPermissions;
+  role: UserRole;
   submitLabel: string;
   onSubmit: (values: ClientFormValues, options: { acknowledgeDuplicate: boolean }) => Promise<void>;
   duplicateWarning?: string | null;
@@ -24,6 +27,7 @@ interface ClientFormProps {
 export function ClientForm({
   initialValues,
   permissions,
+  role,
   submitLabel,
   onSubmit,
   duplicateWarning,
@@ -65,10 +69,22 @@ export function ClientForm({
   const contactDisabled = !permissions.canEditContact;
   const conflictDisabled = !permissions.canEditConflict;
   const statusDisabled = !permissions.canEditStatus;
-  const notesDisabled = !permissions.canViewInternalNotes || contactDisabled;
+  const notesDisabled =
+    !permissions.canViewInternalNotes || !canEditClientField(role, "notes");
+
+  const showReadOnlyHint =
+    mode === "edit" &&
+    (!permissions.canEditContact ||
+      !permissions.canEditConflict ||
+      !permissions.canEditStatus);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {showReadOnlyHint && (
+        <p className="text-sm text-muted">
+          Fields outside your role permissions are read-only.
+        </p>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Section 1 · Client type</CardTitle>

@@ -1,3 +1,5 @@
+"use client";
+
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
@@ -6,6 +8,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Ca
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KPICard } from "@/components/ui/KPICard";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
 import {
   Table,
   TableBody,
@@ -24,14 +27,7 @@ import {
   getUpcomingVacations,
   getVacationStatusLabel,
 } from "@/lib/admin/calculations";
-import {
-  ADMIN_REFERENCE_DATE,
-  MOCK_APPROVALS,
-  MOCK_ASSIGNMENTS,
-  MOCK_EMPLOYEES,
-  MOCK_ROLE_PERMISSIONS,
-  MOCK_VACATIONS,
-} from "@/lib/admin/mock-data";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 
 function statusVariant(status: string) {
   if (status === "active") return "success" as const;
@@ -51,18 +47,40 @@ interface EmployeeProfileDetailProps {
 }
 
 export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps) {
-  const employee = getEmployeeById(MOCK_EMPLOYEES, employeeId);
+  const { data, loading, error, refresh } = useAdminData();
+
+  if (loading) {
+    return <LoadingState message="Loading employee profile..." />;
+  }
+
+  if (error || !data) {
+    return (
+      <Card className="border-red-200 bg-red-50" padding="lg">
+        <CardHeader>
+          <CardTitle className="text-red-800">Unable to load employee</CardTitle>
+          <CardDescription className="text-red-700">
+            {error ?? "Live firm data could not be loaded for this profile."}
+          </CardDescription>
+        </CardHeader>
+        <Button variant="secondary" onClick={() => void refresh()}>
+          Retry
+        </Button>
+      </Card>
+    );
+  }
+
+  const employee = data.employees.find((item) => item.id === employeeId);
 
   if (!employee) {
     return (
       <div className="space-y-4">
         <PageHeader
           title="Employee not found"
-          description="No staff profile matches this employee ID in the local mock data."
+          description="No staff profile matches this employee ID."
         />
         <EmptyState
           title="Invalid employee ID"
-          description={`“${employeeId}” is not a known employee. Return to the roster and open a valid profile.`}
+          description={`“${employeeId}” is not a known staff profile. Return to the roster and open a valid profile.`}
           moduleLabel="Admin · Employees"
         />
         <Link href="/admin/employees">
@@ -73,11 +91,13 @@ export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps
   }
 
   const manager = employee.managerId
-    ? getEmployeeById(MOCK_EMPLOYEES, employee.managerId)
+    ? getEmployeeById(data.employees, employee.managerId)
     : undefined;
-  const role = MOCK_ROLE_PERMISSIONS.find((r) => r.roleKey === employee.roleKey);
+  const role = data.rolePermissions.find(
+    (r) => r.roleKey === employee.roleKey,
+  );
 
-  const myAssignments = MOCK_ASSIGNMENTS.filter(
+  const myAssignments = data.assignments.filter(
     (a) => a.employeeId === employee.id,
   );
   const currentAssignments = myAssignments.filter(
@@ -86,24 +106,24 @@ export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps
   );
   const upcomingDeadlines = getAssignmentsDueSoon(
     myAssignments,
-    ADMIN_REFERENCE_DATE,
+    data.referenceDate,
     7,
   );
   const overdueAssignments = getOverdueAssignments(
     myAssignments,
-    ADMIN_REFERENCE_DATE,
+    data.referenceDate,
   );
-  const pendingApprovals = MOCK_APPROVALS.filter(
+  const pendingApprovals = data.approvals.filter(
     (a) => a.employeeId === employee.id && a.status === "pending",
   );
   const upcomingVacation = getUpcomingVacations(
-    MOCK_VACATIONS.filter((v) => v.employeeId === employee.id),
-    ADMIN_REFERENCE_DATE,
+    data.vacations.filter((v) => v.employeeId === employee.id),
+    data.referenceDate,
   );
   const vacationStatus = getVacationStatusLabel(
     employee,
-    MOCK_VACATIONS,
-    ADMIN_REFERENCE_DATE,
+    data.vacations,
+    data.referenceDate,
   );
   const workloadPct = calculateWorkloadPercentage(
     employee.assignedHours,
@@ -111,8 +131,8 @@ export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps
   );
   const productivity = buildEmployeeProfileProductivity(
     employee,
-    MOCK_ASSIGNMENTS,
-    ADMIN_REFERENCE_DATE,
+    data.assignments,
+    data.referenceDate,
   );
 
   return (
@@ -129,9 +149,9 @@ export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps
       </div>
 
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Mock data:</strong> This
-        profile is assembled from existing admin mock employees, assignments,
-        approvals, and vacations. It will later be replaced by Supabase queries.
+        <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
+        Identity, permissions, assignments, and approvals are sourced from
+        Supabase.
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -262,7 +282,7 @@ export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps
         {currentAssignments.length === 0 ? (
           <EmptyState
             title="No current assignments"
-            description="This employee has no active, pending, or overdue matter assignments in the mock data."
+            description="This employee has no active, pending, or overdue matter assignments."
             moduleLabel="Admin · Assignments"
           />
         ) : (
@@ -342,7 +362,7 @@ export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps
             Pending Approval Requests
           </h2>
           <Link
-            href="/admin/approvals"
+            href="/dashboard/approvals"
             className="text-sm font-medium text-navy-900 underline-offset-2 hover:text-gold-500 hover:underline"
           >
             Open approval queue
@@ -351,7 +371,7 @@ export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps
         {pendingApprovals.length === 0 ? (
           <EmptyState
             title="No pending approvals"
-            description="This employee has no pending approval requests in the mock queue."
+            description="This employee has no pending approval requests."
             moduleLabel="Admin · Approvals"
           />
         ) : (
@@ -360,7 +380,7 @@ export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps
               {pendingApprovals.map((approval) => (
                 <li key={approval.id}>
                   <Link
-                    href="/admin/approvals"
+                    href="/dashboard/approvals"
                     className="flex flex-col justify-between gap-2 rounded-lg border border-gray-100 px-4 py-3 text-sm hover:border-gold-500 sm:flex-row sm:items-center"
                   >
                     <span>
@@ -463,7 +483,7 @@ export function EmployeeProfileDetail({ employeeId }: EmployeeProfileDetailProps
         ) : (
           <EmptyState
             title="No role permissions mapped"
-            description="This employee’s role key is not in the mock role matrix."
+            description="This employee’s role key is not in the role matrix."
             moduleLabel="Admin · Roles"
           />
         )}

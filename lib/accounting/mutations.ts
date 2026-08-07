@@ -199,12 +199,39 @@ export async function recordTrustTransfer(input: {
   const supabase = getAccountingSupabase();
   if (!supabase) return { ok: false, error: "Supabase unavailable" };
 
+  const clientId = input.toClientId ?? input.fromClientId;
+  if (!clientId) {
+    return { ok: false, error: "Client is required for trust transfers." };
+  }
+  if (!input.description.trim()) {
+    return { ok: false, error: "Description is required for trust transfers." };
+  }
+  if (!Number.isFinite(input.amount) || input.amount <= 0) {
+    return { ok: false, error: "Transfer amount must be greater than zero." };
+  }
+
+  if (input.fromClientId) {
+    const { data: ledger } = await supabase
+      .from("trust_client_ledgers")
+      .select("balance")
+      .eq("trust_account_id", input.trustAccountId)
+      .eq("client_id", input.fromClientId)
+      .maybeSingle();
+    const balance = asNumber(ledger?.balance);
+    if (ledger && input.amount > balance) {
+      return {
+        ok: false,
+        error: `Transfer would overdraw the client ledger (balance ${balance.toLocaleString()}).`,
+      };
+    }
+  }
+
   const { error: txErr } = await supabase.from("trust_transactions").insert({
     trust_account_id: input.trustAccountId,
-    client_id: input.toClientId ?? input.fromClientId ?? null,
+    client_id: clientId,
     matter_id: input.matterId ?? null,
     transaction_type: "Transfer",
-    description: input.description,
+    description: input.description.trim(),
     amount: input.amount,
     status: "Posted",
   });
@@ -246,6 +273,139 @@ export async function voidTrustTransaction(input: {
     recordType: "trust_transaction",
     recordId: input.transactionId,
     description: "Trust transaction voided",
+    riskLevel: "High",
+  });
+
+  return { ok: true };
+}
+
+const ESCALATION_STAGES = [
+  "reminder",
+  "internal_review",
+  "write_off_requested",
+  "external_collections",
+] as const;
+
+export async function escalateCollectionStage(input: {
+  invoiceId: string;
+  actor: Actor;
+}): Promise<{ ok: boolean; error?: string; nextStage?: string }> {
+  const supabase = getAccountingSupabase();
+  if (!supabase) return { ok: false, error: "Supabase unavailable" };
+
+  const { data: inv, error: invErr } = await supabase
+    .from("invoices")
+    .select(
+      "escalation_stage, invoice_number, client_id, matter_id, balance_due",
+    )
+    .eq("id", input.invoiceId)
+    .single();
+  if (invErr || !inv) {
+    return { ok: false, error: invErr?.message ?? "Invoice not found" };
+  }
+
+  const current = String(inv.escalation_stage ?? "reminder");
+  const idx = ESCALATION_STAGES.indexOf(
+    current as typeof ESCALATION_STAGES[number],
+  );
+  if (idx < 0 || idx >= ESCALATION_STAGES.length - 1) {
+    return {
+      ok: false,
+      error: "Invoice is already at the final escalation stage.",
+    };
+  }
+
+  const nextStage = ESCALATION_STAGES[idx + 1];
+  if (nextStage === "external_collections") {
+    return {
+      ok: false,
+      error:
+        "External collections require Managing Partner approval after write-off review.",
+    };
+  }
+
+  const { error } = await supabase
+    .from("invoices")
+    .update({ escalation_stage: nextStage })
+    .eq("id", input.invoiceId);
+  if (error) return { ok: false, error: error.message };
+
+  if (nextStage === "write_off_requested") {
+    await supabase.from("write_off_requests").insert({
+      invoice_id: input.invoiceId,
+      client_id: inv.client_id,
+      matter_id: inv.matter_id,
+      amount: asNumber(inv.balance_due),
+      reason: "Collections escalation — write-off requested",
+      status: "pending",
+      requested_by: input.actor.name,
+    });
+  }
+
+  await logAuditEvent({
+    actorName: input.actor.name,
+    actorRole: input.actor.role,
+    module: "Accounts Receivable",
+    action: "Escalate Collection",
+    recordType: "invoice",
+    recordId: input.invoiceId,
+    description: `Escalated ${inv.invoice_number} to ${nextStage.replace(/_/g, " ")}`,
+    riskLevel: "Medium",
+  });
+
+  return { ok: true, nextStage };
+}
+
+export async function approveExternalCollections(input: {
+  invoiceId: string;
+  approver: Actor;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (input.approver.role !== "managing_partner") {
+    return {
+      ok: false,
+      error: "Only the Managing Partner can approve external collections.",
+    };
+  }
+
+  const supabase = getAccountingSupabase();
+  if (!supabase) return { ok: false, error: "Supabase unavailable" };
+
+  const { data: inv, error: invErr } = await supabase
+    .from("invoices")
+    .select("escalation_stage, invoice_number")
+    .eq("id", input.invoiceId)
+    .single();
+  if (invErr || !inv) {
+    return { ok: false, error: invErr?.message ?? "Invoice not found" };
+  }
+
+  if (String(inv.escalation_stage) !== "write_off_requested") {
+    return {
+      ok: false,
+      error:
+        "External collections approval requires write-off requested stage.",
+    };
+  }
+
+  const { error } = await supabase
+    .from("invoices")
+    .update({
+      escalation_stage: "external_collections",
+      external_collections_approved: true,
+      external_collections_approved_by: input.approver.name,
+      external_collections_approved_at: new Date().toISOString(),
+    })
+    .eq("id", input.invoiceId);
+  if (error) return { ok: false, error: error.message };
+
+  await logAuditEvent({
+    actorName: input.approver.name,
+    actorRole: input.approver.role,
+    module: "Accounts Receivable",
+    action: "Approve External Collections",
+    recordType: "invoice",
+    recordId: input.invoiceId,
+    description: `Managing Partner approved external collections for ${inv.invoice_number}`,
     riskLevel: "High",
   });
 

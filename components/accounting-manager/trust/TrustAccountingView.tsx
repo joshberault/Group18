@@ -28,10 +28,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/Table";
+import { Textarea } from "@/components/ui/Textarea";
 import { Toast } from "@/components/ui/Toast";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import {
   fetchTrustWorkspace,
+  recordTrustTransfer,
   resolveTrustException,
   useSupabaseQuery,
   voidTrustTransaction,
@@ -69,7 +71,7 @@ function retainerVariant(status: string) {
 }
 
 export function TrustAccountingView() {
-  const { selectedRole } = useDemoRole();
+  const { selectedRole, identity } = useDemoRole();
   const { data: workspace, loading, error, refresh } = useSupabaseQuery(
     fetchTrustWorkspace,
     [],
@@ -85,6 +87,12 @@ export function TrustAccountingView() {
   const [selectedTransaction, setSelectedTransaction] = useState<TrustTransaction | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; action: () => void } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferLedgerId, setTransferLedgerId] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferDescription, setTransferDescription] = useState("");
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [transferBusy, setTransferBusy] = useState(false);
   const transactions = workspace?.transactions ?? [];
   const exceptions = workspace?.exceptions ?? [];
 
@@ -107,7 +115,63 @@ export function TrustAccountingView() {
         l.client.toLowerCase().includes(search.toLowerCase()) ||
         l.matter.toLowerCase().includes(search.toLowerCase()),
     );
-  }, [search]);
+  }, [search, trustClientLedgers]);
+
+  const selectedTransferLedger = trustClientLedgers.find(
+    (l) => l.id === transferLedgerId,
+  );
+
+  async function submitTransfer() {
+    setTransferError(null);
+    const amount = Number.parseFloat(transferAmount);
+    if (!transferLedgerId || !selectedTransferLedger) {
+      setTransferError("Select a client ledger.");
+      return;
+    }
+    if (!selectedTransferLedger.clientId) {
+      setTransferError("Client is required for trust transfers.");
+      return;
+    }
+    if (!transferDescription.trim()) {
+      setTransferError("Description is required.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setTransferError("Amount must be greater than zero.");
+      return;
+    }
+    if (amount > selectedTransferLedger.balance) {
+      setTransferError(
+        `Transfer would overdraw the ledger (balance ${formatCurrency(
+          selectedTransferLedger.balance,
+        )}).`,
+      );
+      return;
+    }
+
+    setTransferBusy(true);
+    const result = await recordTrustTransfer({
+      trustAccountId: selectedTransferLedger.trustAccountId,
+      fromClientId: selectedTransferLedger.clientId,
+      matterId: selectedTransferLedger.matterId,
+      amount,
+      description: transferDescription.trim(),
+      actor: { name: identity.fullName, role: selectedRole },
+    });
+    setTransferBusy(false);
+
+    if (!result.ok) {
+      setTransferError(result.error ?? "Transfer failed.");
+      return;
+    }
+
+    setTransferOpen(false);
+    setTransferLedgerId("");
+    setTransferAmount("");
+    setTransferDescription("");
+    setToast("Trust transfer recorded");
+    await refresh();
+  }
 
   const handleExport = () => {
     exportToCsv(
@@ -175,7 +239,10 @@ export function TrustAccountingView() {
           </Button>
           <Button
             variant="secondary"
-            onClick={() => setToast("Trust transfer initiated (prototype)")}
+            onClick={() => {
+              setTransferError(null);
+              setTransferOpen(true);
+            }}
           >
             <ArrowLeftRight className="h-4 w-4" />
             Transfer Funds
@@ -655,6 +722,53 @@ export function TrustAccountingView() {
             Cancel
           </Button>
           <Button onClick={() => confirmAction?.action()}>Confirm</Button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        title="Transfer trust funds"
+        description="Transfers require a client ledger, description, and cannot overdraw the balance."
+      >
+        <div className="space-y-4">
+          <Select
+            label="Source client ledger *"
+            value={transferLedgerId}
+            onChange={(e) => setTransferLedgerId(e.target.value)}
+            options={[
+              { value: "", label: "Select ledger..." },
+              ...trustClientLedgers.map((l) => ({
+                value: l.id,
+                label: `${l.client} — ${l.matter} (${formatCurrency(l.balance)})`,
+              })),
+            ]}
+          />
+          <Input
+            label="Amount *"
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={transferAmount}
+            onChange={(e) => setTransferAmount(e.target.value)}
+          />
+          <Textarea
+            label="Description *"
+            value={transferDescription}
+            onChange={(e) => setTransferDescription(e.target.value)}
+            rows={3}
+          />
+          {transferError && (
+            <p className="text-sm text-red-600">{transferError}</p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setTransferOpen(false)}>
+              Cancel
+            </Button>
+            <Button disabled={transferBusy} onClick={() => void submitTransfer()}>
+              {transferBusy ? "Submitting..." : "Submit transfer"}
+            </Button>
+          </div>
         </div>
       </Modal>
 

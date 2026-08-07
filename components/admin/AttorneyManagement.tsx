@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -24,14 +24,8 @@ import {
   isAttorneyOrPartnerTitle,
   uniquePracticeAreas,
 } from "@/lib/admin/calculations";
-import {
-  ADMIN_REFERENCE_DATE,
-  ADMIN_UI_FLAGS,
-  MOCK_ASSIGNMENTS,
-  MOCK_EMPLOYEES,
-  MOCK_ROLE_PERMISSIONS,
-  MOCK_VACATIONS,
-} from "@/lib/admin/mock-data";
+import { ADMIN_REFERENCE_DATE } from "@/lib/admin/mock-data";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 import type { AdminEmployee, EmploymentStatus } from "@/lib/admin/types";
 
 type SortKey = "name" | "workload";
@@ -117,9 +111,12 @@ function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-function resolveRoleLabel(roleKey: string) {
+function resolveRoleLabel(
+  roleKey: string,
+  rolePermissions: { roleKey: string; roleLabel: string }[],
+) {
   return (
-    MOCK_ROLE_PERMISSIONS.find((role) => role.roleKey === roleKey)?.roleLabel ??
+    rolePermissions.find((role) => role.roleKey === roleKey)?.roleLabel ??
     roleKey.replaceAll("_", " ")
   );
 }
@@ -128,9 +125,10 @@ function buildEmployeeFromForm(
   form: EmployeeFormState,
   existing: AdminEmployee | null,
   nextId: string,
+  rolePermissions: { roleKey: string; roleLabel: string }[],
 ): AdminEmployee {
   const weekly = Number(form.weeklyCapacityHours);
-  const roleLabel = resolveRoleLabel(form.roleKey);
+  const roleLabel = resolveRoleLabel(form.roleKey, rolePermissions);
   const isAttorney =
     form.roleKey === "attorney" ||
     form.roleKey === "managing_partner" ||
@@ -160,6 +158,7 @@ function buildEmployeeFromForm(
     availableWorkHours: weekly,
     assignedHours: existing?.assignedHours ?? 0,
     actualHoursWorked: existing?.actualHoursWorked ?? 0,
+    proBonoHoursWorked: existing?.proBonoHoursWorked ?? 0,
     isAttorney,
     profileId: existing?.profileId,
   };
@@ -246,9 +245,8 @@ function validateForm(
 }
 
 export function AttorneyManagement() {
-  const [employees, setEmployees] = useState<AdminEmployee[]>(() =>
-    MOCK_EMPLOYEES.map((employee) => ({ ...employee })),
-  );
+  const { data, loading, error, refresh } = useAdminData();
+  const [employees, setEmployees] = useState<AdminEmployee[]>([]);
   const [searchName, setSearchName] = useState("");
   const [searchEmail, setSearchEmail] = useState("");
   const [searchNumber, setSearchNumber] = useState("");
@@ -265,7 +263,9 @@ export function AttorneyManagement() {
   const [form, setForm] = useState<EmployeeFormState>(emptyForm);
   const [errors, setErrors] = useState<FormErrors>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [hasError, setHasError] = useState(ADMIN_UI_FLAGS.forceError);
+  useEffect(() => {
+    if (data) setEmployees(data.employees.map((employee) => ({ ...employee })));
+  }, [data]);
 
   const practiceAreas = useMemo(
     () => uniquePracticeAreas(employees),
@@ -409,7 +409,12 @@ export function AttorneyManagement() {
 
     if (modalMode === "add") {
       const nextId = `emp-${String(employees.length + 100).padStart(3, "0")}`;
-      const created = buildEmployeeFromForm(form, null, nextId);
+      const created = buildEmployeeFromForm(
+        form,
+        null,
+        nextId,
+        data?.rolePermissions ?? [],
+      );
       setEmployees((prev) => [...prev, created]);
       setSuccessMessage(`Added ${created.fullName} to the local staff roster.`);
       closeModal();
@@ -417,7 +422,12 @@ export function AttorneyManagement() {
     }
 
     if (modalMode === "edit" && selectedEmployee) {
-      const updated = buildEmployeeFromForm(form, selectedEmployee, selectedEmployee.id);
+      const updated = buildEmployeeFromForm(
+        form,
+        selectedEmployee,
+        selectedEmployee.id,
+        data?.rolePermissions ?? [],
+      );
       setEmployees((prev) =>
         prev.map((employee) =>
           employee.id === selectedEmployee.id ? updated : employee,
@@ -463,11 +473,11 @@ export function AttorneyManagement() {
     closeModal();
   }
 
-  if (ADMIN_UI_FLAGS.forceLoading) {
+  if (loading) {
     return <LoadingState message="Loading attorney management..." />;
   }
 
-  if (hasError) {
+  if (error || !data) {
     return (
       <Card className="border-red-200 bg-red-50" padding="lg">
         <CardHeader>
@@ -475,33 +485,30 @@ export function AttorneyManagement() {
             Unable to load attorney management
           </CardTitle>
           <CardDescription className="text-red-700">
-            Local mock staff data could not be loaded for this page.
+            {error ?? "Live firm data could not be loaded for this page."}
           </CardDescription>
         </CardHeader>
         <Button
           variant="secondary"
-          onClick={() => {
-            setHasError(false);
-            setEmployees(MOCK_EMPLOYEES.map((employee) => ({ ...employee })));
-          }}
+          onClick={() => void refresh()}
         >
-          Retry with mock data
+          Retry
         </Button>
       </Card>
     );
   }
 
   const activeAssignmentCount = selectedEmployee
-    ? countActiveAssignmentsForEmployee(selectedEmployee.id, MOCK_ASSIGNMENTS)
+    ? countActiveAssignmentsForEmployee(selectedEmployee.id, data.assignments)
     : 0;
 
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-gold-100 bg-gold-100/40 px-4 py-3 text-sm text-navy-800">
-        <strong className="font-semibold text-navy-900">Mock data:</strong>{" "}
-        Attorney Management currently uses local admin mock data. Changes update
-        this page only and will later be replaced by Supabase queries. Internal
-        hourly cost rate is restricted internal information.
+        <strong className="font-semibold text-navy-900">Live firm data:</strong>{" "}
+        Attorney Management uses current Supabase staff records. Changes update
+        local page state only. Internal hourly cost rate is restricted internal
+        information.
       </div>
 
       {successMessage && (
@@ -567,7 +574,7 @@ export function AttorneyManagement() {
             onChange={(e) => setRoleFilter(e.target.value)}
             options={[
               { value: "all", label: "All roles" },
-              ...MOCK_ROLE_PERMISSIONS.map((role) => ({
+              ...data.rolePermissions.map((role) => ({
                 value: role.roleKey,
                 label: role.roleLabel,
               })),
@@ -643,8 +650,8 @@ export function AttorneyManagement() {
                 );
                 const vacation = getVacationStatusLabel(
                   employee,
-                  MOCK_VACATIONS,
-                  ADMIN_REFERENCE_DATE,
+                  data.vacations,
+                  data.referenceDate,
                 );
                 return (
                   <TableRow key={employee.id}>
@@ -833,7 +840,7 @@ export function AttorneyManagement() {
               label="Role"
               value={form.roleKey}
               onChange={(e) => updateField("roleKey", e.target.value)}
-              options={MOCK_ROLE_PERMISSIONS.map((role) => ({
+              options={data.rolePermissions.map((role) => ({
                 value: role.roleKey,
                 label: role.roleLabel,
               }))}

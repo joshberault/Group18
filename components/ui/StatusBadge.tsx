@@ -53,7 +53,10 @@ const statusConfig: Record<
   },
   disputed: { label: "Disputed", variant: "danger" },
   final_notice: { label: "Final Notice", variant: "danger" },
+  internal_review: { label: "Internal Review", variant: "warning" },
   write_off_requested: { label: "Write-Off Requested", variant: "warning" },
+  external_collections: { label: "External Collections", variant: "danger" },
+  reminder: { label: "Reminder", variant: "neutral" },
   critical: { label: "Critical", variant: "danger" },
   high: { label: "High", variant: "warning" },
   medium: { label: "Medium", variant: "gold" },
@@ -62,6 +65,12 @@ const statusConfig: Record<
   reviewed: { label: "Reviewed", variant: "gold" },
   escalated: { label: "Escalated", variant: "danger" },
   resolved: { label: "Resolved", variant: "success" },
+  submitted: { label: "Submitted", variant: "warning" },
+  screened: { label: "Screened", variant: "default" },
+  consultation_scheduled: { label: "Consultation scheduled", variant: "gold" },
+  declined: { label: "Declined", variant: "danger" },
+  no_hire: { label: "No hire", variant: "danger" },
+  converted: { label: "Converted", variant: "success" },
 };
 
 interface StatusBadgeProps {

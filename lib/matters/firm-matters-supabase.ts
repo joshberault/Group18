@@ -16,6 +16,8 @@ import type { FirmAdminMatterRow } from "@/lib/matters/shared-matters";
 import type {
   EngagementFeeType,
   FirmPortfolioMatter,
+  MatterActivationStatus,
+  MatterEngagementStatus,
   MatterLifecycleStatus,
 } from "@/lib/matters/firm-portfolio";
 import type { AmMatterEntity } from "@/lib/mock-data/accounting-manager/entities";
@@ -30,6 +32,11 @@ export type SharedFirmMatter = {
   clientId: string | null;
   clientName: string;
   status: string;
+  activationStatus: MatterActivationStatus;
+  engagementStatus: MatterEngagementStatus;
+  billingHold: boolean;
+  needsPartnerReview: boolean;
+  partnerReviewReason: string | null;
   billingType: string;
   hourlyRate: number | null;
   retainerBalance: number | null;
@@ -48,6 +55,9 @@ export type SharedFirmMatter = {
   billedToDate: number;
   collectedToDate: number;
   lastInvoiceDate: string | null;
+  /** Non-cancelled invoices in shared catalog for this matter (`matter_id`). */
+  invoiceCount: number;
+  hasInvoices: boolean;
 };
 
 export type FirmMattersResult = {
@@ -79,11 +89,116 @@ type ClientEmbed = {
 
 type PracticeAreaEmbed = { name?: string | null } | null;
 
+const MATTER_SELECT_GOVERNANCE = `
+        id,
+        title,
+        description,
+        status,
+        activation_status,
+        engagement_status,
+        billing_hold,
+        needs_partner_review,
+        partner_review_reason,
+        billing_type,
+        hourly_rate,
+        retainer_balance,
+        retainer_amount,
+        fixed_fee_amount,
+        client_id,
+        created_at,
+        client:clients (
+          id,
+          name,
+          first_name,
+          last_name,
+          company_name,
+          client_type,
+          is_company,
+          conflict_flag,
+          conflict_check_status,
+          city,
+          state
+        ),
+        practice_area:practice_areas ( name )
+      `;
+
+const MATTER_SELECT_LEGACY = `
+        id,
+        title,
+        description,
+        status,
+        billing_type,
+        hourly_rate,
+        retainer_balance,
+        retainer_amount,
+        fixed_fee_amount,
+        client_id,
+        created_at,
+        client:clients (
+          id,
+          name,
+          first_name,
+          last_name,
+          company_name,
+          client_type,
+          is_company,
+          conflict_flag,
+          conflict_check_status,
+          city,
+          state
+        ),
+        practice_area:practice_areas ( name )
+      `;
+
+function isMissingGovernanceColumnError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("activation_status") ||
+    lower.includes("engagement_status") ||
+    lower.includes("billing_hold") ||
+    lower.includes("needs_partner_review") ||
+    lower.includes("partner_review_reason")
+  );
+}
+
+async function queryMatterRows(
+  supabase: NonNullable<ReturnType<typeof createClientSafe>>,
+): Promise<{ rows: MatterRow[]; error: string | null }> {
+  const primary = await supabase
+    .from("matters")
+    .select(MATTER_SELECT_GOVERNANCE)
+    .order("created_at", { ascending: false });
+
+  if (!primary.error) {
+    return { rows: (primary.data ?? []) as MatterRow[], error: null };
+  }
+
+  if (!isMissingGovernanceColumnError(primary.error.message)) {
+    return { rows: [], error: primary.error.message };
+  }
+
+  const fallback = await supabase
+    .from("matters")
+    .select(MATTER_SELECT_LEGACY)
+    .order("created_at", { ascending: false });
+
+  if (fallback.error) {
+    return { rows: [], error: fallback.error.message };
+  }
+
+  return { rows: (fallback.data ?? []) as MatterRow[], error: null };
+}
+
 type MatterRow = {
   id: string;
   title?: string | null;
   description?: string | null;
   status?: string | null;
+  activation_status?: string | null;
+  engagement_status?: string | null;
+  billing_hold?: boolean | null;
+  needs_partner_review?: boolean | null;
+  partner_review_reason?: string | null;
   billing_type?: string | null;
   hourly_rate?: number | null;
   retainer_balance?: number | null;
@@ -175,11 +290,17 @@ function findInvoiceDateAndTotals(
   matterId: string,
   matterTitle: string,
   invoices: Invoice[],
-): { lastInvoice: string | null; billed: number; collected: number } {
+): {
+  lastInvoice: string | null;
+  billed: number;
+  collected: number;
+  invoiceCount: number;
+} {
   const titleKey = matterTitle.trim().toLowerCase();
   let best: string | null = null;
   let billed = 0;
   let collected = 0;
+  let invoiceCount = 0;
   for (const inv of invoices) {
     if (inv.status === "Cancelled") continue;
     const byId = inv.matterId && inv.matterId === matterId;
@@ -187,6 +308,7 @@ function findInvoiceDateAndTotals(
       Boolean(titleKey) &&
       (inv.legalMatter || "").trim().toLowerCase() === titleKey;
     if (!byId && !byTitle) continue;
+    invoiceCount += 1;
     billed += Number(inv.totalAmount) || 0;
     collected += Number(inv.amountPaid) || 0;
     const date = (inv.invoiceDate || "").slice(0, 10);
@@ -196,6 +318,7 @@ function findInvoiceDateAndTotals(
     lastInvoice: best,
     billed: roundMoney(billed),
     collected: roundMoney(collected),
+    invoiceCount,
   };
 }
 
@@ -352,47 +475,16 @@ export async function fetchSharedFirmMatters(
     }
     const invoices = includeWip ? getAllManagedInvoices() : [];
 
-    const { data: matterRows, error: matterError } = await supabase
-      .from("matters")
-      .select(
-        `
-        id,
-        title,
-        description,
-        status,
-        billing_type,
-        hourly_rate,
-        retainer_balance,
-        retainer_amount,
-        fixed_fee_amount,
-        client_id,
-        created_at,
-        client:clients (
-          id,
-          name,
-          first_name,
-          last_name,
-          company_name,
-          client_type,
-          is_company,
-          conflict_flag,
-          conflict_check_status,
-          city,
-          state
-        ),
-        practice_area:practice_areas ( name )
-      `,
-      )
-      .order("created_at", { ascending: false });
+    const { rows: matterRows, error: matterError } = await queryMatterRows(supabase);
 
     if (matterError) {
       return {
         matters: [],
-        error: `Could not load matters: ${matterError.message}`,
+        error: `Could not load matters: ${matterError}`,
       };
     }
 
-    let matters = (matterRows ?? []) as MatterRow[];
+    let matters = matterRows;
     const matterIds = matters.map((m) => String(m.id));
 
     const { attorneyByMatter, assigneesByMatter, assigneeProfileIdsByMatter } =
@@ -454,7 +546,45 @@ export async function fetchSharedFirmMatters(
       const openDate = (m.created_at || "").slice(0, 10) || "—";
       const invoiceMeta = includeWip
         ? findInvoiceDateAndTotals(id, title, invoices)
-        : { lastInvoice: null, billed: 0, collected: 0 };
+        : {
+            lastInvoice: null,
+            billed: 0,
+            collected: 0,
+            invoiceCount: 0,
+          };
+
+      const conflictStatus = mapConflictStatus(
+          clientEmbed?.conflict_check_status,
+          conflictFlag,
+        );
+      const billingHold =
+        Boolean(m.billing_hold) || conflictFlag;
+      const needsPartnerReview =
+        Boolean(m.needs_partner_review) ||
+        billingHold ||
+        !attorneyByMatter.get(id) ||
+        conflictStatus !== "cleared" ||
+        String(m.status || "").toLowerCase() === "on_hold";
+
+      let partnerReviewReason = m.partner_review_reason?.trim() || null;
+      if (!partnerReviewReason) {
+        if (billingHold) {
+          partnerReviewReason = "Billing hold in effect";
+        } else if (conflictFlag || conflictStatus === "possible_conflict") {
+          partnerReviewReason =
+            "Conflict flag on client record — confirm engagement may continue";
+        } else if (
+          conflictStatus === "pending" ||
+          conflictStatus === "not_reviewed"
+        ) {
+          partnerReviewReason = "Conflict check still pending";
+        } else if (!attorneyByMatter.get(id)) {
+          partnerReviewReason = "No responsible attorney assigned";
+        } else if (String(m.status || "").toLowerCase() === "on_hold") {
+          partnerReviewReason =
+            "Matter on hold — partner decision to reopen or close";
+        }
+      }
 
       return {
         id,
@@ -463,6 +593,14 @@ export async function fetchSharedFirmMatters(
         clientId: m.client_id ? String(m.client_id) : clientEmbed?.id ?? null,
         clientName: clientNameFromEmbed(clientEmbed),
         status: String(m.status || "open").toLowerCase(),
+        activationStatus: mapActivationStatus(
+          m.activation_status,
+          String(m.status || "open"),
+        ),
+        engagementStatus: mapEngagementStatus(m.engagement_status),
+        billingHold,
+        needsPartnerReview,
+        partnerReviewReason,
         billingType: String(m.billing_type || "hourly").toLowerCase(),
         hourlyRate:
           m.hourly_rate != null && Number.isFinite(Number(m.hourly_rate))
@@ -487,6 +625,8 @@ export async function fetchSharedFirmMatters(
         office: officeFromClient(clientEmbed),
         unbilledWip: roundMoney(unbilledTimeByMatter.get(id) ?? 0),
         unbilledExpenses: roundMoney(unbilledExpenseByMatter.get(id) ?? 0),
+        invoiceCount: invoiceMeta.invoiceCount,
+        hasInvoices: invoiceMeta.invoiceCount > 0,
         billedToDate: invoiceMeta.billed,
         collectedToDate: invoiceMeta.collected,
         lastInvoiceDate: invoiceMeta.lastInvoice,
@@ -537,7 +677,7 @@ function deriveFinancialStatus(
   m: SharedFirmMatter,
   budget: number,
 ): AmMatterEntity["financialStatus"] {
-  if (m.conflictFlag) return "Billing Hold";
+  if (m.billingHold || m.conflictFlag) return "Billing Hold";
   const spent = m.billedToDate + m.unbilledWip + m.unbilledExpenses;
   if (budget > 0 && spent > budget) return "Over Budget";
   const minRetainer = m.retainerAmount ?? 0;
@@ -581,7 +721,7 @@ export function toAccountingManagerMatter(m: SharedFirmMatter): AmMatterEntity {
     trustBalance: 0,
     marginPercent: marginPercent(m),
     financialStatus: deriveFinancialStatus(m, budget),
-    billingHold: m.conflictFlag,
+    billingHold: m.billingHold,
     minimumRetainer: m.retainerAmount ?? 0,
   };
 }
@@ -640,6 +780,40 @@ function mapLifecycle(status: string): MatterLifecycleStatus {
   return "open";
 }
 
+function mapActivationStatus(
+  raw: string | null | undefined,
+  lifecycleStatus: string,
+): MatterActivationStatus {
+  const t = (raw ?? "").toLowerCase();
+  if (
+    t === "draft" ||
+    t === "pending_activation" ||
+    t === "active" ||
+    t === "closed"
+  ) {
+    return t;
+  }
+  const lifecycle = lifecycleStatus.toLowerCase();
+  if (lifecycle === "closed" || lifecycle === "archived") return "closed";
+  if (lifecycle === "on_hold") return "pending_activation";
+  return "active";
+}
+
+function mapEngagementStatus(
+  raw: string | null | undefined,
+): MatterEngagementStatus {
+  const t = (raw ?? "").toLowerCase();
+  if (
+    t === "not_started" ||
+    t === "letter_sent" ||
+    t === "signed" ||
+    t === "declined"
+  ) {
+    return t;
+  }
+  return "signed";
+}
+
 function mapFeeType(billingType: string): EngagementFeeType {
   switch (billingType.toLowerCase().replace(/\s+/g, "_")) {
     case "fixed_fee":
@@ -659,21 +833,26 @@ function mapFeeType(billingType: string): EngagementFeeType {
 
 export function toFirmPortfolioMatter(m: SharedFirmMatter): FirmPortfolioMatter {
   const needsPartnerReview =
-    m.conflictFlag ||
+    m.needsPartnerReview ||
+    m.billingHold ||
     !m.attorneyName ||
     m.status === "on_hold" ||
     m.conflictStatus !== "cleared";
 
-  let partnerReviewReason: string | null = null;
-  if (m.conflictFlag || m.conflictStatus === "possible_conflict") {
-    partnerReviewReason =
-      "Conflict flag on client record — confirm engagement may continue";
-  } else if (m.conflictStatus === "pending" || m.conflictStatus === "not_reviewed") {
-    partnerReviewReason = "Conflict check still pending";
-  } else if (!m.attorneyName) {
-    partnerReviewReason = "No responsible attorney assigned";
-  } else if (m.status === "on_hold") {
-    partnerReviewReason = "Matter on hold — partner decision to reopen or close";
+  let partnerReviewReason = m.partnerReviewReason;
+  if (!partnerReviewReason) {
+    if (m.billingHold) {
+      partnerReviewReason = "Billing hold in effect";
+    } else if (m.conflictFlag || m.conflictStatus === "possible_conflict") {
+      partnerReviewReason =
+        "Conflict flag on client record — confirm engagement may continue";
+    } else if (m.conflictStatus === "pending" || m.conflictStatus === "not_reviewed") {
+      partnerReviewReason = "Conflict check still pending";
+    } else if (!m.attorneyName) {
+      partnerReviewReason = "No responsible attorney assigned";
+    } else if (m.status === "on_hold") {
+      partnerReviewReason = "Matter on hold — partner decision to reopen or close";
+    }
   }
 
   return {
@@ -686,11 +865,13 @@ export function toFirmPortfolioMatter(m: SharedFirmMatter): FirmPortfolioMatter 
     responsibleAttorney: m.attorneyName,
     originatingAttorney: m.attorneyName,
     status: mapLifecycle(m.status),
+    activationStatus: m.activationStatus,
+    engagementStatus: m.engagementStatus,
     feeType: mapFeeType(m.billingType),
     hourlyRate: m.hourlyRate,
     flatFeeAmount: m.fixedFeeAmount ?? m.retainerAmount,
     budgetCap: deriveBudget(m) || null,
-    billingHold: m.conflictFlag,
+    billingHold: m.billingHold,
     conflictStatus: m.conflictStatus,
     needsPartnerReview,
     partnerReviewReason,
@@ -763,4 +944,19 @@ export function toParalegalAssignmentMatter(
     conflictStatus: m.conflictStatus,
     openDate: m.openDate === "—" ? new Date().toISOString().slice(0, 10) : m.openDate,
   };
+}
+
+export async function fetchSharedFirmMatterById(
+  matterId: string,
+  options: FetchFirmMattersOptions = {},
+): Promise<{ matter: SharedFirmMatter | null; error: string | null }> {
+  const result = await fetchSharedFirmMatters(options);
+  const matter =
+    result.matters.find(
+      (row) =>
+        row.id === matterId ||
+        row.matterNumber === matterId ||
+        row.title.toLowerCase() === matterId.toLowerCase(),
+    ) ?? null;
+  return { matter, error: result.error };
 }
