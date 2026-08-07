@@ -40,6 +40,7 @@ export function TimeEntryList({
         <TableHeader>
           <TableRow>
             <TableHead>Date</TableHead>
+            <TableHead>Requested by</TableHead>
             <TableHead>Matter</TableHead>
             <TableHead>Hours</TableHead>
             <TableHead>Billable</TableHead>
@@ -52,6 +53,7 @@ export function TimeEntryList({
           {entries.map((entry) => (
             <TableRow key={entry.id}>
               <TableCell>{formatDate(entry.entry_date)}</TableCell>
+              <TableCell>{entry.requested_by_name ?? "—"}</TableCell>
               <TableCell>{entry.matter?.title ?? "—"}</TableCell>
               <TableCell>{entry.hours}</TableCell>
               <TableCell>{entry.is_billable ? "Yes" : "No"}</TableCell>

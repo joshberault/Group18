@@ -5,11 +5,7 @@ import { ExpensesPageClient } from "./ExpensesPageClient";
 import { ParalegalExpensesView } from "@/components/paralegal/ParalegalExpensesView";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { LoadingState } from "@/components/ui/LoadingState";
-import {
-  DEMO_EXPENSES,
-  DEMO_MATTERS,
-  DEMO_PROFILE,
-} from "@/lib/attorney/demo-data";
+import { DEMO_MATTERS } from "@/lib/attorney/demo-data";
 
 export default function AttorneyExpensesPage() {
   const { role } = useDemoRole();
@@ -23,11 +19,6 @@ export default function AttorneyExpensesPage() {
   }
 
   return (
-    <ExpensesPageClient
-      profileId={DEMO_PROFILE.id}
-      initialMatters={DEMO_MATTERS}
-      initialExpenses={DEMO_EXPENSES}
-      previewMode
-    />
+    <ExpensesPageClient initialMatters={DEMO_MATTERS} />
   );
 }

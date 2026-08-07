@@ -25,6 +25,7 @@ export function ExpenseList({ expenses }: { expenses: ExpenseSubmission[] }) {
       <TableHeader>
         <TableRow>
           <TableHead>Date</TableHead>
+          <TableHead>Requested by</TableHead>
           <TableHead>Matter</TableHead>
           <TableHead>Amount</TableHead>
           <TableHead>Description</TableHead>
@@ -35,6 +36,7 @@ export function ExpenseList({ expenses }: { expenses: ExpenseSubmission[] }) {
         {expenses.map((expense) => (
           <TableRow key={expense.id}>
             <TableCell>{formatDate(expense.expense_date)}</TableCell>
+            <TableCell>{expense.requested_by_name ?? "—"}</TableCell>
             <TableCell>{expense.matter?.title ?? "—"}</TableCell>
             <TableCell>{formatCurrency(expense.amount)}</TableCell>
             <TableCell>{expense.description}</TableCell>

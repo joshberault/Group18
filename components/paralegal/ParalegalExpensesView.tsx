@@ -18,6 +18,10 @@ import {
   addParalegalExpense,
   updateParalegalExpense,
 } from "@/lib/paralegal/workflow-store";
+import {
+  getDemoSubmitterContext,
+  submitDemoExpense,
+} from "@/lib/demo/time-workflow-store";
 import { formatCurrency } from "@/lib/utils/cn";
 
 const RECEIPT_THRESHOLD = 25;
@@ -82,6 +86,21 @@ export function ParalegalExpensesView() {
       status: receiptMissing ? "draft" : "submitted",
       receiptMissing,
     });
+
+    if (!receiptMissing) {
+      const submitter = getDemoSubmitterContext("paralegal");
+      submitDemoExpense({
+        profileId: submitter.profileId,
+        submitterName: submitter.submitterName,
+        submitterRole: "paralegal",
+        employeeId: submitter.employeeId,
+        matterId: matter.id,
+        matterTitle: matter.title,
+        expenseDate,
+        amount: value,
+        description: description.trim(),
+      });
+    }
     refresh();
     setAmount("");
     setDescription("");
@@ -89,7 +108,7 @@ export function ParalegalExpensesView() {
     setToast(
       receiptMissing
         ? `Saved as draft — receipt required for expenses ≥ $${RECEIPT_THRESHOLD}.`
-        : "Expense submitted for billing/management review (you cannot approve it).",
+        : "Expense submitted for manager approval. Switch to Managing Partner or Firm Administrator to review.",
     );
   }
 

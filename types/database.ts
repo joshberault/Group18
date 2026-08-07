@@ -59,6 +59,8 @@ export type TimeEntry = {
   is_billable: boolean;
   status: ApprovalStatus;
   matter?: { title: string } | null;
+  /** Demo workflow — specialty attorney who submitted the request */
+  requested_by_name?: string;
 };
 
 export type ExpenseSubmission = {
@@ -70,6 +72,8 @@ export type ExpenseSubmission = {
   description: string;
   status: ApprovalStatus;
   matter?: { title: string } | null;
+  /** Demo workflow — specialty attorney who submitted the request */
+  requested_by_name?: string;
 };
 
 export type Task = {

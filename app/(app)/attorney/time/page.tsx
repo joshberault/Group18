@@ -5,11 +5,7 @@ import { TimeEntriesPageClient } from "./TimeEntriesPageClient";
 import { ParalegalTimeView } from "@/components/paralegal/ParalegalTimeView";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { LoadingState } from "@/components/ui/LoadingState";
-import {
-  DEMO_MATTERS,
-  DEMO_PROFILE,
-  DEMO_TIME_ENTRIES,
-} from "@/lib/attorney/demo-data";
+import { DEMO_MATTERS } from "@/lib/attorney/demo-data";
 
 export default function AttorneyTimePage() {
   const { role } = useDemoRole();
@@ -24,11 +20,7 @@ export default function AttorneyTimePage() {
 
   return (
     <Suspense fallback={<LoadingState message="Loading time entries…" />}>
-      <TimeEntriesPageClient
-        profileId={DEMO_PROFILE.id}
-        initialMatters={DEMO_MATTERS}
-        initialEntries={DEMO_TIME_ENTRIES}
-      />
+      <TimeEntriesPageClient initialMatters={DEMO_MATTERS} />
     </Suspense>
   );
 }
