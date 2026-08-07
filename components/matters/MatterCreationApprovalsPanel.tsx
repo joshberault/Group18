@@ -71,6 +71,7 @@ export function MatterCreationApprovalsPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [approvedMatterId, setApprovedMatterId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
@@ -120,15 +121,18 @@ export function MatterCreationApprovalsPanel({
   async function handleApprove() {
     if (!selected) return;
     setBusy(true);
+    setErrorMessage(null);
     const result = await approveMatterCreationRequest(selected.id, {
       name: DEMO_IDENTITIES[role].fullName,
       role,
     }, reviewNotes);
     setBusy(false);
     if (!result.ok) {
-      setMessage(result.error ?? "Unable to approve request.");
+      setMessage(null);
+      setErrorMessage(result.error ?? "Unable to approve request.");
       return;
     }
+    setErrorMessage(null);
     setMessage(`Approved and created matter for "${selected.title}".`);
     if (result.matterId) {
       setApprovedMatterId(result.matterId);
@@ -147,15 +151,18 @@ export function MatterCreationApprovalsPanel({
   async function handleReject() {
     if (!selected) return;
     setBusy(true);
+    setErrorMessage(null);
     const result = await rejectMatterCreationRequest(selected.id, {
       name: DEMO_IDENTITIES[role].fullName,
       role,
     }, reviewNotes);
     setBusy(false);
     if (!result.ok) {
-      setMessage(result.error ?? "Unable to reject request.");
+      setMessage(null);
+      setErrorMessage(result.error ?? "Unable to reject request.");
       return;
     }
+    setErrorMessage(null);
     setMessage(`Rejected matter request "${selected.title}".`);
     setSelectedId(null);
     setReviewNotes("");
@@ -165,6 +172,12 @@ export function MatterCreationApprovalsPanel({
 
   return (
     <div ref={panelRef} className="space-y-4">
+      {errorMessage ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {errorMessage}
+        </div>
+      ) : null}
+
       {message ? (
         <PipelineHandoffBanner stage="matter_created" title={message}>
           {approvedMatterId ? (

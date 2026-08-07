@@ -1,5 +1,8 @@
 import { createClientSafe } from "@/lib/supabase/client";
+import { SPECIALTY_ATTORNEY_PROFILES } from "@/lib/attorney/specialty-attorneys";
 import { displayClientName, type ClientType } from "@/lib/clients/types";
+import { syncLeadAttorneyAssignment } from "@/lib/intake/matter-assignments";
+import { getMatterLeadAttorneySelectOptions } from "@/lib/matters/matter-staff-assignees";
 import type {
   MatterCreationFormValues,
   MatterCreationLookupOption,
@@ -36,6 +39,43 @@ type StoredMatterRequestPayload = {
 
 let cachedStorageMode: StorageMode | null = null;
 
+const MATTER_GOVERNANCE_DEFAULTS = {
+  activation_status: "draft",
+  engagement_status: "not_started",
+  billing_hold: false,
+  needs_partner_review: true,
+  partner_review_reason:
+    "Managing Partner submission — pending engagement agreement approval",
+} as const;
+
+function isMissingTableError(error: { code?: string; message?: string } | null): boolean {
+  const message = error?.message?.toLowerCase() ?? "";
+  return (
+    error?.code === "PGRST205" ||
+    message.includes("could not find the table") ||
+    message.includes("does not exist")
+  );
+}
+
+function isGovernanceColumnError(message: string | undefined): boolean {
+  const lower = (message ?? "").toLowerCase();
+  return (
+    lower.includes("activation_status") ||
+    lower.includes("engagement_status") ||
+    lower.includes("billing_hold") ||
+    lower.includes("needs_partner_review") ||
+    lower.includes("partner_review_reason") ||
+    lower.includes("matters_engagement_status_check") ||
+    lower.includes("matters_activation_status_check")
+  );
+}
+
+function notifyPortfolioUpdated() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("firm-portfolio-matters-updated"));
+  }
+}
+
 function asNumber(value: unknown): number | null {
   if (value == null || value === "") return null;
   const n = Number(value);
@@ -60,7 +100,7 @@ async function detectStorageMode(
     .from("matter_creation_requests")
     .select("id")
     .limit(1);
-  cachedStorageMode = error ? "audit" : "table";
+  cachedStorageMode = error && isMissingTableError(error) ? "audit" : "table";
   return cachedStorageMode;
 }
 
@@ -280,37 +320,93 @@ async function findProfileIdByName(
   supabase: NonNullable<ReturnType<typeof createClientSafe>>,
   fullName: string,
 ): Promise<string | null> {
+  const trimmed = fullName.trim();
+  if (!trimmed) return null;
+
   const { data } = await supabase
     .from("profiles")
     .select("id")
-    .eq("full_name", fullName)
+    .eq("full_name", trimmed)
     .limit(1)
     .maybeSingle();
-  return data?.id ? String(data.id) : null;
+  if (data?.id) return String(data.id);
+
+  const specialty = SPECIALTY_ATTORNEY_PROFILES.find(
+    (profile) => profile.fullName === trimmed,
+  );
+  return specialty?.id ?? null;
+}
+
+function requestRowToStoredPayload(
+  row: Record<string, unknown>,
+): StoredMatterRequestPayload {
+  return {
+    clientId: String(row.client_id),
+    practiceAreaId: row.practice_area_id ? String(row.practice_area_id) : null,
+    title: String(row.title ?? ""),
+    description: String(row.description ?? ""),
+    billingType: String(row.billing_type ?? "hourly") as StoredMatterRequestPayload["billingType"],
+    hourlyRate: asNumber(row.hourly_rate),
+    fixedFeeAmount: asNumber(row.fixed_fee_amount),
+    retainerAmount: asNumber(row.retainer_amount),
+    expenseTerms: String(row.expense_terms ?? ""),
+    proposedAttorneyName: String(row.proposed_attorney_name ?? ""),
+    submittedByName: String(row.submitted_by_name ?? ""),
+    submittedByRole: String(row.submitted_by_role ?? ""),
+    status: String(row.status ?? "pending") as MatterCreationRequestStatus,
+    reviewNotes: String(row.review_notes ?? ""),
+    reviewedByName: String(row.reviewed_by_name ?? ""),
+    reviewedAt: row.reviewed_at ? String(row.reviewed_at) : null,
+    createdMatterId: row.created_matter_id ? String(row.created_matter_id) : null,
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+  };
+}
+
+function buildMatterInsertRow(payload: StoredMatterRequestPayload) {
+  const retainerAmount = payload.retainerAmount;
+  return {
+    client_id: payload.clientId,
+    practice_area_id: payload.practiceAreaId,
+    title: payload.title,
+    description: payload.description || null,
+    status: "open" as const,
+    billing_type: payload.billingType,
+    hourly_rate: payload.hourlyRate,
+    fixed_fee_amount: payload.fixedFeeAmount,
+    retainer_amount: retainerAmount,
+    retainer_balance: retainerAmount,
+    expense_terms: payload.expenseTerms || null,
+    ...MATTER_GOVERNANCE_DEFAULTS,
+  };
 }
 
 async function createMatterFromPayload(
   supabase: NonNullable<ReturnType<typeof createClientSafe>>,
   payload: StoredMatterRequestPayload,
 ): Promise<string> {
-  const retainerAmount = payload.retainerAmount;
-  const { data: matter, error } = await supabase
+  const row = buildMatterInsertRow(payload);
+
+  let { data: matter, error } = await supabase
     .from("matters")
-    .insert({
-      client_id: payload.clientId,
-      practice_area_id: payload.practiceAreaId,
-      title: payload.title,
-      description: payload.description || null,
-      status: "open",
-      billing_type: payload.billingType,
-      hourly_rate: payload.hourlyRate,
-      fixed_fee_amount: payload.fixedFeeAmount,
-      retainer_amount: retainerAmount,
-      retainer_balance: retainerAmount,
-      expense_terms: payload.expenseTerms || null,
-    })
+    .insert(row)
     .select("id")
     .single();
+
+  if (error && isGovernanceColumnError(error.message)) {
+    const {
+      activation_status: _activationStatus,
+      engagement_status: _engagementStatus,
+      billing_hold: _billingHold,
+      needs_partner_review: _needsPartnerReview,
+      partner_review_reason: _partnerReviewReason,
+      ...legacyRow
+    } = row;
+    ({ data: matter, error } = await supabase
+      .from("matters")
+      .insert(legacyRow)
+      .select("id")
+      .single());
+  }
 
   if (error || !matter) {
     throw new Error(error?.message ?? "Unable to create matter.");
@@ -320,14 +416,18 @@ async function createMatterFromPayload(
   if (payload.proposedAttorneyName) {
     const profileId = await findProfileIdByName(supabase, payload.proposedAttorneyName);
     if (profileId) {
-      await supabase.from("matter_assignments").insert({
-        matter_id: matterId,
-        profile_id: profileId,
-        role_on_matter: "lead_attorney",
-      });
+      const sync = await syncLeadAttorneyAssignment(
+        matterId,
+        profileId,
+        payload.proposedAttorneyName,
+      );
+      if (!sync.ok) {
+        console.warn("Lead attorney assignment failed:", sync.error);
+      }
     }
   }
 
+  notifyPortfolioUpdated();
   return matterId;
 }
 
@@ -389,9 +489,17 @@ export async function fetchMatterCreationLookups(): Promise<{
     label: String(area.name),
   }));
 
-  const attorneys = (profilesRes.data ?? [])
+  const attorneysFromProfiles = (profilesRes.data ?? [])
     .map((profile) => String(profile.full_name ?? "").trim())
-    .filter(Boolean)
+    .filter(Boolean);
+
+  const attorneyNames = new Set<string>([
+    ...attorneysFromProfiles,
+    ...getMatterLeadAttorneySelectOptions().map((option) => option.value),
+  ]);
+
+  const attorneys = Array.from(attorneyNames)
+    .sort((a, b) => a.localeCompare(b))
     .map((name) => ({ value: name, label: name }));
 
   return { clients, practiceAreas, attorneys, error: null };
@@ -493,6 +601,7 @@ export async function submitMatterCreationRequest(
     .single();
 
   if (error) return { ok: false, error: error.message };
+  cachedStorageMode = "table";
   return { ok: true, requestId: String(data.id) };
 }
 
@@ -575,56 +684,32 @@ export async function approveMatterCreationRequest(
     return { ok: false, error: "This request has already been reviewed." };
   }
 
-  const retainerAmount = asNumber(request.retainer_amount);
-  const { data: matter, error: matterError } = await supabase
-    .from("matters")
-    .insert({
-      client_id: request.client_id,
-      practice_area_id: request.practice_area_id,
-      title: request.title,
-      description: request.description,
-      status: "open",
-      billing_type: request.billing_type,
-      hourly_rate: asNumber(request.hourly_rate),
-      fixed_fee_amount: asNumber(request.fixed_fee_amount),
-      retainer_amount: retainerAmount,
-      retainer_balance: retainerAmount,
-      expense_terms: request.expense_terms,
-    })
-    .select("id")
-    .single();
+  try {
+    const matterId = await createMatterFromPayload(
+      supabase,
+      requestRowToStoredPayload(request as Record<string, unknown>),
+    );
 
-  if (matterError || !matter) {
-    return { ok: false, error: matterError?.message ?? "Unable to create matter." };
+    const { error: updateError } = await supabase
+      .from("matter_creation_requests")
+      .update({
+        status: "approved",
+        review_notes: reviewNotes?.trim() || null,
+        reviewed_by_name: reviewer.name,
+        reviewed_at: new Date().toISOString(),
+        created_matter_id: matterId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", requestId);
+
+    if (updateError) return { ok: false, error: updateError.message };
+    return { ok: true, matterId };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Unable to create matter.",
+    };
   }
-
-  const matterId = String(matter.id);
-  const proposedAttorney = String(request.proposed_attorney_name ?? "").trim();
-  if (proposedAttorney) {
-    const profileId = await findProfileIdByName(supabase, proposedAttorney);
-    if (profileId) {
-      await supabase.from("matter_assignments").insert({
-        matter_id: matterId,
-        profile_id: profileId,
-        role_on_matter: "lead_attorney",
-      });
-    }
-  }
-
-  const { error: updateError } = await supabase
-    .from("matter_creation_requests")
-    .update({
-      status: "approved",
-      review_notes: reviewNotes?.trim() || null,
-      reviewed_by_name: reviewer.name,
-      reviewed_at: new Date().toISOString(),
-      created_matter_id: matterId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", requestId);
-
-  if (updateError) return { ok: false, error: updateError.message };
-  return { ok: true, matterId };
 }
 
 export async function rejectMatterCreationRequest(
