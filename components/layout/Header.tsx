@@ -147,6 +147,8 @@ export function Header({ onMenuClick, className }: HeaderProps) {
     selectedRole === "paralegal" ||
     selectedRole === "client";
 
+  const showHeaderNotifications = selectedRole !== "prospective_client";
+
   function notificationIcon(type: FeedNotification["type"]) {
     if (type === "document_deletion") return FileX2;
     if (
@@ -206,7 +208,8 @@ export function Header({ onMenuClick, className }: HeaderProps) {
       <div className="flex flex-1 items-center justify-end gap-3 md:flex-none">
         <DemoRoleSelect onRoleChange={handleRoleChange} />
 
-        {usesRoleFeed ? (
+        {showHeaderNotifications ? (
+          usesRoleFeed ? (
           <div className="relative">
             <Button
               variant="ghost"
@@ -224,12 +227,14 @@ export function Header({ onMenuClick, className }: HeaderProps) {
               }
               onClick={handleNotificationBell}
             >
-              <Bell className="h-5 w-5 text-muted" />
-              {visibleNotificationCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-100 px-1 text-[10px] font-bold text-red-700 ring-2 ring-white">
-                  {visibleNotificationCount}
-                </span>
-              )}
+              <span className="relative">
+                <Bell className="h-5 w-5 text-muted" />
+                {visibleNotificationCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+                    {visibleNotificationCount}
+                  </span>
+                )}
+              </span>
             </Button>
 
             {(selectedRole === "attorney" || selectedRole === "paralegal") &&
@@ -310,9 +315,10 @@ export function Header({ onMenuClick, className }: HeaderProps) {
                 </div>
               )}
           </div>
-        ) : (
-          <FirmNotificationsMenu />
-        )}
+          ) : (
+            <FirmNotificationsMenu />
+          )
+        ) : null}
 
         <div className="hidden text-right sm:block">
           <p className="text-sm font-medium text-navy-900">
