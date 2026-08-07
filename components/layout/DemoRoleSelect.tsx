@@ -209,9 +209,7 @@ export function DemoRoleSelect({
 
   return (
     <div ref={rootRef} className={cn("relative min-w-[180px] sm:min-w-[220px]", className)}>
-      <label className="mb-1.5 block text-sm font-medium text-navy-900">
-        Demo role
-      </label>
+      <span className="sr-only">Demo role</span>
       <button
         type="button"
         aria-haspopup="listbox"

@@ -55,8 +55,8 @@ export function GlobalSearch() {
 
   return (
     <div ref={containerRef} className="relative w-full">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+      <div className="relative h-10">
+        <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
         <Input
           placeholder="Search clients, matters, invoices..."
           className="pl-9"

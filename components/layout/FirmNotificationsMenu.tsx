@@ -41,6 +41,7 @@ export function FirmNotificationsMenu() {
       <Button
         variant="ghost"
         size="sm"
+        className="h-10 w-10 shrink-0 px-0"
         aria-label="Notifications"
         onClick={() => setOpen((value) => !value)}
       >

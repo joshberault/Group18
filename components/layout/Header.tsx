@@ -193,13 +193,13 @@ export function Header({ onMenuClick, className }: HeaderProps) {
         variant="ghost"
         size="sm"
         onClick={onMenuClick}
-        className="lg:hidden"
+        className="h-10 w-10 shrink-0 px-0 lg:hidden"
         aria-label="Open navigation"
       >
         <Menu className="h-5 w-5" />
       </Button>
 
-      <div className="hidden max-w-md flex-1 md:block">
+      <div className="hidden min-w-[16rem] max-w-md flex-1 md:block">
         <GlobalSearch />
       </div>
 
@@ -211,6 +211,7 @@ export function Header({ onMenuClick, className }: HeaderProps) {
             <Button
               variant="ghost"
               size="sm"
+              className="h-10 w-10 shrink-0 px-0"
               aria-label={`Notifications${
                 visibleNotificationCount > 0
                   ? `, ${visibleNotificationCount} active`
@@ -225,7 +226,7 @@ export function Header({ onMenuClick, className }: HeaderProps) {
             >
               <Bell className="h-5 w-5 text-muted" />
               {visibleNotificationCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-100 px-1 text-[10px] font-bold text-red-700 ring-2 ring-white">
+                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-100 px-1 text-[10px] font-bold text-red-700 ring-2 ring-white">
                   {visibleNotificationCount}
                 </span>
               )}
@@ -233,7 +234,7 @@ export function Header({ onMenuClick, className }: HeaderProps) {
 
             {(selectedRole === "attorney" || selectedRole === "paralegal") &&
               notificationsOpen && (
-                <div className="absolute right-0 top-12 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl">
+                <div className="absolute right-0 top-11 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl">
                   <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
                     <div>
                       <p className="text-sm font-semibold text-navy-900">
@@ -322,7 +323,7 @@ export function Header({ onMenuClick, className }: HeaderProps) {
           </p>
         </div>
 
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-900 text-sm font-semibold text-gold-500">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-900 text-sm font-semibold text-gold-500">
           {identity.initials}
         </div>
       </div>
