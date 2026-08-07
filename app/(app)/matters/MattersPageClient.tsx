@@ -41,7 +41,18 @@ function MattersPageContent() {
   }
 
   if (selectedRole === "firm_administrator") {
-    return <FirmAdministratorMattersView />;
+    return (
+      <Suspense
+        fallback={
+          <PageHeader
+            title="Matters"
+            description="Loading matter administration…"
+          />
+        }
+      >
+        <FirmAdministratorMattersView />
+      </Suspense>
+    );
   }
 
   if (selectedRole === "paralegal") {

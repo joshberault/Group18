@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   Briefcase,
   ExternalLink,
+  Plus,
   Search,
   UserX,
 } from "lucide-react";
@@ -54,6 +55,10 @@ import {
   toFirmPortfolioMatter,
 } from "@/lib/matters/firm-matters-supabase";
 import { cn } from "@/lib/utils/cn";
+import {
+  buildFirmAdminApprovalsUrl,
+  matterCreationPipelineLabel,
+} from "@/lib/matters/matter-creation-flow";
 
 interface MatterFilters {
   search: string;
@@ -97,6 +102,8 @@ function conflictBadgeVariant(
 
 export function ManagingPartnerMattersView() {
   const searchParams = useSearchParams();
+  const submittedRequest = searchParams.get("submitted") === "matter-request";
+  const submittedRequestId = searchParams.get("requestId");
   const [matters, setMatters] = useState<FirmPortfolioMatter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -356,17 +363,41 @@ export function ManagingPartnerMattersView() {
         title="Firm Matters"
         description="Firm-wide engagement register — lifecycle, fee arrangements, staffing coverage, and partner review. Case work stays in Attorney Hub; WIP/trust stays in Accounting."
       >
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setMatters(resetFirmPortfolioMatters());
-            setFilters(defaultFilters);
-            showToast("Partner session edits cleared; Supabase base matters restored.");
-          }}
-        >
-          Reset session edits
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/matters/new">
+            <Button>
+              <Plus className="h-4 w-4" />
+              Create Matter
+            </Button>
+          </Link>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setMatters(resetFirmPortfolioMatters());
+              setFilters(defaultFilters);
+              showToast("Partner session edits cleared; Supabase base matters restored.");
+            }}
+          >
+            Reset session edits
+          </Button>
+        </div>
       </PageHeader>
+
+      {submittedRequest ? (
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          <p className="font-medium">{matterCreationPipelineLabel()} — request submitted.</p>
+          <p className="mt-1">
+            Switch to the Firm Administrator role and open{" "}
+            <Link
+              href={buildFirmAdminApprovalsUrl(submittedRequestId ?? undefined)}
+              className="font-medium text-green-900 underline underline-offset-2"
+            >
+              Matter creation approvals
+            </Link>{" "}
+            to review and approve this request before the matter opens.
+          </p>
+        </div>
+      ) : null}
 
       {error ? (
         <p className="mb-4 text-sm text-red-700">{error}</p>

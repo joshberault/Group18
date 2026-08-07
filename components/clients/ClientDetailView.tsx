@@ -36,11 +36,14 @@ import {
   updateClientStatus,
 } from "@/lib/clients/queries";
 import { formatAddress, formatDate } from "@/lib/clients/utils";
+import { buildMatterCreationUrl } from "@/lib/matters/matter-creation-flow";
+import { getMatterPermissions } from "@/lib/matters/permissions";
 import { USER_ROLE_LABELS } from "@/lib/types";
 
 export function ClientDetailView({ clientId }: { clientId: string }) {
   const { role } = useDemoRole();
   const permissions = getClientPermissions(role);
+  const matterPermissions = getMatterPermissions(role);
   const searchParams = useSearchParams();
   const startInEdit = searchParams.get("edit") === "1";
 
@@ -172,6 +175,12 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
             {permissions.canEditContact && !editing && (
               <Button onClick={() => setEditing(true)}>Edit Client</Button>
             )}
+            {matterPermissions.canSubmitCreationRequest &&
+              client.conflict_check_status === "cleared" && (
+                <Link href={buildMatterCreationUrl(client.id)}>
+                  <Button>Create Matter Request</Button>
+                </Link>
+              )}
             {permissions.canEditStatus && (
               <Button
                 variant={client.status === "active" ? "danger" : "primary"}

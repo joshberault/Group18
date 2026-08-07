@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { FileDown, Search } from "lucide-react";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import {
@@ -9,6 +10,7 @@ import {
   toFirmAdminMatterRow,
 } from "@/lib/matters/firm-matters-supabase";
 import type { FirmAdminMatterRow } from "@/lib/matters/shared-matters";
+import { MatterCreationApprovalsPanel } from "@/components/matters/MatterCreationApprovalsPanel";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -27,12 +29,17 @@ import {
 } from "@/components/ui/Table";
 
 export function FirmAdministratorMattersView() {
+  const searchParams = useSearchParams();
   const [rows, setRows] = useState<FirmAdminMatterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selected, setSelected] = useState<FirmAdminMatterRow | null>(null);
+  const [approvedMatterId, setApprovedMatterId] = useState<string | null>(
+    searchParams.get("approvedMatterId"),
+  );
+  const [approvalMessage, setApprovalMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -103,6 +110,22 @@ export function FirmAdministratorMattersView() {
         <KPICard title="Offices" value={loading ? "…" : String(kpis.offices)} subtitle="Active locations" />
       </div>
 
+      <MatterCreationApprovalsPanel
+        onReviewed={(matterId) => {
+          void load();
+          if (matterId) {
+            setApprovedMatterId(matterId);
+            setApprovalMessage("Matter approved and opened. It now appears in the administration register below.");
+          }
+        }}
+      />
+
+      {approvalMessage ? (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {approvalMessage}
+        </div>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Matter Administration</CardTitle>
@@ -159,7 +182,13 @@ export function FirmAdministratorMattersView() {
             ) : null}
             {!loading &&
               filtered.map((row) => (
-              <TableRow key={row.id} className="cursor-pointer hover:bg-gray-50" onClick={() => setSelected(row)}>
+              <TableRow
+                key={row.id}
+                className={`cursor-pointer hover:bg-gray-50 ${
+                  row.id === approvedMatterId ? "bg-green-50 ring-1 ring-inset ring-green-200" : ""
+                }`}
+                onClick={() => setSelected(row)}
+              >
                 <TableCell>
                   <p className="font-medium">{row.matterName}</p>
                   <p className="text-xs text-muted">{row.matterNumber}</p>
