@@ -1,6 +1,5 @@
 import { AdminDataProvider } from "@/components/admin/AdminDataProvider";
 import { ManagerDashboard } from "@/components/admin/ManagerDashboard";
-import { FirmOperationsQueues } from "@/components/dashboard/FirmOperationsQueues";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { DEMO_IDENTITIES } from "@/lib/roles/role-config";
 
@@ -19,7 +18,6 @@ export default function AdminDashboardPage() {
         <p className="text-sm text-muted">Role: Administrator</p>
       </div>
       <AdminDataProvider>
-        <FirmOperationsQueues />
         <ManagerDashboard />
       </AdminDataProvider>
     </div>

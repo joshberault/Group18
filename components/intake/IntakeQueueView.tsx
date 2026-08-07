@@ -75,7 +75,13 @@ function formatDate(iso: string): string {
   });
 }
 
-export function IntakeQueueView() {
+interface IntakeQueueViewProps {
+  /** When embedded in a full-screen dashboard modal. */
+  variant?: "standalone" | "embedded";
+}
+
+export function IntakeQueueView({ variant = "standalone" }: IntakeQueueViewProps) {
+  const isEmbedded = variant === "embedded";
   const [toast, setToast] = useState<string | null>(null);
   const [toastVariant, setToastVariant] = useState<"success" | "error">("success");
   const [records, setRecords] = useState<ConsultationRequestRecord[]>([]);
@@ -194,7 +200,8 @@ export function IntakeQueueView() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {!isEmbedded ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted">
             Active queue
@@ -220,6 +227,7 @@ export function IntakeQueueView() {
           <p className="mt-1 text-2xl font-semibold text-navy-900">{kpis.converted}</p>
         </Card>
       </div>
+      ) : null}
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="w-full max-w-xs">
