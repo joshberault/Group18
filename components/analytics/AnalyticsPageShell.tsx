@@ -3,10 +3,12 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import {
   analyticsBannerClass,
+  analyticsDividerClass,
   analyticsIconBoxClass,
   analyticsIconClass,
   analyticsPageClass,
   analyticsSectionDescClass,
+  analyticsSectionTitleClass,
 } from "./analytics-styles";
 
 interface AnalyticsPageShellProps {
@@ -55,6 +57,36 @@ export function AnalyticsPageShell({
   );
 }
 
-export function AnalyticsSectionDivider() {
-  return <hr className="border-gray-100" />;
+interface AnalyticsSectionDividerProps {
+  title?: string;
+  description?: string;
+  icon?: LucideIcon;
+}
+
+export function AnalyticsSectionDivider({
+  title,
+  description,
+  icon: Icon,
+}: AnalyticsSectionDividerProps) {
+  if (!title) {
+    return <hr className="border-gray-200/80" />;
+  }
+
+  return (
+    <div className={`${analyticsDividerClass} pt-1`}>
+      <div className="flex items-center gap-2 py-3">
+        {Icon && (
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-navy-900/5">
+            <Icon className="h-3.5 w-3.5 text-navy-700" />
+          </div>
+        )}
+        <div>
+          <h2 className={analyticsSectionTitleClass}>{title}</h2>
+          {description && (
+            <p className={analyticsSectionDescClass}>{description}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
