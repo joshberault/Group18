@@ -2,106 +2,109 @@
 
 import { useState } from "react";
 import { createClientSafe } from "@/lib/supabase/client";
+import {
+  getDemoSubmitterContext,
+  notifyApprovalWorkflowChange,
+  submitDemoExpense,
+} from "@/lib/demo/time-workflow-store";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { checkMatterBillable } from "@/lib/matters/matter-activation-gates";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import type { UserRole } from "@/lib/types";
 import type { Matter } from "@/types/database";
 
-type DemoExpensePayload = {
-  matter_id: string;
-  profile_id: string;
-  expense_date: string;
-  amount: number;
-  description: string;
-};
+const APPROVAL_SUCCESS_MESSAGE =
+  "Expense submitted for manager approval. Switch to Managing Partner or Firm Administrator on the dashboard to review.";
 
 type Props = {
   matters: Matter[];
-  profileId: string;
+  submitterRole?: UserRole;
   onCreated: () => void;
-  previewMode?: boolean;
-  onDemoSubmit?: (payload: DemoExpensePayload) => void;
 };
 
 export function ExpenseForm({
   matters,
-  profileId,
+  submitterRole = "attorney",
   onCreated,
-  previewMode = false,
-  onDemoSubmit,
 }: Props) {
+  const { selectedRole, attorneySpecialty } = useDemoRole();
+  const effectiveRole = submitterRole ?? selectedRole;
   const [matterId, setMatterId] = useState(matters[0]?.id ?? "");
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
+    setSuccess(null);
 
-    if (previewMode) {
-      const gate = await checkMatterBillable(matterId);
-      if (!gate.allowed) {
-        setError(gate.reason ?? "Expense entry is blocked for this matter.");
-        return;
-      }
-      if (onDemoSubmit) {
-        onDemoSubmit({
-          matter_id: matterId,
-          profile_id: profileId,
-          expense_date: expenseDate,
-          amount: Number(amount),
-          description: description.trim(),
-        });
-        setAmount("");
-        setDescription("");
-        setError(null);
-        onCreated();
-        return;
-      }
-      setError("Demo mode — sign in later to save real entries.");
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setError("Enter a valid expense amount.");
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    if (!description.trim()) {
+      setError("Description is required.");
+      return;
+    }
 
     const gate = await checkMatterBillable(matterId);
     if (!gate.allowed) {
       setError(gate.reason ?? "Expense entry is blocked for this matter.");
-      setLoading(false);
       return;
     }
 
-    const supabase = createClientSafe();
-    if (!supabase) {
-      setError("Supabase is not configured.");
-      setLoading(false);
-      return;
-    }
+    setLoading(true);
 
-    const { error: insertError } = await supabase.from("expense_submissions").insert({
-      matter_id: matterId,
-      profile_id: profileId,
-      expense_date: expenseDate,
-      amount: Number(amount),
-      description,
-      status: "pending",
+    const matterTitle =
+      matters.find((matter) => matter.id === matterId)?.title ?? undefined;
+    const submitter = getDemoSubmitterContext(
+      effectiveRole,
+      effectiveRole === "attorney" ? attorneySpecialty : null,
+    );
+
+    submitDemoExpense({
+      profileId: submitter.profileId,
+      submitterName: submitter.submitterName,
+      submitterRole: effectiveRole,
+      employeeId: submitter.employeeId,
+      matterId,
+      matterTitle,
+      expenseDate,
+      amount: parsedAmount,
+      description: description.trim(),
     });
 
-    setLoading(false);
-
-    if (insertError) {
-      setError(insertError.message);
-      return;
+    const supabase = createClientSafe();
+    if (supabase) {
+      const { error: insertError } = await supabase.from("expense_submissions").insert({
+        matter_id: matterId,
+        profile_id: submitter.profileId,
+        expense_date: expenseDate,
+        amount: parsedAmount,
+        description: description.trim(),
+        status: "pending",
+      });
+      if (insertError) {
+        console.warn("Supabase expense insert skipped:", insertError.message);
+      } else {
+        notifyApprovalWorkflowChange();
+      }
     }
 
+    setLoading(false);
     setAmount("");
     setDescription("");
+    setSuccess(APPROVAL_SUCCESS_MESSAGE);
     onCreated();
   }
 
@@ -145,6 +148,7 @@ export function ExpenseForm({
           </div>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
+        {success && <p className="text-sm text-green-700">{success}</p>}
         <Button type="submit" disabled={loading || matters.length === 0}>
           {loading ? "Submitting..." : "Submit for Manager Approval"}
         </Button>

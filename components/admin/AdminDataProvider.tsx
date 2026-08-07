@@ -13,6 +13,7 @@ import {
   fetchAdminOperationsDataset,
   type AdminOperationsDataset,
 } from "@/lib/admin/queries";
+import { subscribeTimeWorkflow } from "@/lib/demo/time-workflow-store";
 
 type AdminDataContextValue = {
   data: AdminOperationsDataset | null;
@@ -46,6 +47,12 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    return subscribeTimeWorkflow(() => {
+      void refresh();
+    });
   }, [refresh]);
 
   const value = useMemo(

@@ -18,6 +18,10 @@ import {
   addParalegalTimeEntry,
   updateParalegalTimeEntry,
 } from "@/lib/paralegal/workflow-store";
+import {
+  getDemoSubmitterContext,
+  submitDemoTimeEntry,
+} from "@/lib/demo/time-workflow-store";
 
 export function ParalegalTimeView() {
   const searchParams = useSearchParams();
@@ -98,13 +102,29 @@ export function ParalegalTimeView() {
       billable,
       status: asDraft ? "draft" : "submitted",
     });
+
+    if (!asDraft) {
+      const submitter = getDemoSubmitterContext("paralegal");
+      submitDemoTimeEntry({
+        profileId: submitter.profileId,
+        submitterName: submitter.submitterName,
+        submitterRole: "paralegal",
+        employeeId: submitter.employeeId,
+        matterId: matter.id,
+        matterTitle: matter.title,
+        entryDate,
+        hours: value,
+        description: `${activityType.replaceAll("_", " ")} — ${description.trim()}`,
+        isBillable: billable,
+      });
+    }
     refresh();
     setHours("");
     setDescription("");
     setToast(
       asDraft
         ? "Draft time entry saved."
-        : "Time submitted for attorney/billing review (you cannot approve it).",
+        : "Time submitted for manager approval. Switch to Managing Partner or Firm Administrator to review.",
     );
   }
 
@@ -265,8 +285,23 @@ export function ParalegalTimeView() {
                   className="mt-3"
                   onClick={() => {
                     updateParalegalTimeEntry(entry.id, { status: "submitted" });
+                    const submitter = getDemoSubmitterContext("paralegal");
+                    submitDemoTimeEntry({
+                      profileId: submitter.profileId,
+                      submitterName: submitter.submitterName,
+                      submitterRole: "paralegal",
+                      employeeId: submitter.employeeId,
+                      matterId: entry.matterId,
+                      matterTitle: entry.matterTitle,
+                      entryDate: entry.entryDate,
+                      hours: entry.hours,
+                      description: entry.description,
+                      isBillable: entry.billable,
+                    });
                     refresh();
-                    setToast("Draft submitted for review.");
+                    setToast(
+                      "Draft submitted for manager approval. Switch to Managing Partner or Firm Administrator to review.",
+                    );
                   }}
                 >
                   Submit draft

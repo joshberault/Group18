@@ -1,8 +1,10 @@
-import type { AdminApproval } from "@/lib/admin/types";
-import { DEMO_IDENTITIES } from "@/lib/roles/role-config";
-import type { UserRole } from "@/lib/types";
-import type { Matter, TimeEntry, ApprovalStatus } from "@/types/database";
-import { DEMO_MATTERS, DEMO_PROFILE } from "@/lib/attorney/demo-data";
+import type { AdminApproval, ApprovalPriority } from "@/lib/admin/types";
+import { getLeadAttorneyForSpecialty } from "@/lib/attorney/specialty-attorneys";
+import {
+  getStoredAttorneySpecialty,
+  type AttorneyDemoSpecialty,
+} from "@/lib/attorney/specialties";
+import { DEMO_PROFILE } from "@/lib/attorney/demo-data";
 
 const STORAGE_KEY = "counselflow-demo-time-workflow-v1";
 export const TIME_WORKFLOW_EVENT = "counselflow-time-workflow-change";
@@ -50,6 +52,7 @@ export type DemoJournalEntry = {
 
 type DemoTimeWorkflowState = {
   timeEntries: TimeEntry[];
+  expenses: ExpenseSubmission[];
   approvals: AdminApproval[];
   payrollAccruals: DemoPayrollAccrual[];
   journalEntries: DemoJournalEntry[];
@@ -58,6 +61,7 @@ type DemoTimeWorkflowState = {
 function emptyState(): DemoTimeWorkflowState {
   return {
     timeEntries: [],
+    expenses: [],
     approvals: [],
     payrollAccruals: [],
     journalEntries: [],
@@ -72,6 +76,7 @@ function readState(): DemoTimeWorkflowState {
     const parsed = JSON.parse(raw) as Partial<DemoTimeWorkflowState>;
     return {
       timeEntries: parsed.timeEntries ?? [],
+      expenses: parsed.expenses ?? [],
       approvals: parsed.approvals ?? [],
       payrollAccruals: parsed.payrollAccruals ?? [],
       journalEntries: parsed.journalEntries ?? [],
@@ -84,6 +89,12 @@ function readState(): DemoTimeWorkflowState {
 function writeState(state: DemoTimeWorkflowState) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  notifyApprovalWorkflowChange();
+}
+
+/** Notify dashboards and approval queues that pending items changed. */
+export function notifyApprovalWorkflowChange() {
+  if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(TIME_WORKFLOW_EVENT));
 }
 
@@ -94,13 +105,65 @@ export function subscribeTimeWorkflow(listener: () => void) {
   return () => window.removeEventListener(TIME_WORKFLOW_EVENT, handler);
 }
 
-export function profileIdForRole(role: UserRole): string {
-  if (role === "paralegal") return PARALEGAL_PROFILE_ID;
-  return DEMO_PROFILE.id;
+import { DEMO_IDENTITIES } from "@/lib/roles/role-config";
+import type { UserRole } from "@/lib/types";
+import type {
+  ExpenseSubmission,
+  Matter,
+  TimeEntry,
+  ApprovalStatus,
+} from "@/types/database";
+import { DEMO_MATTERS } from "@/lib/attorney/demo-data";
+
+export type DemoSubmitterContext = {
+  profileId: string;
+  submitterName: string;
+  employeeId: string;
+};
+
+/** Resolve profile + display name for demo submissions (specialty attorneys when role is attorney). */
+export function getDemoSubmitterContext(
+  role: UserRole,
+  attorneySpecialty?: AttorneyDemoSpecialty | null,
+): DemoSubmitterContext {
+  if (role === "attorney") {
+    const specialty = attorneySpecialty ?? getStoredAttorneySpecialty();
+    const attorney = getLeadAttorneyForSpecialty(specialty);
+    return {
+      profileId: attorney.id,
+      submitterName: attorney.fullName,
+      employeeId: attorney.id,
+    };
+  }
+
+  if (role === "paralegal") {
+    return {
+      profileId: PARALEGAL_PROFILE_ID,
+      submitterName: DEMO_IDENTITIES.paralegal.fullName,
+      employeeId: "demo-paralegal",
+    };
+  }
+
+  const identity = DEMO_IDENTITIES[role];
+  return {
+    profileId: DEMO_PROFILE.id,
+    submitterName: identity?.fullName ?? "Demo User",
+    employeeId: `demo-${role}`,
+  };
 }
 
-export function submitterNameForRole(role: UserRole): string {
-  return DEMO_IDENTITIES[role]?.fullName ?? "Demo User";
+export function profileIdForRole(
+  role: UserRole,
+  attorneySpecialty?: AttorneyDemoSpecialty | null,
+): string {
+  return getDemoSubmitterContext(role, attorneySpecialty).profileId;
+}
+
+export function submitterNameForRole(
+  role: UserRole,
+  attorneySpecialty?: AttorneyDemoSpecialty | null,
+): string {
+  return getDemoSubmitterContext(role, attorneySpecialty).submitterName;
 }
 
 function matterBillableRate(matter: Matter | undefined): number {
@@ -123,6 +186,60 @@ function nextTimeEntryId(state: DemoTimeWorkflowState) {
   return `time-demo-${max + 1}`;
 }
 
+function nextExpenseId(state: DemoTimeWorkflowState) {
+  const max = state.expenses
+    .map((row) => Number(row.id.replace(/\D/g, "")) || 0)
+    .reduce((a, b) => Math.max(a, b), 0);
+  return `exp-demo-${max + 1}`;
+}
+
+function resolveMatterTitle(matterId: string, matterTitle?: string): string {
+  if (matterTitle?.trim()) return matterTitle.trim();
+  return DEMO_MATTERS.find((row) => row.id === matterId)?.title ?? "Unknown matter";
+}
+
+function buildApprovalBase(input: {
+  submitterName: string;
+  submitterRole: UserRole;
+  employeeId: string;
+  matterId: string;
+  matterTitle: string;
+  submittedAt: string;
+  amountOrHours: string;
+  title: string;
+  summary: string;
+  priority: ApprovalPriority;
+}): Pick<
+  AdminApproval,
+  | "submittedBy"
+  | "employeeId"
+  | "status"
+  | "priority"
+  | "submittedAt"
+  | "amountOrHours"
+  | "matterId"
+  | "matterLabel"
+  | "matterReference"
+  | "matterStatus"
+  | "assignedApproverId"
+  | "assignedApproverName"
+> {
+  return {
+    submittedBy: input.submitterName,
+    employeeId: input.employeeId,
+    status: "pending",
+    priority: input.priority,
+    submittedAt: input.submittedAt,
+    amountOrHours: input.amountOrHours,
+    matterId: input.matterId,
+    matterLabel: input.matterTitle,
+    matterReference: input.matterId.toUpperCase(),
+    matterStatus: "open",
+    assignedApproverId: "emp-001",
+    assignedApproverName: DEMO_IDENTITIES.managing_partner.fullName,
+  };
+}
+
 function nextJournalEntryNumber(state: DemoTimeWorkflowState) {
   const max = state.journalEntries
     .map((row) => Number(row.entryNumber.replace(/\D/g, "")) || 0)
@@ -132,6 +249,10 @@ function nextJournalEntryNumber(state: DemoTimeWorkflowState) {
 
 export function getTimeEntriesForProfile(profileId: string): TimeEntry[] {
   return readState().timeEntries.filter((entry) => entry.profile_id === profileId);
+}
+
+export function getExpensesForProfile(profileId: string): ExpenseSubmission[] {
+  return readState().expenses.filter((entry) => entry.profile_id === profileId);
 }
 
 export function getDemoApprovals(): AdminApproval[] {
@@ -148,6 +269,12 @@ export function getPendingTimeApprovals(): AdminApproval[] {
   );
 }
 
+export function getPendingExpenseApprovals(): AdminApproval[] {
+  return getMergedApprovals().filter(
+    (row) => row.type === "expense" && row.status === "pending",
+  );
+}
+
 export function getPayrollAccruals(): DemoPayrollAccrual[] {
   return readState().payrollAccruals.map((row) => ({ ...row }));
 }
@@ -160,7 +287,9 @@ export type SubmitTimeEntryInput = {
   profileId: string;
   submitterName: string;
   submitterRole: UserRole;
+  employeeId?: string;
   matterId: string;
+  matterTitle?: string;
   entryDate: string;
   hours: number;
   description: string;
@@ -169,12 +298,12 @@ export type SubmitTimeEntryInput = {
 
 export function submitDemoTimeEntry(input: SubmitTimeEntryInput): TimeEntry {
   const state = readState();
-  const matter = DEMO_MATTERS.find((row) => row.id === input.matterId);
+  const matterTitle = resolveMatterTitle(input.matterId, input.matterTitle);
   const timeEntryId = nextTimeEntryId(state);
   const approvalId = nextApprovalId(state);
   const submittedAt = new Date().toISOString();
   const hoursLabel = `${input.hours.toFixed(1)} hrs`;
-  const matterTitle = matter?.title ?? "Unknown matter";
+  const employeeId = input.employeeId ?? input.profileId;
 
   const timeEntry: TimeEntry = {
     id: timeEntryId,
@@ -186,25 +315,26 @@ export function submitDemoTimeEntry(input: SubmitTimeEntryInput): TimeEntry {
     is_billable: input.isBillable,
     status: "pending",
     matter: { title: matterTitle },
+    requested_by_name: input.submitterName,
   };
 
   const approval: AdminApproval = {
     id: approvalId,
     title: `${hoursLabel} — ${matterTitle}`,
     type: "time_entry",
-    submittedBy: input.submitterName,
-    employeeId: `demo-${input.submitterRole}`,
     summary: `${input.description} (${input.submitterRole.replace("_", " ")})`,
-    status: "pending",
-    priority: input.hours >= 10 ? "urgent" : "normal",
-    submittedAt,
-    amountOrHours: hoursLabel,
-    matterId: input.matterId,
-    matterLabel: matterTitle,
-    matterReference: input.matterId.toUpperCase(),
-    matterStatus: "open",
-    assignedApproverId: "emp-001",
-    assignedApproverName: DEMO_IDENTITIES.managing_partner.fullName,
+    ...buildApprovalBase({
+      submitterName: input.submitterName,
+      submitterRole: input.submitterRole,
+      employeeId,
+      matterId: input.matterId,
+      matterTitle,
+      submittedAt,
+      amountOrHours: hoursLabel,
+      title: `${hoursLabel} — ${matterTitle}`,
+      summary: `${input.description} (${input.submitterRole.replace("_", " ")})`,
+      priority: input.hours >= 10 ? "urgent" : "normal",
+    }),
     originalSnapshot: `time_entry|${timeEntryId}|${input.hours}|${matterTitle}|${input.entryDate}`,
     timeEntryDate: input.entryDate,
     timeEntryHours: input.hours,
@@ -219,6 +349,70 @@ export function submitDemoTimeEntry(input: SubmitTimeEntryInput): TimeEntry {
   });
 
   return timeEntry;
+}
+
+export type SubmitExpenseInput = {
+  profileId: string;
+  submitterName: string;
+  submitterRole: UserRole;
+  employeeId?: string;
+  matterId: string;
+  matterTitle?: string;
+  expenseDate: string;
+  amount: number;
+  description: string;
+};
+
+export function submitDemoExpense(input: SubmitExpenseInput): ExpenseSubmission {
+  const state = readState();
+  const matterTitle = resolveMatterTitle(input.matterId, input.matterTitle);
+  const expenseId = nextExpenseId(state);
+  const approvalId = nextApprovalId(state);
+  const submittedAt = new Date().toISOString();
+  const amountLabel = `$${input.amount.toFixed(2)}`;
+  const employeeId = input.employeeId ?? input.profileId;
+
+  const expense: ExpenseSubmission = {
+    id: expenseId,
+    matter_id: input.matterId,
+    profile_id: input.profileId,
+    expense_date: input.expenseDate,
+    amount: input.amount,
+    description: input.description,
+    status: "pending",
+    matter: { title: matterTitle },
+    requested_by_name: input.submitterName,
+  };
+
+  const approval: AdminApproval = {
+    id: approvalId,
+    title: `Expense — ${input.description.trim() || matterTitle}`,
+    type: "expense",
+    summary: `${amountLabel} — ${input.description.trim()}`,
+    ...buildApprovalBase({
+      submitterName: input.submitterName,
+      submitterRole: input.submitterRole,
+      employeeId,
+      matterId: input.matterId,
+      matterTitle,
+      submittedAt,
+      amountOrHours: amountLabel,
+      title: `Expense — ${input.description.trim() || matterTitle}`,
+      summary: `${amountLabel} — ${input.description.trim()}`,
+      priority: input.amount >= 250 ? "urgent" : "normal",
+    }),
+    originalSnapshot: `expense|${expenseId}|${input.amount}|${matterTitle}|${input.expenseDate}`,
+    expenseAmount: input.amount,
+    expensePurpose: input.description.trim(),
+  };
+
+  writeState({
+    ...state,
+    expenses: [expense, ...state.expenses],
+    approvals: [approval, ...state.approvals],
+  });
+
+  return expense;
 }
 
 function createPayrollAccrual(
@@ -287,24 +481,27 @@ function createPayrollAccrual(
   return { accrual, journal };
 }
 
-function linkedTimeEntryId(approval: AdminApproval): string | null {
-  const parts = approval.originalSnapshot.split("|");
-  if (parts[0] !== "time_entry" || !parts[1]) return null;
-  return parts[1];
+function linkedRecordId(approval: AdminApproval): string | null {
+  const parts = approval.originalSnapshot?.split("|") ?? [];
+  if ((parts[0] === "time_entry" || parts[0] === "expense") && parts[1]) {
+    return parts[1];
+  }
+  return null;
 }
 
-export function resolveDemoTimeApproval(
+function applyApprovalDecision(
   approvalId: string,
   decision: "approved" | "rejected" | "returned",
   reviewerName: string,
-  reviewNotes?: string,
+  reviewNotes: string | undefined,
+  type: "time_entry" | "expense",
 ): boolean {
   const state = readState();
   const approval = state.approvals.find((row) => row.id === approvalId);
-  if (!approval || approval.type !== "time_entry") return false;
+  if (!approval || approval.type !== type) return false;
 
   const reviewedAt = new Date().toISOString();
-  const timeEntryId = linkedTimeEntryId(approval);
+  const recordId = linkedRecordId(approval);
   const nextStatus: ApprovalStatus =
     decision === "approved"
       ? "approved"
@@ -330,39 +527,78 @@ export function resolveDemoTimeApproval(
       : row,
   );
 
-  const updatedEntries = timeEntryId
-    ? state.timeEntries.map((entry) =>
-        entry.id === timeEntryId ? { ...entry, status: nextStatus } : entry,
-      )
-    : state.timeEntries;
-
+  let updatedEntries = state.timeEntries;
+  let updatedExpenses = state.expenses;
   let payrollAccruals = state.payrollAccruals;
   let journalEntries = state.journalEntries;
 
-  if (decision === "approved" && timeEntryId) {
-    const timeEntry = updatedEntries.find((entry) => entry.id === timeEntryId);
-    if (timeEntry?.is_billable) {
-      const { accrual, journal } = createPayrollAccrual(
-        approval,
-        timeEntry,
-        reviewedAt,
-        reviewerName,
-        state,
-      );
-      payrollAccruals = [accrual, ...payrollAccruals];
-      journalEntries = [journal, ...journalEntries];
+  if (type === "time_entry" && recordId) {
+    updatedEntries = state.timeEntries.map((entry) =>
+      entry.id === recordId ? { ...entry, status: nextStatus } : entry,
+    );
+
+    if (decision === "approved") {
+      const timeEntry = updatedEntries.find((entry) => entry.id === recordId);
+      if (timeEntry?.is_billable) {
+        const { accrual, journal } = createPayrollAccrual(
+          approval,
+          timeEntry,
+          reviewedAt,
+          reviewerName,
+          state,
+        );
+        payrollAccruals = [accrual, ...payrollAccruals];
+        journalEntries = [journal, ...journalEntries];
+      }
     }
+  }
+
+  if (type === "expense" && recordId) {
+    updatedExpenses = state.expenses.map((entry) =>
+      entry.id === recordId ? { ...entry, status: nextStatus } : entry,
+    );
   }
 
   writeState({
     ...state,
     approvals: updatedApprovals,
     timeEntries: updatedEntries,
+    expenses: updatedExpenses,
     payrollAccruals,
     journalEntries,
   });
 
   return true;
+}
+
+export function resolveDemoTimeApproval(
+  approvalId: string,
+  decision: "approved" | "rejected" | "returned",
+  reviewerName: string,
+  reviewNotes?: string,
+): boolean {
+  return applyApprovalDecision(
+    approvalId,
+    decision,
+    reviewerName,
+    reviewNotes,
+    "time_entry",
+  );
+}
+
+export function resolveDemoExpenseApproval(
+  approvalId: string,
+  decision: "approved" | "rejected" | "returned",
+  reviewerName: string,
+  reviewNotes?: string,
+): boolean {
+  return applyApprovalDecision(
+    approvalId,
+    decision,
+    reviewerName,
+    reviewNotes,
+    "expense",
+  );
 }
 
 export function isDemoSessionApproval(approvalId: string): boolean {

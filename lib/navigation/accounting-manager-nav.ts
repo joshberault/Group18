@@ -5,6 +5,7 @@ import {
   Building2,
   CircleDollarSign,
   ClipboardList,
+  FileText,
   Landmark,
   LayoutDashboard,
   Receipt,
@@ -55,7 +56,7 @@ export const ACCOUNTING_MANAGER_NAV_ITEMS: NavItem[] = [
     routeKey: "invoices",
     label: "Invoices & Collections",
     href: "/invoices",
-    icon: Receipt,
+    icon: FileText,
     description:
       "Invoice management, generation, status filters, and invoice detail",
   },

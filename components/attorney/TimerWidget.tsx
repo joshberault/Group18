@@ -2,8 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { Pause, Play, Square } from "lucide-react";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { useAttorneyData } from "@/components/attorney/AttorneyDataProvider";
 import { checkMatterBillable } from "@/lib/matters/matter-activation-gates";
+import {
+  getDemoSubmitterContext,
+  notifyApprovalWorkflowChange,
+  submitDemoTimeEntry,
+} from "@/lib/demo/time-workflow-store";
+import { createClientSafe } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
@@ -46,8 +53,9 @@ function formatElapsed(ms: number) {
   return [hours, minutes, seconds].map((v) => String(v).padStart(2, "0")).join(":");
 }
 
-export function TimerWidget() {
-  const { matters, profileId, addTimeEntry } = useAttorneyData();
+export function TimerWidget({ onSaved }: { onSaved?: () => void }) {
+  const { selectedRole, attorneySpecialty } = useDemoRole();
+  const { matters } = useAttorneyData();
   const [timer, setTimer] = useState<TimerState>({
     running: false,
     startedAt: null,
@@ -121,14 +129,43 @@ export function TimerWidget() {
       return;
     }
 
-    addTimeEntry({
-      matter_id: timer.matterId,
-      profile_id: profileId,
-      entry_date: new Date().toISOString().slice(0, 10),
+    const matterTitle =
+      matters.find((matter) => matter.id === timer.matterId)?.title ?? undefined;
+    const entryDate = new Date().toISOString().slice(0, 10);
+    const description = timer.description.trim();
+    const submitter = getDemoSubmitterContext(
+      selectedRole,
+      selectedRole === "attorney" ? attorneySpecialty : null,
+    );
+
+    submitDemoTimeEntry({
+      profileId: submitter.profileId,
+      submitterName: submitter.submitterName,
+      submitterRole: selectedRole,
+      employeeId: submitter.employeeId,
+      matterId: timer.matterId,
+      matterTitle,
+      entryDate,
       hours,
-      description: timer.description.trim(),
-      is_billable: timer.isBillable,
+      description,
+      isBillable: timer.isBillable,
     });
+
+    const supabase = createClientSafe();
+    if (supabase) {
+      const { error: insertError } = await supabase.from("time_entries").insert({
+        matter_id: timer.matterId,
+        profile_id: submitter.profileId,
+        entry_date: entryDate,
+        hours,
+        description,
+        is_billable: timer.isBillable,
+        status: "pending",
+      });
+      if (!insertError) {
+        notifyApprovalWorkflowChange();
+      }
+    }
 
     const reset: TimerState = {
       running: false,
@@ -140,7 +177,10 @@ export function TimerWidget() {
     };
     setTimer(reset);
     saveTimer(null);
-    setSavedMessage(`Saved ${hours}h from timer.`);
+    setSavedMessage(
+      `Submitted ${hours}h for manager approval. Review on the Managing Partner or Firm Administrator dashboard.`,
+    );
+    onSaved?.();
   }
 
   return (
@@ -195,7 +235,7 @@ export function TimerWidget() {
           )}
           <Button type="button" variant="secondary" onClick={stopAndSave}>
             <Square className="mr-2 h-4 w-4" />
-            Stop & Save Entry
+            Stop & Submit for Approval
           </Button>
         </div>
 
