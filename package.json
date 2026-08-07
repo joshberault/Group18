@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "seed:pipeline": "node scripts/seed-fifteen-client-pipeline.mjs"
+    "seed:pipeline": "node scripts/seed-fifteen-client-pipeline.mjs",
+    "db:ensure-engagement": "node scripts/ensure-engagement-tables.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

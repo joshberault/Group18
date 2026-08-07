@@ -74,7 +74,7 @@ import {
 import { getOverdueInvoiceMetrics } from "@/lib/billing/receivables-utils";
 import { invoicesHref } from "@/lib/billing/routes";
 import { USER_ROLE_LABELS } from "@/lib/types";
-import { formatCurrency, formatHours } from "@/lib/utils/cn";
+import { cn, formatCurrency, formatHours } from "@/lib/utils/cn";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 /** Billing Specialist destinations for the firm Dashboard KPIs (not /billing). */
@@ -156,12 +156,15 @@ function DashboardKpiCard({
       icon={icon}
       trend={trend}
       variant={variant}
-      className={interactive ? "transition-shadow hover:shadow-md" : undefined}
+      className={cn(
+        "h-full min-h-[8.5rem]",
+        interactive ? "transition-shadow hover:shadow-md" : undefined,
+      )}
     />
   );
 
   if (!interactive || !href) {
-    return card;
+    return <div className="h-full">{card}</div>;
   }
 
   return (
@@ -482,12 +485,12 @@ export function DashboardContent() {
           <div
             className={
               isManagingPartner
-                ? "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+                ? "mb-6 grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
                 : isFirmAdministrator
-                  ? "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7"
+                  ? "mb-6 grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7"
                   : isBillingSpecialist
-                    ? "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3"
-                    : "mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+                    ? "mb-6 grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3"
+                    : "mb-6 grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
             }
           >
             <DashboardKpiCard
@@ -497,7 +500,6 @@ export function DashboardContent() {
               icon={Briefcase}
               href={firmKpiHref("activeMatters")}
               interactive={kpiInteractive}
-              variant="success"
               showViewDetailsLink={!isManagingPartner}
             />
             <DashboardKpiCard
@@ -591,7 +593,6 @@ export function DashboardContent() {
             icon={Briefcase}
             href={firmKpiHref("activeMatters")}
             interactive={kpiInteractive}
-            variant="success"
             showViewDetailsLink={!isManagingPartner}
           />
           <DashboardKpiCard

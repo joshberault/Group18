@@ -55,7 +55,7 @@ function CompactQueueCard({
         subtitle={subtitle}
         icon={icon}
         badge={badge}
-        className="h-full cursor-pointer transition-shadow hover:shadow-lg"
+        className="h-full min-h-[8.5rem] cursor-pointer transition-shadow hover:shadow-lg"
       />
     </button>
   );
