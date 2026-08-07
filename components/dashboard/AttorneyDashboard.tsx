@@ -56,6 +56,8 @@ import {
   getAttorneyTimeExpenseReminders,
   getUpcomingAttorneyDeadlines,
 } from "@/lib/attorney/dashboard-data";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { cn } from "@/lib/utils/cn";
 
 type FilterState = {
   matter: string;
@@ -134,10 +136,12 @@ function urgencyBadge(iso: string) {
 }
 
 export function AttorneyDashboard() {
+  const { role } = useDemoRole();
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const counts = getAttorneySummaryCounts();
-  const timeReminders = getAttorneyTimeExpenseReminders();
+  const timeReminders =
+    role === "managing_partner" ? null : getAttorneyTimeExpenseReminders();
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const matters = getAttorneyMatters();
   const clients = useMemo(() => {
@@ -261,11 +265,13 @@ export function AttorneyDashboard() {
               <CheckSquare className="h-4 w-4" /> Review Assigned Tasks
             </Button>
           </Link>
-          <Link href="/attorney/time">
-            <Button variant="secondary">
-              <Clock className="h-4 w-4" /> Log Time
-            </Button>
-          </Link>
+          {role !== "managing_partner" && (
+            <Link href="/attorney/time">
+              <Button variant="secondary">
+                <Clock className="h-4 w-4" /> Log Time
+              </Button>
+            </Link>
+          )}
           <Link href="/attorney/matters">
             <Button variant="secondary">
               <Briefcase className="h-4 w-4" /> My Matters
@@ -409,7 +415,13 @@ export function AttorneyDashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div
+        className={cn(
+          "grid gap-6",
+          role !== "managing_partner" && "xl:grid-cols-2",
+        )}
+      >
+        {timeReminders && (
         <Card>
           <CardHeader>
             <CardTitle>Time &amp; expense reminders</CardTitle>
@@ -472,6 +484,7 @@ export function AttorneyDashboard() {
             </Link>
           </div>
         </Card>
+        )}
 
         <Card>
           <CardHeader>

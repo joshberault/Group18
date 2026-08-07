@@ -71,6 +71,11 @@ function priorityVariant(priority: ApprovalPriority) {
   return priority === "urgent" ? ("danger" as const) : ("neutral" as const);
 }
 
+function capitalizeLabel(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function typeLabel(type: ApprovalType) {
   return TYPE_LABELS[type] ?? type;
 }
@@ -681,12 +686,12 @@ export function ApprovalQueue() {
                     <TableCell>{row.amountOrHours ?? "—"}</TableCell>
                     <TableCell>
                       <Badge variant={priorityVariant(row.priority)}>
-                        {row.priority}
+                        {capitalizeLabel(row.priority)}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant={statusVariant(row.status)}>
-                        {row.status}
+                        {capitalizeLabel(row.status)}
                       </Badge>
                     </TableCell>
                     <TableCell>{row.assignedApproverName}</TableCell>
@@ -776,8 +781,8 @@ export function ApprovalQueue() {
                 ["Title", selected.title],
                 ["Type", typeLabel(selected.type)],
                 ["Requested by", selected.submittedBy],
-                ["Status", selected.status],
-                ["Priority", selected.priority],
+                ["Status", capitalizeLabel(selected.status)],
+                ["Priority", capitalizeLabel(selected.priority)],
                 ["Assigned approver", selected.assignedApproverName],
                 [
                   "Submitted",
