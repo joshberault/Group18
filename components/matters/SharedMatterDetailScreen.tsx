@@ -188,8 +188,6 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
     dueDate: "",
   });
   const [newNote, setNewNote] = useState("");
-  const [reassignModalOpen, setReassignModalOpen] = useState(false);
-  const [reassignTarget, setReassignTarget] = useState("");
 
   const refreshPortfolio = useCallback(() => {
     setAllMatters(getLiveFirmPortfolioMatters());
@@ -402,16 +400,13 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
           )}
         </div>
         {isManagingPartner && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setReassignTarget(portfolioMatter.responsibleAttorney ?? "");
-              setReassignModalOpen(true);
-            }}
-          >
-            Reassign matter
-          </Button>
+          <div className="w-48">
+            <Select
+              value={portfolioMatter.responsibleAttorney ?? ""}
+              onChange={(e) => void handleReassignMatter(e.target.value)}
+              options={leadAttorneyOptions}
+            />
+          </div>
         )}
       </div>
 
@@ -703,40 +698,6 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
           </div>
         </Card>
       )}
-
-      <Modal
-        isOpen={reassignModalOpen}
-        onClose={() => setReassignModalOpen(false)}
-        title="Reassign entire matter"
-        description="Transfer lead responsibility for this matter to another attorney."
-      >
-        <div className="space-y-4">
-          <Select
-            label="New lead attorney"
-            value={reassignTarget}
-            onChange={(e) => setReassignTarget(e.target.value)}
-            options={leadAttorneyOptions}
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setReassignModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                void handleReassignMatter(reassignTarget).then(() =>
-                  setReassignModalOpen(false),
-                );
-              }}
-              disabled={
-                !reassignTarget.trim() ||
-                reassignTarget === portfolioMatter.responsibleAttorney
-              }
-            >
-              Reassign matter
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       <Modal
         isOpen={taskModalOpen}

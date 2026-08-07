@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClientSafe } from "@/lib/supabase/client";
 import {
   getDemoSubmitterContext,
@@ -22,24 +22,33 @@ const APPROVAL_SUCCESS_MESSAGE =
 
 type Props = {
   matters: Matter[];
+  mattersLoading?: boolean;
   submitterRole?: UserRole;
   onCreated: () => void;
 };
 
 export function ExpenseForm({
   matters,
+  mattersLoading = false,
   submitterRole = "attorney",
   onCreated,
 }: Props) {
   const { selectedRole, attorneySpecialty } = useDemoRole();
   const effectiveRole = submitterRole ?? selectedRole;
-  const [matterId, setMatterId] = useState(matters[0]?.id ?? "");
+  const [matterId, setMatterId] = useState("");
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMatterId((current) => {
+      if (current && matters.some((matter) => matter.id === current)) return current;
+      return matters[0]?.id ?? "";
+    });
+  }, [matters]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -119,6 +128,7 @@ export function ExpenseForm({
             onChange={(e) => setMatterId(e.target.value)}
             options={matters.map((matter) => ({ value: matter.id, label: matter.title }))}
             required
+            disabled={mattersLoading || matters.length === 0}
           />
           <Input
             label="Date"
@@ -147,9 +157,15 @@ export function ExpenseForm({
             />
           </div>
         </div>
+        {matters.length === 0 && !mattersLoading ? (
+          <p className="text-sm text-muted">
+            No matters are assigned to you yet. Ask the managing partner to assign a
+            matter before logging expenses.
+          </p>
+        ) : null}
         {error && <p className="text-sm text-red-600">{error}</p>}
         {success && <p className="text-sm text-green-700">{success}</p>}
-        <Button type="submit" disabled={loading || matters.length === 0}>
+        <Button type="submit" disabled={loading || mattersLoading || matters.length === 0}>
           {loading ? "Submitting..." : "Submit for Manager Approval"}
         </Button>
       </form>

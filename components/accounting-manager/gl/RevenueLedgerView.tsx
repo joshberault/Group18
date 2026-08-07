@@ -33,6 +33,7 @@ import {
   completeCloseTask,
   fetchRevenueLedgerWorkspace,
   postJournalEntry,
+  REVENUE_LEDGER_UPDATE_EVENT,
   useSupabaseQuery,
 } from "@/lib/accounting";
 import type {
@@ -107,6 +108,14 @@ export function RevenueLedgerView() {
       setTasks(workspace.closeTasks);
     }
   }, [workspace]);
+
+  useEffect(() => {
+    const onLedgerUpdated = () => {
+      void refresh();
+    };
+    window.addEventListener(REVENUE_LEDGER_UPDATE_EVENT, onLedgerUpdated);
+    return () => window.removeEventListener(REVENUE_LEDGER_UPDATE_EVENT, onLedgerUpdated);
+  }, [refresh]);
   const [showJeForm, setShowJeForm] = useState(false);
   const [jeDate, setJeDate] = useState("2026-08-05");
   const [jeDescription, setJeDescription] = useState("");

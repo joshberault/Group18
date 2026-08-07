@@ -1,4 +1,9 @@
 import { createClientSafe } from "@/lib/supabase/client";
+import {
+  isIssuedInvoiceStatus,
+  postInvoiceBillingToGl,
+  postPaymentToGl,
+} from "@/lib/accounting/billing-gl-posting";
 import { normalizeBillingDate } from "@/lib/billing/billing-period";
 import type {
   BillingMethod,
@@ -679,16 +684,17 @@ async function syncNewPayments(
   clientId: string,
   matterId: string,
   recordedBy: string,
+  invoiceNumber: string,
   previous: PaymentEntry[],
   next: PaymentEntry[],
 ): Promise<string | null> {
   const prevIds = new Set(previous.map((p) => p.id));
   const added = next.filter((p) => p.id && !prevIds.has(p.id));
-  // Also detect amount-only appends without stable ids
-  if (added.length === 0 && next.length > previous.length) {
-    const tail = next.slice(previous.length);
-    for (const p of tail) {
-      const { error } = await supabase.from("payments").insert({
+
+  async function insertPayment(p: PaymentEntry): Promise<string | null> {
+    const { data, error } = await supabase
+      .from("payments")
+      .insert({
         invoice_id: invoiceId,
         client_id: clientId,
         matter_id: matterId,
@@ -698,8 +704,32 @@ async function syncNewPayments(
         payment_method: mapPaymentMethodToDb(p.method),
         status: "completed",
         reference_number: p.reference || null,
-      });
-      if (error) return error.message;
+      })
+      .select("id, payment_date, amount, reference_number")
+      .single();
+    if (error) return error.message;
+
+    const paymentId = String(data.id);
+    const glResult = await postPaymentToGl({
+      paymentId,
+      invoiceNumber,
+      paymentDate: String(data.payment_date ?? p.date).slice(0, 10),
+      amount: money(data.amount),
+      referenceNumber: data.reference_number,
+      createdByProfileId: recordedBy,
+    });
+    if (!glResult.ok) {
+      console.warn(`GL post skipped for payment ${paymentId}:`, glResult.error);
+    }
+    return null;
+  }
+
+  // Also detect amount-only appends without stable ids
+  if (added.length === 0 && next.length > previous.length) {
+    const tail = next.slice(previous.length);
+    for (const p of tail) {
+      const error = await insertPayment(p);
+      if (error) return error;
     }
     return null;
   }
@@ -707,18 +737,8 @@ async function syncNewPayments(
   for (const p of added) {
     // Skip re-insert of existing DB payment UUIDs already present
     if (isUuid(p.id) && prevIds.has(p.id)) continue;
-    const { error } = await supabase.from("payments").insert({
-      invoice_id: invoiceId,
-      client_id: clientId,
-      matter_id: matterId,
-      recorded_by: recordedBy,
-      payment_date: p.date || new Date().toISOString().slice(0, 10),
-      amount: money(p.amount),
-      payment_method: mapPaymentMethodToDb(p.method),
-      status: "completed",
-      reference_number: p.reference || null,
-    });
-    if (error) return error.message;
+    const error = await insertPayment(p);
+    if (error) return error;
   }
   return null;
 }
@@ -902,10 +922,27 @@ export async function upsertInvoiceInSupabase(
     resolved.clientId,
     resolved.matterId,
     actorId,
+    invoice.invoiceNumber,
     previousPayments,
     invoice.paymentHistory ?? [],
   );
   if (payError) return { ok: false, count: 0, error: payError };
+
+  if (isIssuedInvoiceStatus(dbStatus) && moneyFields.totalAmount > 0) {
+    const glResult = await postInvoiceBillingToGl({
+      invoiceId,
+      invoiceNumber: invoice.invoiceNumber,
+      invoiceDate: invoice.invoiceDate,
+      clientId: resolved.clientId,
+      matterId: resolved.matterId,
+      totalAmount: moneyFields.totalAmount,
+      billingType,
+      createdByProfileId: actorId,
+    });
+    if (!glResult.ok) {
+      console.warn("Invoice billing GL post failed:", glResult.error);
+    }
+  }
 
   const { data: full, error: reloadError } = await supabase
     .from("invoices")

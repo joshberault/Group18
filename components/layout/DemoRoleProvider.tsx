@@ -18,6 +18,7 @@ import {
 } from "@/lib/attorney/specialties";
 import type { NavItem } from "@/lib/navigation";
 import type { Permission } from "@/lib/roles/permissions";
+import { resolveDemoIdentity } from "@/lib/roles/demo-identity";
 import {
   canAccessRoute,
   DEFAULT_DEMO_ROLE,
@@ -159,6 +160,14 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
     return USER_ROLE_LABELS[selectedRole];
   }, [attorneySpecialty, selectedRole]);
 
+  const identity = useMemo(
+    () =>
+      isClientReady
+        ? resolveDemoIdentity(navigationRole, attorneySpecialty)
+        : DEMO_IDENTITIES[DEFAULT_DEMO_ROLE],
+    [attorneySpecialty, isClientReady, navigationRole],
+  );
+
   const value = useMemo<DemoRoleContextValue>(
     () => ({
       selectedRole,
@@ -176,7 +185,7 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
       hasPermission,
       navigationItems,
       defaultRoute: roleDefinition.defaultRoute,
-      identity: DEMO_IDENTITIES[navigationRole],
+      identity,
       dashboardTitle: roleDefinition.dashboardTitle,
       dashboardDescription: roleDefinition.dashboardDescription,
     }),
@@ -192,7 +201,7 @@ export function DemoRoleProvider({ children }: { children: React.ReactNode }) {
       hasPermission,
       navigationItems,
       roleDefinition,
-      navigationRole,
+      identity,
     ],
   );
 

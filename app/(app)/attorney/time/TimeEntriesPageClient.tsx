@@ -4,28 +4,21 @@ import Link from "next/link";
 import { TimeEntryForm } from "@/components/attorney/TimeEntryForm";
 import { TimeEntryList } from "@/components/attorney/TimeEntryList";
 import { TimerWidget } from "@/components/attorney/TimerWidget";
-import { useAttorneyData } from "@/components/attorney/AttorneyDataProvider";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { useAssignedAttorneyMatters } from "@/hooks/useAssignedAttorneyMatters";
 import { useDemoTimeWorkflow } from "@/hooks/useDemoTimeWorkflow";
 import { getDemoSubmitterContext } from "@/lib/demo/time-workflow-store";
-import type { Matter } from "@/types/database";
 
-type Props = {
-  initialMatters: Matter[];
-};
-
-export function TimeEntriesPageClient({ initialMatters }: Props) {
+export function TimeEntriesPageClient() {
   const { selectedRole, attorneySpecialty } = useDemoRole();
-  const { matters: storeMatters } = useAttorneyData();
+  const { matters, loading: mattersLoading } = useAssignedAttorneyMatters();
   const submitter = getDemoSubmitterContext(
     selectedRole,
     selectedRole === "attorney" ? attorneySpecialty : null,
   );
   const { timeEntries, refresh } = useDemoTimeWorkflow(submitter.profileId);
-
-  const formMatters = storeMatters.length > 0 ? storeMatters : initialMatters;
 
   return (
     <div className="space-y-6">
@@ -40,10 +33,11 @@ export function TimeEntriesPageClient({ initialMatters }: Props) {
         </Link>
       </PageHeader>
 
-      <TimerWidget onSaved={refresh} />
+      <TimerWidget matters={matters} onSaved={refresh} />
 
       <TimeEntryForm
-        matters={formMatters}
+        matters={matters}
+        mattersLoading={mattersLoading}
         submitterRole={selectedRole}
         onCreated={refresh}
       />

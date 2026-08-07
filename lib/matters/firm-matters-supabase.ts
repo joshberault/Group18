@@ -24,6 +24,7 @@ import type { AmMatterEntity } from "@/lib/mock-data/accounting-manager/entities
 import type { ParalegalAssignmentMatter } from "@/lib/paralegal/demo-data";
 import type { CaseTypeId } from "@/lib/client-portal/case-task-lists";
 import { CASE_TYPE_LABELS } from "@/lib/client-portal/case-task-lists";
+import type { BillingType, Matter, MatterStatus } from "@/types/database";
 
 export type SharedFirmMatter = {
   id: string;
@@ -944,6 +945,47 @@ export function toParalegalAssignmentMatter(
       m.description || `${m.practiceArea} engagement for ${m.clientName}`,
     conflictStatus: m.conflictStatus,
     openDate: m.openDate === "—" ? new Date().toISOString().slice(0, 10) : m.openDate,
+  };
+}
+
+function mapAttorneyBillingType(raw: string): BillingType {
+  const key = raw.toLowerCase().replace(/\s+/g, "_");
+  if (key === "fixed_fee" || key === "flat" || key === "flat_fee") {
+    return "fixed_fee";
+  }
+  if (key === "retainer") return "retainer";
+  if (key === "contingency") return "contingency";
+  return "hourly";
+}
+
+function mapAttorneyMatterStatus(raw: string): MatterStatus {
+  if (raw === "closed" || raw === "archived") return raw;
+  return "open";
+}
+
+/** Map shared firm matters for attorney time/expense matter pickers. */
+export function toAttorneyWorkflowMatter(m: SharedFirmMatter): Matter {
+  return {
+    id: m.id,
+    title: m.title,
+    description: m.description,
+    status: mapAttorneyMatterStatus(m.status),
+    billing_type: mapAttorneyBillingType(m.billingType),
+    hourly_rate: m.hourlyRate,
+    fixed_fee_amount: m.fixedFeeAmount,
+    retainer_amount: m.retainerAmount,
+    retainer_balance: m.retainerBalance,
+    expense_terms: null,
+    client: m.clientId
+      ? {
+          id: m.clientId,
+          name: m.clientName,
+          email: null,
+          company_name: null,
+          conflict_flag: m.conflictFlag,
+        }
+      : null,
+    practice_area: m.practiceArea ? { name: m.practiceArea } : null,
   };
 }
 

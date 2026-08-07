@@ -5,7 +5,6 @@ import { ExpensesPageClient } from "./ExpensesPageClient";
 import { ParalegalExpensesView } from "@/components/paralegal/ParalegalExpensesView";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { DEMO_MATTERS } from "@/lib/attorney/demo-data";
 
 export default function AttorneyExpensesPage() {
   const { role } = useDemoRole();
@@ -19,6 +18,6 @@ export default function AttorneyExpensesPage() {
   }
 
   return (
-    <ExpensesPageClient initialMatters={DEMO_MATTERS} />
+    <ExpensesPageClient />
   );
 }

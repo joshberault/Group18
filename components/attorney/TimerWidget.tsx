@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Pause, Play, Square } from "lucide-react";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
-import { useAttorneyData } from "@/components/attorney/AttorneyDataProvider";
 import { checkMatterBillable } from "@/lib/matters/matter-activation-gates";
 import {
   getDemoSubmitterContext,
@@ -15,6 +14,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import type { Matter } from "@/types/database";
 
 const TIMER_KEY = "counselflow-attorney-timer";
 
@@ -53,14 +53,19 @@ function formatElapsed(ms: number) {
   return [hours, minutes, seconds].map((v) => String(v).padStart(2, "0")).join(":");
 }
 
-export function TimerWidget({ onSaved }: { onSaved?: () => void }) {
+export function TimerWidget({
+  matters,
+  onSaved,
+}: {
+  matters: Matter[];
+  onSaved?: () => void;
+}) {
   const { selectedRole, attorneySpecialty } = useDemoRole();
-  const { matters } = useAttorneyData();
   const [timer, setTimer] = useState<TimerState>({
     running: false,
     startedAt: null,
     accumulatedMs: 0,
-    matterId: matters[0]?.id ?? "",
+    matterId: "",
     description: "",
     isBillable: true,
   });
@@ -69,8 +74,24 @@ export function TimerWidget({ onSaved }: { onSaved?: () => void }) {
 
   useEffect(() => {
     const stored = loadTimer();
-    if (stored) setTimer(stored);
-  }, []);
+    if (stored) {
+      setTimer(stored);
+      return;
+    }
+    setTimer((prev) => ({
+      ...prev,
+      matterId: matters[0]?.id ?? "",
+    }));
+  }, [matters]);
+
+  useEffect(() => {
+    setTimer((prev) => {
+      if (prev.matterId && matters.some((matter) => matter.id === prev.matterId)) {
+        return prev;
+      }
+      return { ...prev, matterId: matters[0]?.id ?? "" };
+    });
+  }, [matters]);
 
   useEffect(() => {
     saveTimer(timer);
@@ -202,6 +223,7 @@ export function TimerWidget({ onSaved }: { onSaved?: () => void }) {
             value={timer.matterId}
             onChange={(e) => setTimer((prev) => ({ ...prev, matterId: e.target.value }))}
             options={matters.map((matter) => ({ value: matter.id, label: matter.title }))}
+            disabled={matters.length === 0}
           />
           <label className="flex items-center gap-2 self-end text-sm text-navy-900">
             <input

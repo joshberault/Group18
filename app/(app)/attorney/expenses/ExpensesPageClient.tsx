@@ -3,28 +3,21 @@
 import Link from "next/link";
 import { ExpenseForm } from "@/components/attorney/ExpenseForm";
 import { ExpenseList } from "@/components/attorney/ExpenseList";
-import { useAttorneyData } from "@/components/attorney/AttorneyDataProvider";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { useAssignedAttorneyMatters } from "@/hooks/useAssignedAttorneyMatters";
 import { useDemoTimeWorkflow } from "@/hooks/useDemoTimeWorkflow";
 import { getDemoSubmitterContext } from "@/lib/demo/time-workflow-store";
-import type { Matter } from "@/types/database";
 
-type Props = {
-  initialMatters: Matter[];
-};
-
-export function ExpensesPageClient({ initialMatters }: Props) {
+export function ExpensesPageClient() {
   const { selectedRole, attorneySpecialty } = useDemoRole();
-  const { matters: storeMatters } = useAttorneyData();
+  const { matters, loading: mattersLoading } = useAssignedAttorneyMatters();
   const submitter = getDemoSubmitterContext(
     selectedRole,
     selectedRole === "attorney" ? attorneySpecialty : null,
   );
   const { expenses, refresh } = useDemoTimeWorkflow(submitter.profileId);
-
-  const formMatters = storeMatters.length > 0 ? storeMatters : initialMatters;
 
   return (
     <div className="space-y-6">
@@ -40,7 +33,8 @@ export function ExpensesPageClient({ initialMatters }: Props) {
       </PageHeader>
 
       <ExpenseForm
-        matters={formMatters}
+        matters={matters}
+        mattersLoading={mattersLoading}
         submitterRole={selectedRole}
         onCreated={refresh}
       />

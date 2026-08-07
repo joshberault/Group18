@@ -10,5 +10,6 @@ export * from "./receivables-service";
 export * from "./dashboard-service";
 export * from "./admin-service";
 export * from "./billing-oversight-service";
+export * from "./billing-gl-posting";
 export * from "./mutations";
 export * from "./use-supabase-query";

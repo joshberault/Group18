@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import { ChevronDown, ChevronLeft } from "lucide-react";
 import {
   ATTORNEY_DEMO_SPECIALTIES,
-  getAttorneySpecialtyOption,
   type AttorneyDemoSpecialty,
 } from "@/lib/attorney/specialties";
 import { getLeadAttorneyForSpecialty } from "@/lib/attorney/specialty-attorneys";
@@ -27,7 +26,7 @@ function roleTriggerLabel(
   attorneySpecialty: AttorneyDemoSpecialty | null,
 ): string {
   if (selectedRole === "attorney" && attorneySpecialty) {
-    return getAttorneySpecialtyOption(attorneySpecialty).label;
+    return getLeadAttorneyForSpecialty(attorneySpecialty).fullName;
   }
   return USER_ROLE_LABELS[selectedRole];
 }

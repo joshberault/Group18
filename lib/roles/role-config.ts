@@ -20,7 +20,7 @@ export const DEMO_IDENTITIES: Record<
   { fullName: string; initials: string }
 > = {
   managing_partner: { fullName: "Morgan Counsel", initials: "MC" },
-  attorney: { fullName: "Avery Counsel", initials: "AC" },
+  attorney: { fullName: "George Giddens", initials: "GG" },
   paralegal: { fullName: "Parker Legal", initials: "PL" },
   billing_specialist: { fullName: "Bailey Ledger", initials: "BL" },
   accounting_manager: { fullName: "Alex Morgan", initials: "AM" },

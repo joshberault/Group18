@@ -44,7 +44,6 @@ import {
   TASK_STATUS_LABELS,
 } from "@/lib/paralegal/metrics";
 import {
-  DEMO_ATTORNEY,
   getAttorneyAlerts,
   getAttorneyMatters,
   getAttorneyMatterIdForTitle,
@@ -136,7 +135,7 @@ function urgencyBadge(iso: string) {
 }
 
 export function AttorneyDashboard() {
-  const { role } = useDemoRole();
+  const { role, identity, roleDisplayLabel } = useDemoRole();
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const counts = getAttorneySummaryCounts();
@@ -235,7 +234,7 @@ export function AttorneyDashboard() {
       >
         <div className="text-right text-xs text-muted">
           <p className="font-medium text-navy-900">
-            {DEMO_ATTORNEY.fullName}, {DEMO_ATTORNEY.title}
+            {identity.fullName}, {roleDisplayLabel}
           </p>
           {updatedAt ? <p>Last updated {updatedAt}</p> : null}
         </div>
@@ -245,7 +244,7 @@ export function AttorneyDashboard() {
         <div className="p-6">
           <p className="text-sm font-medium text-gold-500">Attorney daily action center</p>
           <p className="mt-2 max-w-3xl text-sm text-gray-200">
-            Focused on {DEMO_ATTORNEY.fullName}&apos;s matters. Approve or return paralegal
+            Focused on {identity.fullName}&apos;s matters. Approve or return paralegal
             submissions, act on deadlines, and escalate conflict or engagement risk — without
             clearing conflicts or changing firm administration settings.
           </p>
@@ -256,7 +255,7 @@ export function AttorneyDashboard() {
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
           <CardDescription>
-            Daily shortcuts for {DEMO_ATTORNEY.fullName} — assigned matters, billable time, tasks, deadlines, and paralegal submissions awaiting your review.
+            Daily shortcuts for {identity.fullName} — assigned matters, billable time, tasks, deadlines, and paralegal submissions awaiting your review.
           </CardDescription>
         </CardHeader>
         <div className="flex flex-wrap gap-2">
@@ -317,7 +316,7 @@ export function AttorneyDashboard() {
         <CardHeader>
           <CardTitle>Dashboard filters</CardTitle>
           <CardDescription>
-            Defaults to {DEMO_ATTORNEY.fullName}&apos;s assigned matters (not firm-wide).
+            Defaults to {identity.fullName}&apos;s assigned matters (not firm-wide).
           </CardDescription>
         </CardHeader>
         <div className="grid gap-3 md:grid-cols-3">

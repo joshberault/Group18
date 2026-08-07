@@ -13,3 +13,4 @@ export {
   isValidDemoRole,
   pathnameToRouteKey,
 } from "./role-config";
+export { initialsFromName, resolveDemoIdentity } from "./demo-identity";
