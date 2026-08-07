@@ -11,12 +11,18 @@ function CalendarPageBody() {
   const { selectedRole } = useDemoRole();
 
   useEffect(() => {
-    if (selectedRole === "managing_partner") {
+    if (
+      selectedRole === "managing_partner" ||
+      selectedRole === "paralegal"
+    ) {
       router.replace("/attorney/tasks?view=calendar");
     }
   }, [router, selectedRole]);
 
-  if (selectedRole === "managing_partner") {
+  if (
+    selectedRole === "managing_partner" ||
+    selectedRole === "paralegal"
+  ) {
     return <LoadingState message="Opening Tasks & Deadlines…" />;
   }
 
