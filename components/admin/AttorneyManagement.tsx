@@ -158,6 +158,7 @@ function buildEmployeeFromForm(
     availableWorkHours: weekly,
     assignedHours: existing?.assignedHours ?? 0,
     actualHoursWorked: existing?.actualHoursWorked ?? 0,
+    proBonoHoursWorked: existing?.proBonoHoursWorked ?? 0,
     isAttorney,
     profileId: existing?.profileId,
   };

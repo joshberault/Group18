@@ -78,7 +78,7 @@ type ArModal =
 
 export function AccountsReceivableView() {
   const searchParams = useSearchParams();
-  const { data: workspace, loading, error } = useSupabaseQuery(
+  const { data: workspace, loading, error, refresh } = useSupabaseQuery(
     fetchReceivablesWorkspace,
     [],
   );
@@ -472,6 +472,7 @@ export function AccountsReceivableView() {
           filters={queueFilters}
           onFiltersChange={setQueueFilters}
           records={collectionsQueue}
+          onRecordsChange={() => void refresh()}
         />
       </div>
 

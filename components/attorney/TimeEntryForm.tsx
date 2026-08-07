@@ -8,6 +8,7 @@ import {
   submitDemoTimeEntry,
   submitterNameForRole,
 } from "@/lib/demo/time-workflow-store";
+import { checkMatterBillable } from "@/lib/matters/matter-activation-gates";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -56,6 +57,12 @@ export function TimeEntryForm({
 
     if (!description.trim()) {
       setError("Description is required.");
+      return;
+    }
+
+    const gate = await checkMatterBillable(matterId);
+    if (!gate.allowed) {
+      setError(gate.reason ?? "Time entry is blocked for this matter.");
       return;
     }
 
@@ -164,7 +171,7 @@ export function TimeEntryForm({
               checked={isBillable}
               onChange={(e) => setIsBillable(e.target.checked)}
             />
-            Billable hours
+            {isBillable ? "Billable hours" : "Pro bono (non-billable)"}
           </label>
           <div className="md:col-span-2">
             <Textarea

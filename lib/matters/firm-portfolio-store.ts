@@ -1,8 +1,10 @@
 import type {
   EngagementFeeType,
   FirmPortfolioMatter,
+  MatterEngagementStatus,
   MatterLifecycleStatus,
 } from "@/lib/matters/firm-portfolio";
+import { persistFirmPortfolioPatch } from "@/lib/matters/supabase-portfolio";
 
 export const FIRM_PORTFOLIO_STORAGE_KEY =
   "counselflow-firm-portfolio-matters-v1";
@@ -12,6 +14,8 @@ type MatterPatch = Partial<
   Pick<
     FirmPortfolioMatter,
     | "status"
+    | "activationStatus"
+    | "engagementStatus"
     | "feeType"
     | "hourlyRate"
     | "flatFeeAmount"
@@ -45,6 +49,26 @@ function writePatches(patches: Record<string, MatterPatch>) {
   if (!canUseStorage()) return;
   localStorage.setItem(FIRM_PORTFOLIO_STORAGE_KEY, JSON.stringify(patches));
   window.dispatchEvent(new Event(FIRM_PORTFOLIO_UPDATE_EVENT));
+}
+
+function queueSupabasePersist(id: string, patch: MatterPatch) {
+  void persistFirmPortfolioPatch(id, {
+    status: patch.status,
+    activationStatus: patch.activationStatus,
+    engagementStatus: patch.engagementStatus,
+    feeType: patch.feeType,
+    hourlyRate: patch.hourlyRate,
+    flatFeeAmount: patch.flatFeeAmount,
+    budgetCap: patch.budgetCap,
+    billingHold: patch.billingHold,
+    responsibleAttorney: patch.responsibleAttorney,
+    needsPartnerReview: patch.needsPartnerReview,
+    partnerReviewReason: patch.partnerReviewReason,
+  }).then((result) => {
+    if (!result.ok) {
+      console.warn("Matter governance persist failed:", result.error);
+    }
+  });
 }
 
 /** Merge localStorage partner edits onto any base portfolio (Supabase or seed). */
@@ -87,6 +111,7 @@ export function updateFirmPortfolioMatter(
   const patches = readPatches();
   patches[id] = { ...(patches[id] ?? {}), ...patch };
   writePatches(patches);
+  queueSupabasePersist(id, patches[id] ?? patch);
   return getLiveFirmPortfolioMatters();
 }
 
@@ -95,15 +120,25 @@ export function setMatterLifecycle(
   status: MatterLifecycleStatus,
 ): FirmPortfolioMatter[] {
   const next: MatterPatch = { status };
-  if (status === "on_hold") {
+  if (status === "open") {
+    next.activationStatus = "active";
+  } else if (status === "on_hold") {
+    next.activationStatus = "pending_activation";
     next.needsPartnerReview = true;
     next.partnerReviewReason = "Matter placed on hold by Managing Partner";
-  }
-  if (status === "closed" || status === "archived") {
+  } else if (status === "closed" || status === "archived") {
+    next.activationStatus = "closed";
     next.needsPartnerReview = false;
     next.partnerReviewReason = null;
   }
   return updateFirmPortfolioMatter(id, next);
+}
+
+export function setMatterEngagementStatus(
+  id: string,
+  engagementStatus: MatterEngagementStatus,
+): FirmPortfolioMatter[] {
+  return updateFirmPortfolioMatter(id, { engagementStatus });
 }
 
 export function setMatterFeeTerms(

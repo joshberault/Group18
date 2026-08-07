@@ -287,6 +287,7 @@ export function buildDemoStaffEmployee(role: UserRole): AdminEmployee {
     availableWorkHours: meta.weeklyCapacityHours,
     assignedHours: meta.assignedHours,
     actualHoursWorked: meta.actualHoursWorked,
+    proBonoHoursWorked: 0,
     isAttorney: meta.isAttorney,
   };
 }

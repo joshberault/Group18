@@ -53,6 +53,7 @@ import {
   TableRow,
 } from "@/components/ui/Table";
 import { cn } from "@/lib/utils/cn";
+import { checkMatterBillable } from "@/lib/matters/matter-activation-gates";
 
 const STEPS = [
   "Select Client",
@@ -807,6 +808,21 @@ export function GenerateInvoiceWizard() {
       setMessages(["Select a legal matter to continue."]);
       return;
     }
+    if (step === 1 && matter) {
+      void (async () => {
+        const gate = await checkMatterBillable(matter.id);
+        if (!gate.allowed) {
+          setMessages([gate.reason ?? "Billing is blocked for this matter."]);
+          return;
+        }
+        advanceStep();
+      })();
+      return;
+    }
+    advanceStep();
+  }
+
+  function advanceStep() {
     if (step === 1 && matterWipLoading) {
       setMessages([
         "Still loading billable time for this matter. Wait a moment, then continue.",
@@ -846,6 +862,12 @@ export function GenerateInvoiceWizard() {
       return;
     }
     if (!client || !matter) return;
+
+    const gate = await checkMatterBillable(matter.id);
+    if (!gate.allowed) {
+      setMessages([gate.reason ?? "Billing is blocked for this matter."]);
+      return;
+    }
 
     const number =
       invoiceNumber || (await allocateNextInvoiceNumberAsync());
@@ -932,6 +954,12 @@ export function GenerateInvoiceWizard() {
     }
     if (!client || !matter) return;
     if (finalizing) return;
+
+    const gate = await checkMatterBillable(matter.id);
+    if (!gate.allowed) {
+      setMessages([gate.reason ?? "Billing is blocked for this matter."]);
+      return;
+    }
 
     setFinalizing(true);
     setMessages([]);

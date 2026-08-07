@@ -131,6 +131,8 @@ export interface AdminEmployee {
   assignedHours: number;
   /** Actual billable hours worked in the period. */
   actualHoursWorked: number;
+  /** Non-billable / pro bono hours in the period. */
+  proBonoHoursWorked: number;
   isAttorney: boolean;
   /** Optional link to an existing profiles.id when wired to Supabase */
   profileId?: string;
@@ -371,6 +373,8 @@ export interface AdminProductivityMetric {
   utilizationRate: number;
   mattersClosed: number;
   capacityStatus: WorkloadCapacityStatus;
+  /** Non-billable / pro bono hours (non-billable time entry code). */
+  proBonoHours: number;
 }
 
 export interface AdminDashboardSummary {

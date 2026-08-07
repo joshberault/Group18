@@ -1,13 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import type { ArCollectionsRecord } from "@/lib/mock-data/ar-oversight";
+import { COLLECTION_ESCALATION_LABELS } from "@/lib/mock-data/ar-oversight";
+import {
+  approveExternalCollections,
+  escalateCollectionStage,
+} from "@/lib/accounting";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { formatCurrency } from "@/lib/utils/cn";
+import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 
 interface CollectionRecordDetailDrawerProps {
   record: ArCollectionsRecord | null;
   onClose: () => void;
+  onUpdated?: () => void;
 }
 
 function statusToBadgeKey(status: string): string {
@@ -17,8 +26,58 @@ function statusToBadgeKey(status: string): string {
 export function CollectionRecordDetailDrawer({
   record,
   onClose,
+  onUpdated,
 }: CollectionRecordDetailDrawerProps) {
+  const { selectedRole, identity } = useDemoRole();
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
   if (!record) return null;
+
+  const canEscalate =
+    record.escalationStage !== "write_off_requested" &&
+    record.escalationStage !== "external_collections";
+
+  const canApproveExternal =
+    selectedRole === "managing_partner" &&
+    record.escalationStage === "write_off_requested" &&
+    !record.externalCollectionsApproved;
+
+  async function handleEscalate() {
+    setBusy(true);
+    setMessage(null);
+    const result = await escalateCollectionStage({
+      invoiceId: record!.invoiceId,
+      actor: { name: identity.fullName, role: selectedRole },
+    });
+    setBusy(false);
+    if (result.ok) {
+      const label =
+        COLLECTION_ESCALATION_LABELS[
+          result.nextStage as keyof typeof COLLECTION_ESCALATION_LABELS
+        ] ?? result.nextStage;
+      setMessage(`Escalated to ${label}.`);
+      onUpdated?.();
+    } else {
+      setMessage(result.error ?? "Escalation failed.");
+    }
+  }
+
+  async function handleApproveExternal() {
+    setBusy(true);
+    setMessage(null);
+    const result = await approveExternalCollections({
+      invoiceId: record!.invoiceId,
+      approver: { name: identity.fullName, role: selectedRole },
+    });
+    setBusy(false);
+    if (result.ok) {
+      setMessage("External collections approved by Managing Partner.");
+      onUpdated?.();
+    } else {
+      setMessage(result.error ?? "Approval failed.");
+    }
+  }
 
   return (
     <Drawer
@@ -28,6 +87,18 @@ export function CollectionRecordDetailDrawer({
       description={`${record.client} — ${record.matter}`}
     >
       <dl className="space-y-3 text-sm">
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted">Escalation stage</dt>
+          <dd>
+            <StatusBadge status={record.escalationStage} />
+          </dd>
+        </div>
+        {record.externalCollectionsApproved && (
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted">External collections</dt>
+            <dd className="font-medium text-green-800">MP approved</dd>
+          </div>
+        )}
         <div className="flex justify-between gap-4">
           <dt className="text-muted">Matter number</dt>
           <dd className="font-medium text-navy-900">
@@ -103,6 +174,28 @@ export function CollectionRecordDetailDrawer({
           <dd className="text-navy-900">{record.detail.lastAction}</dd>
         </div>
       </dl>
+
+      {message && (
+        <p className="mt-4 text-sm text-navy-900" role="status">{message}</p>
+      )}
+
+      <div className="mt-6 flex flex-wrap gap-2">
+        {canEscalate && (
+          <Button size="sm" disabled={busy} onClick={() => void handleEscalate()}>
+            Escalate stage
+          </Button>
+        )}
+        {canApproveExternal && (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={busy}
+            onClick={() => void handleApproveExternal()}
+          >
+            Approve external collections
+          </Button>
+        )}
+      </div>
     </Drawer>
   );
 }

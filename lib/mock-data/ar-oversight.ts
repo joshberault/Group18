@@ -5,6 +5,29 @@ export type AgingBucket =
   | "61–90 Days"
   | "90+ Days";
 
+export type CollectionEscalationStage =
+  | "reminder"
+  | "internal_review"
+  | "write_off_requested"
+  | "external_collections";
+
+export const COLLECTION_ESCALATION_LABELS: Record<
+  CollectionEscalationStage,
+  string
+> = {
+  reminder: "Reminder",
+  internal_review: "Internal Review",
+  write_off_requested: "Write-Off Requested",
+  external_collections: "External Collections",
+};
+
+export const COLLECTION_ESCALATION_ORDER: CollectionEscalationStage[] = [
+  "reminder",
+  "internal_review",
+  "write_off_requested",
+  "external_collections",
+];
+
 export type CollectionStatus =
   | "Current"
   | "Past Due"
@@ -76,6 +99,11 @@ export interface ArCollectionsRecord {
   office: string;
   isException: boolean;
   exceptionTypes: string[];
+  escalationStage: CollectionEscalationStage;
+  externalCollectionsApproved: boolean;
+  invoiceId: string;
+  clientId: string;
+  matterId: string;
   detail: {
     matterNumber: string;
     paymentHistory: string;

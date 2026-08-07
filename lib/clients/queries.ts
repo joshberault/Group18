@@ -4,6 +4,10 @@ import type {
   FirmClient,
   RelatedMatterSummary,
 } from "@/lib/clients/types";
+import {
+  diffClientAuditFields,
+  recordClientAuditEvents,
+} from "@/lib/clients/audit-log";
 import { createClientSafe } from "@/lib/supabase/client";
 
 const CLIENT_COLUMNS = `
@@ -242,10 +246,24 @@ export async function createClientRecord(
 export async function updateClientRecord(
   id: string,
   values: ClientFormValues,
+  options?: { changedBy?: string; auditReason?: string },
 ): Promise<{ data: FirmClient | null; error: string | null }> {
   const supabase = createClientSafe();
   if (!supabase) {
     return { data: null, error: "Supabase is not configured." };
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("clients")
+    .select(CLIENT_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (existingError) {
+    return { data: null, error: existingError.message };
+  }
+  if (!existing) {
+    return { data: null, error: "Client not found." };
   }
 
   const payload = formToPayload(values);
@@ -258,6 +276,25 @@ export async function updateClientRecord(
 
   if (error) {
     return { data: null, error: error.message };
+  }
+
+  const auditChanges = diffClientAuditFields(
+    existing as FirmClient,
+    values,
+  );
+  if (auditChanges.length > 0 && options?.changedBy) {
+    const auditResult = await recordClientAuditEvents(
+      id,
+      auditChanges,
+      options.changedBy,
+      options.auditReason,
+    );
+    if (!auditResult.ok) {
+      return {
+        data: data as FirmClient,
+        error: auditResult.error ?? "Client saved but audit log failed.",
+      };
+    }
   }
 
   return { data: data as FirmClient, error: null };
