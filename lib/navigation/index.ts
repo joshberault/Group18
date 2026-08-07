@@ -191,8 +191,8 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/client-portal",
     icon: UserCircle,
     description: "Client-facing matter and invoice access",
-    // Managing Partner excluded — hardened on main.
-    roles: ["client", "firm_administrator"],
+    // Staff demos (Managing Partner, Firm Administrator) excluded.
+    roles: ["client"],
   },
 ];
 
@@ -256,6 +256,7 @@ function getFirmAdminSectionChildren(): NavItem[] {
  * firm administrators get "Manager Dashboard" (/admin) with nested section links;
  * Billing Specialist: Dashboard → Billing Dashboard at /billing; hide separate Billing.
  * Managing Partner: never show Time & Expenses or Client Portal.
+ * Firm Administrator: never show Client Portal.
  */
 export function getNavItemsForRole(role: UserRole): NavItem[] {
   return NAV_ITEMS.filter((item) => canAccessNavItem(role, item.roles ?? []))
@@ -265,6 +266,13 @@ export function getNavItemsForRole(role: UserRole): NavItem[] {
         (item.routeKey === "time" ||
           item.routeKey === "client_portal" ||
           item.href === "/attorney/time" ||
+          item.href.startsWith("/client-portal"))
+      ) {
+        return null;
+      }
+      if (
+        role === "firm_administrator" &&
+        (item.routeKey === "client_portal" ||
           item.href.startsWith("/client-portal"))
       ) {
         return null;

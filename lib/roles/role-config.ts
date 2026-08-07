@@ -275,7 +275,7 @@ function canAccessStandardRoute(role: UserRole, pathname: string): boolean {
 
 export function canAccessRoute(role: UserRole, pathname: string): boolean {
   if (isClientPortalRoute(pathname)) {
-    return role === "client" || role === "firm_administrator";
+    return role === "client";
   }
 
   // Client demo uses portal tabs only — not the firm Dashboard.
@@ -357,6 +357,15 @@ export function getNavigationForRole(role: UserRole): NavItem[] {
         item.routeKey !== "time" &&
         item.routeKey !== "client_portal" &&
         item.href !== "/attorney/time" &&
+        !item.href.startsWith("/client-portal"),
+    );
+  }
+
+  // Firm Administrator demo: never show Client Portal.
+  if (role === "firm_administrator") {
+    return items.filter(
+      (item) =>
+        item.routeKey !== "client_portal" &&
         !item.href.startsWith("/client-portal"),
     );
   }
