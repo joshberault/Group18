@@ -31,6 +31,7 @@ import { ProspectiveClientDashboard } from "@/components/dashboard/ProspectiveCl
 import { FirmOperationsQueueCards } from "@/components/dashboard/FirmOperationsQueueCards";
 import { AccountingManagerDashboard } from "@/components/accounting-manager/dashboard/AccountingManagerDashboard";
 import { RiskCenterContent } from "@/components/analytics/RiskCenterContent";
+import { MonthlyCollectionsChart } from "@/components/analytics/MonthlyCollectionsChart";
 import { BillingPeriodToolbar } from "@/components/billing/BillingPeriodToolbar";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { KPICard } from "@/components/ui/KPICard";
@@ -44,6 +45,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/Table";
+import { fetchMonthlyCollections } from "@/lib/analytics/rpc";
+import type { MonthlyCollectionRow } from "@/lib/analytics/types";
 import {
   dashboardKpis,
   monthlyCollectionsChart,
@@ -217,6 +220,32 @@ export function DashboardContent() {
   const [activeMattersLoading, setActiveMattersLoading] = useState(false);
   const [unbilledHours, setUnbilledHours] = useState<number | null>(null);
   const [unbilledLoading, setUnbilledLoading] = useState(false);
+  const [executiveMonthlyCollections, setExecutiveMonthlyCollections] = useState<
+    MonthlyCollectionRow[]
+  >([]);
+  const [executiveCollectionsLoading, setExecutiveCollectionsLoading] =
+    useState(false);
+
+  useEffect(() => {
+    if (role !== "managing_partner") {
+      setExecutiveMonthlyCollections([]);
+      setExecutiveCollectionsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setExecutiveCollectionsLoading(true);
+    void (async () => {
+      const result = await fetchMonthlyCollections();
+      if (cancelled) return;
+      setExecutiveMonthlyCollections(result.data ?? []);
+      setExecutiveCollectionsLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
 
   useEffect(() => {
     if (!usesLiveFirmKpis) {
@@ -662,32 +691,41 @@ export function DashboardContent() {
       ) : null}
 
       <div className="mb-6 grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Monthly Collections</CardTitle>
-            <CardDescription>{chartDescription}</CardDescription>
-          </CardHeader>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={collectionsChartData}
-                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#6b7280" />
-                <YAxis
-                  tick={{ fontSize: 12 }}
-                  stroke="#6b7280"
-                  tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                />
-                <Tooltip
-                  formatter={(value: number) => [formatCurrency(value), "Collections"]}
-                />
-                <Bar dataKey="amount" fill="#1e2a4a" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+        {isManagingPartner ? (
+          <MonthlyCollectionsChart
+            compact
+            analyticsHref="/dashboard/analytics"
+            data={executiveMonthlyCollections}
+            loading={executiveCollectionsLoading}
+          />
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Monthly Collections</CardTitle>
+              <CardDescription>{chartDescription}</CardDescription>
+            </CardHeader>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={collectionsChartData}
+                  margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#6b7280" />
+                  <YAxis
+                    tick={{ fontSize: 12 }}
+                    stroke="#6b7280"
+                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => [formatCurrency(value), "Collections"]}
+                  />
+                  <Bar dataKey="amount" fill="#1e2a4a" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
