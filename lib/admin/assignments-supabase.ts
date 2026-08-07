@@ -160,6 +160,7 @@ export function profileToAdminEmployee(
     availableWorkHours: capacity,
     assignedHours,
     actualHoursWorked: 0,
+    proBonoHoursWorked: 0,
     isAttorney,
   };
 }
