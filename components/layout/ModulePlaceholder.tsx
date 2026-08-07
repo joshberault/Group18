@@ -42,9 +42,9 @@ export function ModulePlaceholder({
     <>
       <PageHeader title={title} description={description} />
       <EmptyState
-        title={`${title} module`}
-        description={`This module will support ${title.toLowerCase()} workflows as part of the contract-to-cash process. Feature development will be completed on a dedicated teammate branch.`}
-        moduleLabel="Ready for feature development"
+        title={`${title} is not available for your role`}
+        description="Your current role does not include access to this module. Switch roles or contact your firm administrator if you need access."
+        moduleLabel="Access required"
         icon={<Icon className="h-7 w-7" />}
       />
     </>

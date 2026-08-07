@@ -1,13 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { createClientSafe } from "@/lib/supabase/client";
 import {
   getDemoSubmitterContext,
   notifyApprovalWorkflowChange,
   submitDemoTimeEntry,
 } from "@/lib/demo/time-workflow-store";
+import { insertTimeEntryInSupabase } from "@/lib/time/time-entry-supabase";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { checkMatterBillable } from "@/lib/matters/matter-activation-gates";
 import { Button } from "@/components/ui/Button";
@@ -88,6 +87,15 @@ export function TimeEntryForm({
       effectiveRole === "attorney" ? attorneySpecialty : null,
     );
 
+    const insertResult = await insertTimeEntryInSupabase({
+      matterId,
+      profileId: submitter.profileId,
+      entryDate,
+      hours: parsedHours,
+      description: description.trim(),
+      isBillable,
+    });
+
     submitDemoTimeEntry({
       profileId: submitter.profileId,
       submitterName: submitter.submitterName,
@@ -99,24 +107,13 @@ export function TimeEntryForm({
       hours: parsedHours,
       description: description.trim(),
       isBillable,
+      supabaseTimeEntryId: insertResult.id,
     });
 
-    const supabase = createClientSafe();
-    if (supabase) {
-      const { error: insertError } = await supabase.from("time_entries").insert({
-        matter_id: matterId,
-        profile_id: submitter.profileId,
-        entry_date: entryDate,
-        hours: parsedHours,
-        description: description.trim(),
-        is_billable: isBillable,
-        status: "pending",
-      });
-      if (insertError) {
-        console.warn("Supabase time entry insert skipped:", insertError.message);
-      } else {
-        notifyApprovalWorkflowChange();
-      }
+    if (insertResult.error) {
+      console.warn("Supabase time entry insert skipped:", insertResult.error);
+    } else if (insertResult.id) {
+      notifyApprovalWorkflowChange();
     }
 
     setLoading(false);

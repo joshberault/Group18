@@ -119,7 +119,7 @@ export async function searchGlobalRecordsFromSupabase(
         type: "task",
         label: task.title as string,
         reference: matterJoin?.title ?? "",
-        href: "/tasks",
+        href: "/attorney/tasks",
       });
     }
   }
@@ -127,16 +127,19 @@ export async function searchGlobalRecordsFromSupabase(
   if (allowed.has("document") && supabase) {
     const { data } = await supabase
       .from("portal_documents")
-      .select("id, title, file_name")
+      .select("id, title, file_name, matter_id")
       .ilike("title", `%${query.trim()}%`)
       .limit(10);
     for (const doc of data ?? []) {
+      const matterId = (doc as { matter_id?: string | null }).matter_id;
       results.push({
         id: `doc-${doc.id}`,
         type: "document",
         label: doc.title as string,
         reference: (doc.file_name as string) ?? "",
-        href: "/client-portal/upload-documents",
+        href: matterId
+          ? `/matters/${matterId}?tab=documents`
+          : "/matters",
       });
     }
   }

@@ -205,6 +205,31 @@ export function getNavRoles(href: string): UserRole[] {
   return item?.roles ?? [];
 }
 
+/** Nest Invoices and AR under Billing for roles that see all three modules. */
+export function nestBillingCollectionsNav(items: NavItem[]): NavItem[] {
+  const billing = items.find((item) => item.href === "/billing");
+  const invoices = items.find((item) => item.href === "/invoices");
+  const receivables = items.find((item) => item.href === "/receivables");
+  if (!billing || !invoices || !receivables) return items;
+
+  const nestedBilling: NavItem = {
+    ...billing,
+    label: "Billing & Collections",
+    description: "Billing queue, invoices, and accounts receivable",
+    children: [
+      { ...billing, label: "Billing Dashboard" },
+      { ...invoices, label: "Invoices" },
+      { ...receivables, label: "Accounts Receivable" },
+    ],
+  };
+
+  return items
+    .filter(
+      (item) => item.href !== "/invoices" && item.href !== "/receivables",
+    )
+    .map((item) => (item.href === "/billing" ? nestedBilling : item));
+}
+
 /** Section links nested under Manager Dashboard in the Firm Admin sidebar. */
 function getFirmAdminSectionChildren(): NavItem[] {
   const sections: Array<{

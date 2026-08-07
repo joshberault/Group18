@@ -110,11 +110,11 @@ export const ACCOUNTING_MANAGER_NAV_ITEMS: NavItem[] = [
   },
   {
     routeKey: "reports",
-    label: "Reports",
+    label: "Financial Reports",
     href: "/reports",
     icon: BarChart3,
     description:
-      "Financial and operational reports including P&L, balance sheet, and WIP",
+      "Exportable financial statements: P&L, balance sheet, WIP, and GL reports",
   },
   {
     routeKey: "audit_log",

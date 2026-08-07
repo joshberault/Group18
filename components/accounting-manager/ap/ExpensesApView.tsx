@@ -286,7 +286,7 @@ export function ExpensesApView() {
         description="Vendor bills, expense reimbursements, matter-related expenses, cost recovery, payment approvals, and accounts payable."
       >
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setToast("New vendor bill form opened (prototype)")}>
+          <Button disabled title="Vendor bills are created from the expense submission workflow.">
             <Plus className="h-4 w-4" />
             New Vendor Bill
           </Button>

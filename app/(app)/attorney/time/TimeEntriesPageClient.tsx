@@ -44,7 +44,7 @@ export function TimeEntriesPageClient() {
 
       <div>
         <h2 className="mb-3 text-lg font-semibold text-navy-900">Your entries</h2>
-        <TimeEntryList entries={timeEntries} editable />
+        <TimeEntryList entries={timeEntries} editable onDeleted={refresh} />
       </div>
     </div>
   );

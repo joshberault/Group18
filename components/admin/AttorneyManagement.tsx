@@ -796,7 +796,7 @@ export function AttorneyManagement() {
         isOpen={modalMode === "add" || modalMode === "edit"}
         onClose={closeModal}
         title={modalMode === "add" ? "Add employee" : "Edit employee"}
-        description="Updates apply to local mock data on this page only."
+        description="Updates apply to the employee roster on this page."
         className="max-w-3xl"
       >
         <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-1">

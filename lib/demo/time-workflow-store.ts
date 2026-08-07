@@ -9,7 +9,7 @@ import { DEMO_PROFILE } from "@/lib/attorney/demo-data";
 const STORAGE_KEY = "counselflow-demo-time-workflow-v1";
 export const TIME_WORKFLOW_EVENT = "counselflow-time-workflow-change";
 
-const PARALEGAL_PROFILE_ID = "demo-profile-paralegal";
+const PARALEGAL_PROFILE_ID = "bbbb0202-0001-4001-8001-000000000002";
 const DEFAULT_BILLABLE_RATE = 175;
 const DEFAULT_COST_RATE = 85;
 
@@ -251,6 +251,49 @@ export function getTimeEntriesForProfile(profileId: string): TimeEntry[] {
   return readState().timeEntries.filter((entry) => entry.profile_id === profileId);
 }
 
+export function getApprovedBillableTimeEntriesForMatter(
+  matterId: string,
+): TimeEntry[] {
+  return readState().timeEntries.filter(
+    (entry) =>
+      entry.matter_id === matterId &&
+      entry.is_billable &&
+      entry.status === "approved",
+  );
+}
+
+export function getDemoApprovalForTimeEntryId(
+  demoTimeEntryId: string,
+): AdminApproval | undefined {
+  return readState().approvals.find((row) => {
+    const parts = row.originalSnapshot?.split("|") ?? [];
+    return parts[0] === "time_entry" && parts[1] === demoTimeEntryId;
+  });
+}
+
+/** Approved demo-workflow time grouped by matter (for invoice handoff hints). */
+export function listApprovedDemoMattersWithWip(): Array<{
+  matterId: string;
+  matterTitle: string;
+  hours: number;
+}> {
+  const totals = new Map<string, { matterTitle: string; hours: number }>();
+  for (const entry of readState().timeEntries) {
+    if (!entry.is_billable || entry.status !== "approved") continue;
+    const title =
+      entry.matter?.title?.trim() || entry.matter_id || "Unknown matter";
+    const prev = totals.get(entry.matter_id) ?? { matterTitle: title, hours: 0 };
+    totals.set(entry.matter_id, {
+      matterTitle: title,
+      hours: prev.hours + (Number(entry.hours) || 0),
+    });
+  }
+  return [...totals.entries()].map(([matterId, value]) => ({
+    matterId,
+    ...value,
+  }));
+}
+
 export function getExpensesForProfile(profileId: string): ExpenseSubmission[] {
   return readState().expenses.filter((entry) => entry.profile_id === profileId);
 }
@@ -294,6 +337,7 @@ export type SubmitTimeEntryInput = {
   hours: number;
   description: string;
   isBillable: boolean;
+  supabaseTimeEntryId?: string | null;
 };
 
 export function submitDemoTimeEntry(input: SubmitTimeEntryInput): TimeEntry {
@@ -335,7 +379,7 @@ export function submitDemoTimeEntry(input: SubmitTimeEntryInput): TimeEntry {
       summary: `${input.description} (${input.submitterRole.replace("_", " ")})`,
       priority: input.hours >= 10 ? "urgent" : "normal",
     }),
-    originalSnapshot: `time_entry|${timeEntryId}|${input.hours}|${matterTitle}|${input.entryDate}`,
+    originalSnapshot: `time_entry|${timeEntryId}|${input.supabaseTimeEntryId ?? ""}|${input.hours}|${matterTitle}|${input.entryDate}`,
     timeEntryDate: input.entryDate,
     timeEntryHours: input.hours,
     timeEntryBillable: input.isBillable,
@@ -603,4 +647,23 @@ export function resolveDemoExpenseApproval(
 
 export function isDemoSessionApproval(approvalId: string): boolean {
   return readState().approvals.some((row) => row.id === approvalId);
+}
+
+export function deleteDemoTimeEntry(timeEntryId: string): boolean {
+  const state = readState();
+  const entry = state.timeEntries.find((row) => row.id === timeEntryId);
+  if (!entry) return false;
+  if (entry.status !== "pending") {
+    return false;
+  }
+
+  writeState({
+    ...state,
+    timeEntries: state.timeEntries.filter((row) => row.id !== timeEntryId),
+    approvals: state.approvals.filter((row) => {
+      const recordId = linkedRecordId(row);
+      return recordId !== timeEntryId;
+    }),
+  });
+  return true;
 }

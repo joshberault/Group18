@@ -2,6 +2,8 @@ import type { ConsultationRequestRecord } from "@/lib/demo/consultation-requests
 import { createClientRecord } from "@/lib/clients/queries";
 import type { ClientFormValues } from "@/lib/clients/types";
 import { createMatterFromIntake } from "@/lib/intake/create-matter-from-intake";
+import { queueEngagementApproval } from "@/lib/pipeline/engagement-approval-store";
+import { createClientSafe } from "@/lib/supabase/client";
 import {
   defaultBillingTypeForCaseType,
   defaultLeadAttorneyForIntake,
@@ -84,6 +86,25 @@ export async function convertIntakeToClientAndMatter(
       error: matterResult.error ?? "Client created but matter creation failed.",
     };
   }
+
+  const supabase = createClientSafe();
+  if (supabase) {
+    await supabase
+      .from("clients")
+      .update({
+        conflict_check_status: "cleared",
+        conflict_check_notes: `Intake conversion cleared conflict review for request ${record.id}.`,
+        conflict_checked_at: new Date().toISOString(),
+        conflict_flag: false,
+      })
+      .eq("id", clientResult.data.id);
+  }
+
+  queueEngagementApproval({
+    matterId: matterResult.matterId,
+    matterTitle,
+    clientName: clientResult.data.name ?? `${record.firstName} ${record.lastName}`.trim(),
+  });
 
   return {
     clientId: clientResult.data.id,

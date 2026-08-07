@@ -187,7 +187,9 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
     setBusy(false);
     if (result.data) {
       setClient(result.data);
-      setMessage("Client marked inactive. Records are retained (no permanent delete).");
+      setMessage(
+        "Client marked inactive. Records are retained per firm policy; contact a firm administrator for exceptional purge requests.",
+      );
     } else {
       setMessage(result.error ?? "Status update failed.");
     }
@@ -390,7 +392,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
             isOpen={confirmInactive}
             onClose={() => setConfirmInactive(false)}
             title="Deactivate client?"
-            description="The client will be marked Inactive. Records are retained — there is no permanent delete in this module."
+            description="The client will be marked Inactive. Records are retained per firm policy. Contact a firm administrator if an exceptional purge is required."
           >
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setConfirmInactive(false)}>

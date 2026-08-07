@@ -14,7 +14,11 @@ export function RoleGuard({ children }: { children: React.ReactNode }) {
   const { selectedRole, isClientReady } = useDemoRole();
 
   if (!isClientReady) {
-    return <>{children}</>;
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted">
+        Loading workspace…
+      </div>
+    );
   }
 
   if (!canAccessRoute(selectedRole, pathname)) {

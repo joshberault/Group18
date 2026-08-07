@@ -5,7 +5,7 @@ import {
 } from "@/lib/navigation/accounting-manager-nav";
 import { CLIENT_NAV_ITEMS, isClientPortalRoute } from "@/lib/navigation/client-nav";
 import { PROSPECTIVE_CLIENT_NAV_ITEMS } from "@/lib/navigation/prospective-client-nav";
-import { NAV_ITEMS, getNavItemsForRole, type NavItem, type RouteKey } from "@/lib/navigation";
+import { NAV_ITEMS, getNavItemsForRole, nestBillingCollectionsNav, type NavItem, type RouteKey } from "@/lib/navigation";
 import type { UserRole } from "@/lib/types";
 import { USER_ROLE_LABELS } from "@/lib/types";
 import type { Permission } from "./permissions";
@@ -86,7 +86,6 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
       "tasks",
       "calendar",
       "notes",
-      "invoices",
     ],
     dashboardTitle: "Attorney Dashboard",
     dashboardDescription:
@@ -97,12 +96,11 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
       "manage_clients",
       "enter_time",
       "manage_tasks",
-      "create_invoices",
     ],
   },
   paralegal: {
     displayName: USER_ROLE_LABELS.paralegal,
-    defaultRoute: "/dashboard",
+    defaultRoute: "/attorney/dashboard",
     allowedRoutes: [
       "dashboard",
       "attorney_hub",
@@ -271,10 +269,22 @@ function canAccessStandardRoute(role: UserRole, pathname: string): boolean {
     return accountingItem?.roles?.includes(role) ?? false;
   }
 
-  return true;
+  if (pathname === "/" || pathname === "") {
+    return true;
+  }
+
+  return false;
 }
 
 export function canAccessRoute(role: UserRole, pathname: string): boolean {
+  // Paralegal operational home is Attorney Hub — not the firm dashboard.
+  if (
+    role === "paralegal" &&
+    (pathname === "/dashboard" || pathname.startsWith("/dashboard/"))
+  ) {
+    return false;
+  }
+
   if (isClientPortalRoute(pathname)) {
     return role === "client";
   }
@@ -329,6 +339,15 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
     return true;
   }
 
+  // Managing Partner and Firm Administrator may view trust balances (read-only KPI link).
+  if (
+    (role === "managing_partner" || role === "firm_administrator") &&
+    (pathname === "/accounting/trust" ||
+      pathname.startsWith("/accounting/trust/"))
+  ) {
+    return true;
+  }
+
   if (isAccountingManagerExclusivePath(pathname)) {
     return false;
   }
@@ -338,7 +357,7 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
 
 export function getNavigationForRole(role: UserRole): NavItem[] {
   if (role === "accounting_manager") {
-    return ACCOUNTING_MANAGER_NAV_ITEMS;
+    return nestBillingCollectionsNav(ACCOUNTING_MANAGER_NAV_ITEMS);
   }
 
   if (role === "client") {
@@ -353,33 +372,35 @@ export function getNavigationForRole(role: UserRole): NavItem[] {
 
   // Managing Partner demo: declutter sidebar (ops/oversight home only).
   if (role === "managing_partner") {
-    return items
-      .filter(
-        (item) =>
-          item.routeKey !== "time" &&
-          item.routeKey !== "client_portal" &&
-          item.routeKey !== "attorney_hub" &&
-          item.routeKey !== "calendar" &&
-          item.routeKey !== "notes" &&
-          item.routeKey !== "reports" &&
-          item.routeKey !== "risk_center" &&
-          item.href !== "/attorney/time" &&
-          item.href !== "/attorney/dashboard" &&
-          item.href !== "/attorney/calendar" &&
-          item.href !== "/attorney/notes" &&
-          item.href !== "/reports" &&
-          item.href !== "/risk-center" &&
-          !item.href.startsWith("/client-portal"),
-      )
-      .map((item) =>
-        item.routeKey === "tasks"
-          ? {
-              ...item,
-              label: "Tasks & Deadlines",
-              description: "Task list and deadlines calendar",
-            }
-          : item,
-      );
+    return nestBillingCollectionsNav(
+      items
+        .filter(
+          (item) =>
+            item.routeKey !== "time" &&
+            item.routeKey !== "client_portal" &&
+            item.routeKey !== "attorney_hub" &&
+            item.routeKey !== "calendar" &&
+            item.routeKey !== "notes" &&
+            item.routeKey !== "reports" &&
+            item.routeKey !== "risk_center" &&
+            item.href !== "/attorney/time" &&
+            item.href !== "/attorney/dashboard" &&
+            item.href !== "/attorney/calendar" &&
+            item.href !== "/attorney/notes" &&
+            item.href !== "/reports" &&
+            item.href !== "/risk-center" &&
+            !item.href.startsWith("/client-portal"),
+        )
+        .map((item) =>
+          item.routeKey === "tasks"
+            ? {
+                ...item,
+                label: "Tasks & Deadlines",
+                description: "Task list and deadlines calendar",
+              }
+            : item,
+        ),
+    );
   }
 
   // Paralegal: Calendar lives under Tasks & Deadlines (List | Calendar).
@@ -402,11 +423,17 @@ export function getNavigationForRole(role: UserRole): NavItem[] {
 
   // Firm Administrator demo: never show Client Portal.
   if (role === "firm_administrator") {
-    return items.filter(
-      (item) =>
-        item.routeKey !== "client_portal" &&
-        !item.href.startsWith("/client-portal"),
+    return nestBillingCollectionsNav(
+      items.filter(
+        (item) =>
+          item.routeKey !== "client_portal" &&
+          !item.href.startsWith("/client-portal"),
+      ),
     );
+  }
+
+  if (role === "billing_specialist") {
+    return nestBillingCollectionsNav(items);
   }
 
   return items;

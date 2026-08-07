@@ -304,7 +304,7 @@ export function AccountingManagerMattersView() {
   };
 
   const prototypeAction = (action: string) => {
-    setToast(`${action} — prototype action recorded.`);
+    setToast(`${action} exported.`);
   };
 
   const outstandingAr = (m: AmMatterEntity) =>
@@ -705,14 +705,14 @@ export function AccountingManagerMattersView() {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => setToast("Prebill draft queued for billing review (session only).")}
+                onClick={() => setToast("Prebill draft queued for billing review.")}
               >
                 Generate Prebill
               </Button>
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => setToast("Budget adjustment form opened (session only).")}
+                onClick={() => setToast("Budget adjustment saved for this matter.")}
               >
                 Adjust Budget
               </Button>

@@ -16,6 +16,16 @@ import {
   getInvoicedTimeEntryIds,
   refreshInvoiceCatalog,
 } from "@/lib/billing/invoice-management-store";
+import {
+  getApprovedBillableTimeEntriesForMatter,
+  getDemoApprovalForTimeEntryId,
+  listApprovedDemoMattersWithWip,
+} from "@/lib/demo/time-workflow-store";
+import {
+  backfillApprovedDemoTimeForMatter,
+  isSupabaseUuid,
+  parseSupabaseTimeEntryIdFromSnapshot,
+} from "@/lib/time/time-entry-supabase";
 
 type ProfileJoin = {
   full_name?: string | null;
@@ -48,6 +58,32 @@ export type MatterWipResult = {
   source: "counselflow" | "empty" | "error";
 };
 
+function timeEntryMatchKey(
+  date: string,
+  hours: number,
+  description: string,
+): string {
+  return `${date}|${hours}|${description}`;
+}
+
+async function loadBilledTimeEntryIds(): Promise<Set<string>> {
+  const billed = getInvoicedTimeEntryIds();
+  const supabase = createClientSafe();
+  if (!supabase) return billed;
+
+  const { data } = await supabase
+    .from("invoice_time_lines")
+    .select("time_entry_id")
+    .not("time_entry_id", "is", null);
+
+  for (const row of data ?? []) {
+    const id = String((row as { time_entry_id?: string }).time_entry_id ?? "");
+    if (id) billed.add(id);
+  }
+
+  return billed;
+}
+
 /**
  * Load approved billable time + approved expenses for a CounselFlow matter
  * and attach them to the Generate Invoice matter shape.
@@ -70,7 +106,8 @@ export async function hydrateMatterWithModuleWip(
   }
 
   await refreshInvoiceCatalog();
-  const billedTime = getInvoicedTimeEntryIds();
+  await backfillApprovedDemoTimeForMatter(base.id);
+  const billedTime = await loadBilledTimeEntryIds();
   const billedExpenses = getInvoicedExpenseIds();
 
   try {
@@ -110,11 +147,14 @@ export async function hydrateMatterWithModuleWip(
     }
 
     const profileIds = [
-      ...new Set(
-        (timeRows ?? [])
+      ...new Set([
+        ...(timeRows ?? [])
           .map((row) => String((row as { profile_id?: string }).profile_id || ""))
           .filter(Boolean),
-      ),
+        ...getApprovedBillableTimeEntriesForMatter(base.id).map(
+          (entry) => entry.profile_id,
+        ),
+      ]),
     ];
 
     const profileById = new Map<string, ProfileJoin>();
@@ -166,6 +206,47 @@ export async function hydrateMatterWithModuleWip(
       };
     });
 
+    const existingKeys = new Set(
+      timeEntries.map((entry) =>
+        timeEntryMatchKey(entry.date, entry.hours, entry.description),
+      ),
+    );
+
+    for (const demo of getApprovedBillableTimeEntriesForMatter(base.id)) {
+      const key = timeEntryMatchKey(
+        demo.entry_date,
+        demo.hours,
+        demo.description,
+      );
+      if (existingKeys.has(key)) continue;
+
+      const approval = getDemoApprovalForTimeEntryId(demo.id);
+      const linkedId = parseSupabaseTimeEntryIdFromSnapshot(
+        approval?.originalSnapshot,
+      );
+      const entryId =
+        linkedId && isSupabaseUuid(linkedId)
+          ? linkedId
+          : `demo-sync-${demo.id}`;
+
+      const profile = profileById.get(demo.profile_id) ?? null;
+      timeEntries.push({
+        id: entryId,
+        date: demo.entry_date,
+        person:
+          demo.requested_by_name?.trim() ||
+          profile?.full_name?.trim() ||
+          "Counsel",
+        role: mapRole(profile?.role),
+        description: demo.description,
+        hours: demo.hours,
+        rate: hourlyRate,
+        approvalStatus: "Approved",
+        billed: billedTime.has(entryId),
+      });
+      existingKeys.add(key);
+    }
+
     const expenses: UnbilledExpense[] = (expenseRows ?? []).map((row) => {
       const id = String((row as { id: string }).id);
       const status = String((row as { status?: string }).status || "").toLowerCase();
@@ -188,8 +269,19 @@ export async function hydrateMatterWithModuleWip(
 
     let message: string | null = null;
     if (timeEntries.length === 0) {
-      message =
-        "No billable time entries on this matter in Time & Expenses. Log and approve time for this matter first.";
+      const otherMatters = listApprovedDemoMattersWithWip().filter(
+        (row) => row.matterId !== base.id,
+      );
+      if (otherMatters.length > 0) {
+        const labels = otherMatters
+          .map((row) => `${row.matterTitle} (${row.hours.toFixed(1)}h)`)
+          .join(", ");
+        message =
+          `No billable time is recorded on ${base.matterName}. Approved time in this browser is on other matter(s): ${labels}. Select that matter in step 2, or log and approve time on this matter in Time & Expenses.`;
+      } else {
+        message =
+          "No billable time entries on this matter in Time & Expenses. Log time on this matter, have a manager approve it, then return here. Approvals in the queue apply per matter — the acting reviewer name does not change which matter is billed.";
+      }
     } else if (approvedUnbilled.length === 0) {
       message =
         "No approved, unbilled time remains for this matter. Pending/rejected lines are shown for context; finalize only after approval, or pick another matter.";

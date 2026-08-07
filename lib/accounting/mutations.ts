@@ -1,4 +1,5 @@
 import { getAccountingSupabase, logAuditEvent, asNumber } from "./db";
+import { postPaymentToGl } from "@/lib/accounting/billing-gl-posting";
 
 type Actor = { name: string; role: string };
 
@@ -31,10 +32,30 @@ export async function recordPayment(input: {
       payment_method: input.paymentMethod,
       reference_number: input.referenceNumber ?? null,
       allocated_amount: input.amount,
+      status: "completed",
+      payment_date: new Date().toISOString().slice(0, 10),
     })
-    .select("id")
+    .select("id, payment_date, amount, reference_number")
     .single();
   if (payErr) return { ok: false, error: payErr.message };
+
+  const { data: invoiceRow } = await supabase
+    .from("invoices")
+    .select("invoice_number")
+    .eq("id", input.invoiceId)
+    .maybeSingle();
+
+  const glResult = await postPaymentToGl({
+    paymentId: String(payment.id),
+    invoiceNumber: String(invoiceRow?.invoice_number ?? input.invoiceId),
+    paymentDate: String(payment.payment_date).slice(0, 10),
+    amount: asNumber(payment.amount),
+    referenceNumber: payment.reference_number,
+    createdByProfileId: input.clientId,
+  });
+  if (!glResult.ok) {
+    console.warn(`GL post skipped for payment ${payment.id}:`, glResult.error);
+  }
 
   await supabase.from("payment_allocations").insert({
     payment_id: payment.id,
@@ -336,6 +357,7 @@ export async function recordTrustTransfer(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   const supabase = getAccountingSupabase();
   if (!supabase) return { ok: false, error: "Supabase unavailable" };
+  const db = supabase;
 
   const clientId = input.toClientId ?? input.fromClientId;
   if (!clientId) {
@@ -349,7 +371,7 @@ export async function recordTrustTransfer(input: {
   }
 
   if (input.fromClientId) {
-    const { data: ledger } = await supabase
+    const { data: ledger } = await db
       .from("trust_client_ledgers")
       .select("balance")
       .eq("trust_account_id", input.trustAccountId)
@@ -364,7 +386,7 @@ export async function recordTrustTransfer(input: {
     }
   }
 
-  const { error: txErr } = await supabase.from("trust_transactions").insert({
+  const { error: txErr } = await db.from("trust_transactions").insert({
     trust_account_id: input.trustAccountId,
     client_id: clientId,
     matter_id: input.matterId ?? null,
@@ -374,6 +396,53 @@ export async function recordTrustTransfer(input: {
     status: "Posted",
   });
   if (txErr) return { ok: false, error: txErr.message };
+
+  async function adjustLedgerBalance(
+    ledgerClientId: string,
+    delta: number,
+  ): Promise<string | null> {
+    const { data: ledger } = await db
+      .from("trust_client_ledgers")
+      .select("id, balance")
+      .eq("trust_account_id", input.trustAccountId)
+      .eq("client_id", ledgerClientId)
+      .maybeSingle();
+
+    if (ledger?.id) {
+      const nextBalance = asNumber(ledger.balance) + delta;
+      const { error: ledgerErr } = await db
+        .from("trust_client_ledgers")
+        .update({ balance: nextBalance })
+        .eq("id", ledger.id);
+      return ledgerErr?.message ?? null;
+    }
+
+    if (delta > 0) {
+      const { error: insertErr } = await db
+        .from("trust_client_ledgers")
+        .insert({
+          trust_account_id: input.trustAccountId,
+          client_id: ledgerClientId,
+          balance: delta,
+        });
+      return insertErr?.message ?? null;
+    }
+
+    return null;
+  }
+
+  if (input.fromClientId && input.toClientId) {
+    const fromError = await adjustLedgerBalance(input.fromClientId, -input.amount);
+    if (fromError) return { ok: false, error: fromError };
+    const toError = await adjustLedgerBalance(input.toClientId, input.amount);
+    if (toError) return { ok: false, error: toError };
+  } else if (input.toClientId) {
+    const ledgerError = await adjustLedgerBalance(input.toClientId, input.amount);
+    if (ledgerError) return { ok: false, error: ledgerError };
+  } else if (input.fromClientId) {
+    const ledgerError = await adjustLedgerBalance(input.fromClientId, -input.amount);
+    if (ledgerError) return { ok: false, error: ledgerError };
+  }
 
   await logAuditEvent({
     actorName: input.actor.name,

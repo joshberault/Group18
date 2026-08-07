@@ -44,7 +44,7 @@ const DEFAULT_NOTIFICATIONS: FirmNotification[] = [
     title: "Bank reconciliation due",
     message: "Operating account reconciliation due by Aug 8.",
     module: "Banking",
-    href: "/accounting/banking",
+    href: "/receivables",
     createdAt: "2026-08-04T11:00:00Z",
     read: true,
   },

@@ -28,6 +28,7 @@ import {
   loadBillingMattersForClient,
 } from "@/lib/billing/counselflow-catalog";
 import { hydrateMatterWithModuleWip } from "@/lib/billing/matter-wip";
+import { resolveTimeEntryIdForInvoicing } from "@/lib/time/time-entry-supabase";
 import {
   applyRetainerToMatter,
   fetchMatterRetainerBalance,
@@ -1008,7 +1009,20 @@ export function GenerateInvoiceWizard() {
       );
     }
 
-    const locked = selectedTime.map((t) => t.id);
+    const resolvedSelectedTime = await Promise.all(
+      selectedTime.map(async (entry) => ({
+        ...entry,
+        id: await resolveTimeEntryIdForInvoicing({
+          id: entry.id,
+          matterId: matter.id,
+          entryDate: entry.date,
+          hours: entry.hours,
+          description: entry.description,
+        }),
+      })),
+    );
+
+    const locked = resolvedSelectedTime.map((t) => t.id);
     const lockedExp = selectedExpenses.map((e) => e.id);
     setLockedTimeIds((prev) => new Set([...prev, ...locked]));
     setLockedExpenseIds((prev) => new Set([...prev, ...lockedExp]));
@@ -1051,7 +1065,7 @@ export function GenerateInvoiceWizard() {
       status: "Sent",
       client: clientForInvoice,
       matter,
-      timeEntries: selectedTime,
+      timeEntries: resolvedSelectedTime,
       expenses: selectedExpenses,
       applyWriteDowns,
       courtesyDiscount,

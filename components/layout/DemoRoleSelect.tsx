@@ -213,7 +213,7 @@ export function DemoRoleSelect({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="Switch demonstration role"
+        aria-label="Switch workspace role"
         onClick={() => setOpen((current) => !current)}
         className="flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 text-left text-sm text-navy-900 focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/20"
       >

@@ -22,6 +22,7 @@ import {
   getDemoSubmitterContext,
   submitDemoTimeEntry,
 } from "@/lib/demo/time-workflow-store";
+import { insertTimeEntryInSupabase } from "@/lib/time/time-entry-supabase";
 
 export function ParalegalTimeView() {
   const searchParams = useSearchParams();
@@ -54,7 +55,7 @@ export function ParalegalTimeView() {
     }
   }, [action]);
 
-  function handleSubmit(e: React.FormEvent, asDraft: boolean) {
+  async function handleSubmit(e: React.FormEvent, asDraft: boolean) {
     e.preventDefault();
     const matter = PARALEGAL_ASSIGNED_MATTERS.find((m) => m.id === matterId);
     if (!matter) return;
@@ -105,6 +106,15 @@ export function ParalegalTimeView() {
 
     if (!asDraft) {
       const submitter = getDemoSubmitterContext("paralegal");
+      const fullDescription = `${activityType.replaceAll("_", " ")} — ${description.trim()}`;
+      const insertResult = await insertTimeEntryInSupabase({
+        matterId: matter.id,
+        profileId: submitter.profileId,
+        entryDate,
+        hours: value,
+        description: fullDescription,
+        isBillable: billable,
+      });
       submitDemoTimeEntry({
         profileId: submitter.profileId,
         submitterName: submitter.submitterName,
@@ -114,8 +124,9 @@ export function ParalegalTimeView() {
         matterTitle: matter.title,
         entryDate,
         hours: value,
-        description: `${activityType.replaceAll("_", " ")} — ${description.trim()}`,
+        description: fullDescription,
         isBillable: billable,
+        supabaseTimeEntryId: insertResult.id,
       });
     }
     refresh();

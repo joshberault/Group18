@@ -28,6 +28,7 @@ import {
   setMatterEngagementStatus,
   setMatterFeeTerms,
 } from "@/lib/matters/firm-portfolio-store";
+import { queueEngagementApproval } from "@/lib/pipeline/engagement-approval-store";
 import { cn } from "@/lib/utils/cn";
 
 const WIZARD_STEPS = ["Choose template", "Structured terms", "Review & apply"] as const;
@@ -224,9 +225,16 @@ export function EngagementTermsPanel({
       billingHold: matter.billingHold,
     });
     setMatterEngagementStatus(matter.id, "letter_sent");
+    queueEngagementApproval({
+      matterId: matter.id,
+      matterTitle: matter.title,
+      clientName: matter.clientName,
+    });
     setAppliedTerms({ ...termsDraft });
     onMatterChange();
-    onToast?.("Engagement terms applied and letter marked as sent.");
+    onToast?.(
+      "Engagement terms applied. Firm Administrator can approve the engagement to activate billable work.",
+    );
     setSaving(false);
     setStep(0);
   };

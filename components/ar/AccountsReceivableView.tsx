@@ -15,6 +15,12 @@ import type {
   CollectionRisk,
 } from "@/lib/mock-data/ar-oversight";
 import { fetchReceivablesWorkspace, useSupabaseQuery } from "@/lib/accounting";
+import {
+  getAllManagedInvoices,
+  refreshInvoiceCatalog,
+  updateManagedInvoice,
+} from "@/lib/billing/invoice-management-store";
+import type { InvoiceStatus } from "@/lib/billing/invoice-types";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
@@ -115,6 +121,7 @@ export function AccountsReceivableView() {
   const [modal, setModal] = useState<ArModal>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [paymentClient, setPaymentClient] = useState("");
+  const [paymentInvoice, setPaymentInvoice] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Check");
   const [paymentNote, setPaymentNote] = useState("");
@@ -122,7 +129,7 @@ export function AccountsReceivableView() {
   const [cashAmount, setCashAmount] = useState("");
   const [cashInvoice, setCashInvoice] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
-  const [sessionActivity, setSessionActivity] = useState<ArActivityEvent[]>([]);
+  const sessionActivity: ArActivityEvent[] = [];
   const arCollectionExceptions: ArCollectionException[] = [];
 
   useEffect(() => {
@@ -148,6 +155,7 @@ export function AccountsReceivableView() {
     setModal(null);
     setFormError(null);
     setPaymentClient("");
+    setPaymentInvoice("");
     setPaymentAmount("");
     setPaymentNote("");
     setCashClient("");
@@ -155,8 +163,12 @@ export function AccountsReceivableView() {
     setCashInvoice("");
   }
 
-  function submitRecordPayment() {
+  async function submitRecordPayment() {
     const amount = Number(paymentAmount);
+    if (!paymentInvoice.trim()) {
+      setFormError("Invoice number is required.");
+      return;
+    }
     if (!paymentClient.trim()) {
       setFormError("Client is required.");
       return;
@@ -165,24 +177,58 @@ export function AccountsReceivableView() {
       setFormError("Payment amount must be greater than zero.");
       return;
     }
-    setSessionActivity((prev) => [
-      {
-        id: `session-${Date.now()}`,
-        action: "Payment recorded (session)",
-        matter: paymentClient.trim(),
-        description: `${formatCurrency(amount)} via ${paymentMethod}`,
-        user: "Accounting Manager",
-        relativeTime: "Just now",
-      },
-      ...prev,
-    ]);
+
+    await refreshInvoiceCatalog();
+    const invoice = getAllManagedInvoices().find(
+      (row) =>
+        row.invoiceNumber.toLowerCase() === paymentInvoice.trim().toLowerCase(),
+    );
+    if (!invoice) {
+      setFormError(`Invoice ${paymentInvoice.trim()} was not found.`);
+      return;
+    }
+
+    const paid = invoice.amountPaid + amount;
+    const remaining = Math.max(
+      0,
+      Math.round((invoice.remainingBalance - amount) * 100) / 100,
+    );
+    const newStatus: InvoiceStatus =
+      remaining <= 0
+        ? "Paid"
+        : paid > 0
+          ? "Partially Paid"
+          : invoice.status;
+    const paymentId = `pay-ar-${Date.now()}`;
+    const updated = await updateManagedInvoice(invoice.invoiceNumber, {
+      amountPaid: paid,
+      remainingBalance: remaining,
+      status: newStatus,
+      paymentHistory: [
+        ...(invoice.paymentHistory ?? []),
+        {
+          id: paymentId,
+          date: new Date().toISOString().slice(0, 10),
+          method: paymentMethod,
+          reference: paymentNote.trim() || `AR-${invoice.invoiceNumber}`,
+          amount,
+        },
+      ],
+    });
+
+    if (!updated) {
+      setFormError("Could not record payment. Try again from Billing receivables.");
+      return;
+    }
+
+    await refresh();
     setToast(
-      `Payment of ${formatCurrency(amount)} recorded for ${paymentClient.trim()} (session only).`,
+      `Payment of ${formatCurrency(amount)} recorded for ${invoice.invoiceNumber}.`,
     );
     closeModal();
   }
 
-  function submitApplyCash() {
+  async function submitApplyCash() {
     const amount = Number(cashAmount);
     if (!cashClient.trim() || !cashInvoice.trim()) {
       setFormError("Client and invoice are required.");
@@ -192,18 +238,53 @@ export function AccountsReceivableView() {
       setFormError("Amount must be greater than zero.");
       return;
     }
-    setSessionActivity((prev) => [
-      {
-        id: `session-${Date.now()}`,
-        action: "Unapplied cash applied (session)",
-        matter: cashClient.trim(),
-        description: `${formatCurrency(amount)} applied to ${cashInvoice.trim()}`,
-        user: "Accounting Manager",
-        relativeTime: "Just now",
-      },
-      ...prev,
-    ]);
-    setToast("Unapplied cash applied in this session only.");
+
+    await refreshInvoiceCatalog();
+    const invoice = getAllManagedInvoices().find(
+      (row) =>
+        row.invoiceNumber.toLowerCase() === cashInvoice.trim().toLowerCase(),
+    );
+    if (!invoice) {
+      setFormError(`Invoice ${cashInvoice.trim()} was not found.`);
+      return;
+    }
+
+    const paid = invoice.amountPaid + amount;
+    const remaining = Math.max(
+      0,
+      Math.round((invoice.remainingBalance - amount) * 100) / 100,
+    );
+    const newStatus: InvoiceStatus =
+      remaining <= 0
+        ? "Paid"
+        : paid > 0
+          ? "Partially Paid"
+          : invoice.status;
+    const updated = await updateManagedInvoice(invoice.invoiceNumber, {
+      amountPaid: paid,
+      remainingBalance: remaining,
+      status: newStatus,
+      paymentHistory: [
+        ...(invoice.paymentHistory ?? []),
+        {
+          id: `pay-cash-${Date.now()}`,
+          date: new Date().toISOString().slice(0, 10),
+          method: "Check",
+          reference: `CASH-${invoice.invoiceNumber}`,
+          amount,
+        },
+      ],
+    });
+
+    if (!updated) {
+      setFormError("Could not apply cash to that invoice.");
+      return;
+    }
+
+    await refresh();
+    setToast(
+      `${formatCurrency(amount)} applied to ${invoice.invoiceNumber}.`,
+    );
     closeModal();
   }
 
@@ -600,9 +681,15 @@ export function AccountsReceivableView() {
         isOpen={modal?.type === "record_payment"}
         onClose={closeModal}
         title="Record Payment"
-        description="Session-only payment entry for demo testing."
+        description="Record a payment against an open invoice. Updates receivables and posts to the general ledger."
       >
         <div className="space-y-4">
+          <Input
+            label="Invoice number"
+            value={paymentInvoice}
+            onChange={(e) => setPaymentInvoice(e.target.value)}
+            required
+          />
           <Input
             label="Client"
             value={paymentClient}
@@ -648,7 +735,7 @@ export function AccountsReceivableView() {
         isOpen={modal?.type === "apply_cash"}
         onClose={closeModal}
         title="Apply Unapplied Cash"
-        description="Apply unapplied cash to an open invoice in this session."
+        description="Apply unapplied cash to an open invoice."
       >
         <div className="space-y-4">
           <Input

@@ -22,6 +22,7 @@ import {
   isDemoSessionApproval,
   resolveDemoTimeApproval,
 } from "@/lib/demo/time-workflow-store";
+import { syncTimeApprovalToSupabase } from "@/lib/time/time-entry-supabase";
 import type { AdminApproval } from "@/lib/admin/types";
 
 type Props = {
@@ -33,7 +34,7 @@ type Props = {
 
 export function PendingTimeApprovalsPanel({
   title = "Pending Time Approvals",
-  description = "Review billable hours submitted during this demo session.",
+  description = "Review billable hours submitted for manager approval.",
   adminLink = false,
   limit = 5,
 }: Props) {
@@ -66,7 +67,7 @@ export function PendingTimeApprovalsPanel({
     setError(null);
   }
 
-  function confirmAction() {
+  async function confirmAction() {
     if (!selected || !modalMode) return;
 
     if (modalMode === "reject" && !notes.trim()) {
@@ -81,10 +82,31 @@ export function PendingTimeApprovalsPanel({
         DEMO_IDENTITIES.managing_partner.fullName,
         notes.trim() || undefined,
       );
+
+      const syncResult = await syncTimeApprovalToSupabase(
+        {
+          id: selected.id,
+          matterId: selected.matterId,
+          employeeId: selected.employeeId,
+          originalSnapshot: selected.originalSnapshot,
+          timeEntryDate: selected.timeEntryDate,
+          timeEntryHours: selected.timeEntryHours,
+          timeEntryDescription: selected.timeEntryDescription,
+          timeEntryBillable: selected.timeEntryBillable,
+        },
+        modalMode === "approve" ? "approved" : "rejected",
+      );
+      if (!syncResult.ok && syncResult.error) {
+        setError(
+          `Approval saved locally but could not update the time entry record: ${syncResult.error}`,
+        );
+        return;
+      }
+
       refresh();
       setSuccess(
         modalMode === "approve"
-          ? "Time entry approved. Accrued wages payable journal entry posted to Revenue & General Ledger."
+          ? "Time entry approved. It is now available for invoicing."
           : "Time entry rejected.",
       );
       closeModal();
@@ -92,7 +114,7 @@ export function PendingTimeApprovalsPanel({
     }
 
     setError(
-      "This seeded approval is read-only in the demo queue. Approve session submissions created from Time & Expenses.",
+      "This seeded approval is read-only. Approve submissions created from Time & Expenses.",
     );
   }
 

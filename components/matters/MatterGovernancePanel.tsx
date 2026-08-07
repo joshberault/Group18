@@ -29,6 +29,7 @@ import {
   setMatterFeeTerms,
   setMatterLifecycle,
 } from "@/lib/matters/firm-portfolio-store";
+import { cancelDraftMatter } from "@/lib/matters/cancel-draft-matter";
 
 function conflictBadgeVariant(
   status: FirmPortfolioMatter["conflictStatus"],
@@ -124,6 +125,27 @@ export function MatterGovernancePanel({
     notify(
       `Engagement status set to ${ENGAGEMENT_STATUS_LABELS[engagementStatus].toLowerCase()}.`,
     );
+  };
+
+  const handleCancelDraft = async () => {
+    if (matter.activationStatus === "active") {
+      notify("Active matters cannot be cancelled from this control.");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Cancel this draft matter? It will be archived and removed from active workflows.",
+      )
+    ) {
+      return;
+    }
+    const result = await cancelDraftMatter(matter.id);
+    if (!result.ok) {
+      notify(result.error ?? "Could not cancel draft matter.");
+      return;
+    }
+    onMatterChange();
+    notify("Draft matter cancelled and archived.");
   };
 
   return (
@@ -261,6 +283,15 @@ export function MatterGovernancePanel({
             </Button>
           ))}
         </div>
+        {matter.activationStatus !== "active" && matter.status !== "archived" && (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => void handleCancelDraft()}
+          >
+            Cancel draft matter
+          </Button>
+        )}
       </section>
 
       <section className="space-y-3">

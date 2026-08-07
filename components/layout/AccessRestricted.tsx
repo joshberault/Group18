@@ -4,14 +4,13 @@ import Link from "next/link";
 import { ShieldX } from "lucide-react";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 
 interface AccessRestrictedProps {
   attemptedPath?: string;
 }
 
 /**
- * Shown when a user navigates directly to a route their demo role cannot access.
+ * Shown when a user navigates to a route their role cannot access.
  * Production authorization must also be enforced via Supabase Row Level Security.
  */
 export function AccessRestricted({ attemptedPath }: AccessRestrictedProps) {
@@ -24,12 +23,9 @@ export function AccessRestricted({ attemptedPath }: AccessRestrictedProps) {
       </div>
       <h2 className="text-lg font-semibold text-navy-900">Access Restricted</h2>
       <p className="mt-2 max-w-md text-sm text-muted">
-        Your current demonstration role does not have permission to view this
-        page{attemptedPath ? ` (${attemptedPath})` : ""}.
+        Your role does not have permission to view this page
+        {attemptedPath ? ` (${attemptedPath})` : ""}.
       </p>
-      <Badge variant="gold" className="mt-4">
-        Demo frontend authorization
-      </Badge>
       <Link href={defaultRoute} className="mt-6">
         <Button>Return to Your Workspace</Button>
       </Link>

@@ -3,6 +3,7 @@ import type { UserRole } from "@/lib/types";
 /** Roles that use the attorney operational hub as their home dashboard */
 export const ATTORNEY_HUB_ROLES: UserRole[] = [
   "attorney",
+  "paralegal",
 ];
 
 /** Roles that can open the attorney hub (including oversight) */
@@ -26,8 +27,7 @@ export function getDefaultHomePath(role: UserRole): string {
     case "attorney":
       return "/attorney/dashboard";
     case "paralegal":
-      // Daily action center lives on /dashboard; Attorney Hub is a separate module.
-      return "/dashboard";
+      return "/attorney/dashboard";
     case "client":
       return "/client-portal/account-summary";
     case "prospective_client":

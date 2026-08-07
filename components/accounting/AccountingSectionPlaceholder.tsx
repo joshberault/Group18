@@ -16,9 +16,9 @@ export function AccountingSectionPlaceholder({
     <>
       <PageHeader title={title} description={description} />
       <EmptyState
-        title={`${title} — under development`}
-        description="This Accounting Manager workspace section is being built on the Accounting branch. The navigation and route are in place for integration with live data later."
-        moduleLabel="Accounting Manager module — in development"
+        title={`${title}`}
+        description="This accounting workspace section is available to the Accounting Manager role. Switch to Accounting Manager or open the linked module from your dashboard."
+        moduleLabel="Accounting workspace"
         icon={icon}
       />
     </>

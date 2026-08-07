@@ -9,7 +9,7 @@ import {
   notifyApprovalWorkflowChange,
   submitDemoTimeEntry,
 } from "@/lib/demo/time-workflow-store";
-import { createClientSafe } from "@/lib/supabase/client";
+import { insertTimeEntryInSupabase } from "@/lib/time/time-entry-supabase";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
@@ -159,6 +159,15 @@ export function TimerWidget({
       selectedRole === "attorney" ? attorneySpecialty : null,
     );
 
+    const insertResult = await insertTimeEntryInSupabase({
+      matterId: timer.matterId,
+      profileId: submitter.profileId,
+      entryDate,
+      hours,
+      description,
+      isBillable: timer.isBillable,
+    });
+
     submitDemoTimeEntry({
       profileId: submitter.profileId,
       submitterName: submitter.submitterName,
@@ -170,22 +179,11 @@ export function TimerWidget({
       hours,
       description,
       isBillable: timer.isBillable,
+      supabaseTimeEntryId: insertResult.id,
     });
 
-    const supabase = createClientSafe();
-    if (supabase) {
-      const { error: insertError } = await supabase.from("time_entries").insert({
-        matter_id: timer.matterId,
-        profile_id: submitter.profileId,
-        entry_date: entryDate,
-        hours,
-        description,
-        is_billable: timer.isBillable,
-        status: "pending",
-      });
-      if (!insertError) {
-        notifyApprovalWorkflowChange();
-      }
+    if (!insertResult.error && insertResult.id) {
+      notifyApprovalWorkflowChange();
     }
 
     const reset: TimerState = {

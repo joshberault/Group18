@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   BookOpen,
   FileSearch,
@@ -23,7 +24,7 @@ interface AccountingSection {
   description: string;
   icon: React.ReactNode;
   permission: Permission;
-  status: string;
+  href: string;
   metric?: string;
 }
 
@@ -35,7 +36,7 @@ const ACCOUNTING_SECTIONS: AccountingSection[] = [
       "Firm-wide accounting snapshot including open period status, pending approvals, and control exceptions.",
     icon: <BookOpen className="h-5 w-5" />,
     permission: "view_accounting_dashboard",
-    status: "Development section",
+    href: "/dashboard",
     metric: "Open period: August 2026",
   },
   {
@@ -45,7 +46,7 @@ const ACCOUNTING_SECTIONS: AccountingSection[] = [
       "Client trust balances, retainer activity, and IOLTA compliance monitoring.",
     icon: <Landmark className="h-5 w-5" />,
     permission: "view_trust_balances",
-    status: "Development section",
+    href: "/accounting/trust",
     metric: `${formatCurrency(892400)} held in trust`,
   },
   {
@@ -55,7 +56,7 @@ const ACCOUNTING_SECTIONS: AccountingSection[] = [
       "Outstanding receivables, aging buckets, and collection follow-up queues.",
     icon: <Receipt className="h-5 w-5" />,
     permission: "view_accounts_receivable",
-    status: "Development section",
+    href: "/receivables",
     metric: `${formatCurrency(428750)} outstanding`,
   },
   {
@@ -65,7 +66,7 @@ const ACCOUNTING_SECTIONS: AccountingSection[] = [
       "Earned vs. billed revenue, WIP conversion, and period-close recognition rules.",
     icon: <PiggyBank className="h-5 w-5" />,
     permission: "view_revenue_recognition",
-    status: "Development section",
+    href: "/accounting/revenue-ledger",
   },
   {
     id: "write-downs",
@@ -74,7 +75,7 @@ const ACCOUNTING_SECTIONS: AccountingSection[] = [
       "Fee adjustments, discount approvals, and uncollectible balance treatment.",
     icon: <Scale className="h-5 w-5" />,
     permission: "manage_write_downs",
-    status: "Development section",
+    href: "/receivables?section=write-offs",
   },
   {
     id: "profitability",
@@ -83,7 +84,7 @@ const ACCOUNTING_SECTIONS: AccountingSection[] = [
       "Matter-level margin analysis, cost allocation, and partner profitability reporting.",
     icon: <LineChart className="h-5 w-5" />,
     permission: "view_profitability",
-    status: "Development section",
+    href: "/dashboard/analytics",
   },
   {
     id: "reconciliation",
@@ -92,7 +93,7 @@ const ACCOUNTING_SECTIONS: AccountingSection[] = [
       "Bank, trust, and payment application reconciliation workflows.",
     icon: <FileSearch className="h-5 w-5" />,
     permission: "reconcile_payments",
-    status: "Development section",
+    href: "/accounting/banking",
   },
   {
     id: "audit",
@@ -101,7 +102,7 @@ const ACCOUNTING_SECTIONS: AccountingSection[] = [
       "Accounting control checkpoints, segregation of duties, and immutable audit logs.",
     icon: <ShieldCheck className="h-5 w-5" />,
     permission: "view_audit_log",
-    status: "Development section",
+    href: "/accounting/audit-log",
   },
 ];
 
@@ -118,11 +119,11 @@ export function AccountingWorkspace() {
   return (
     <>
       <PageHeader
-        title="Accounting Manager Workspace"
+        title="Accounting"
         description={
           isFullAccess
             ? "Trust accounting, revenue recognition, reconciliation, and financial controls."
-            : "Read-level accounting oversight for firm management."
+            : "Accounting summaries and links for firm management."
         }
       />
 
@@ -131,40 +132,39 @@ export function AccountingWorkspace() {
           <p className="text-sm font-medium text-gold-500">
             {isFullAccess
               ? "Accounting Manager Workspace"
-              : "Accounting Oversight View"}
+              : "Accounting Oversight"}
           </p>
           <p className="mt-2 text-sm text-gray-200">
             {isFullAccess
               ? "Manage trust activity, reconcile payments, and monitor firm financial controls from this workspace."
               : isOversight
-                ? "Managing partners may review accounting summaries. Full administration requires the Accounting Manager role."
+                ? "Open a section below for trust balances, receivables, and profitability reporting."
                 : "You have limited access to this accounting workspace."}
-          </p>
-          <p className="mt-3 text-xs text-gray-400">
-            Demo frontend authorization — Supabase Row Level Security required for production.
           </p>
         </div>
       </Card>
 
       <div className="grid gap-4 sm:grid-cols-2">
         {visibleSections.map((section) => (
-          <Card key={section.id}>
-            <CardHeader>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-navy-900 text-gold-500">
-                  {section.icon}
+          <Link key={section.id} href={section.href} className="block">
+            <Card className="h-full transition-shadow hover:shadow-md">
+              <CardHeader>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-navy-900 text-gold-500">
+                    {section.icon}
+                  </div>
+                  <Badge variant="gold">Open module</Badge>
                 </div>
-                <Badge variant="gold">{section.status}</Badge>
-              </div>
-              <CardTitle className="mt-3">{section.title}</CardTitle>
-              <CardDescription>{section.description}</CardDescription>
-              {section.metric && (
-                <p className="mt-2 text-sm font-medium text-navy-900">
-                  {section.metric}
-                </p>
-              )}
-            </CardHeader>
-          </Card>
+                <CardTitle className="mt-3">{section.title}</CardTitle>
+                <CardDescription>{section.description}</CardDescription>
+                {section.metric && (
+                  <p className="mt-2 text-sm font-medium text-navy-900">
+                    {section.metric}
+                  </p>
+                )}
+              </CardHeader>
+            </Card>
+          </Link>
         ))}
       </div>
 
@@ -173,7 +173,7 @@ export function AccountingWorkspace() {
           <CardHeader>
             <CardTitle>No accounting sections available</CardTitle>
             <CardDescription>
-              Your current demonstration role does not include accounting workspace permissions.
+              Your role does not include accounting workspace permissions.
             </CardDescription>
           </CardHeader>
         </Card>

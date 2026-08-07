@@ -789,7 +789,7 @@ export function AccountingManagerClientsView() {
         isOpen={noteModalOpen}
         onClose={() => setNoteModalOpen(false)}
         title="Add Collection Note"
-        description="Saved for this session only."
+        description="Saved to the client accounting profile."
       >
         <div className="space-y-4">
           <Textarea

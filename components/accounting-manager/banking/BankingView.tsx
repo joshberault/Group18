@@ -134,13 +134,14 @@ export function BankingView() {
         description="Bank accounts, bank feeds, reconciliations, ACH payments, wire transfers, and the check register."
       >
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setToast("ACH batch scheduled (prototype)")}>
+          <Button disabled title="ACH batches are scheduled from the Banking module workflow.">
             <Send className="h-4 w-4" />
             Schedule ACH
           </Button>
           <Button
             variant="secondary"
-            onClick={() => setToast("Wire transfer form opened (prototype)")}
+            disabled
+            title="Wire transfers are initiated from the Banking module workflow."
           >
             <CreditCard className="h-4 w-4" />
             Wire Transfer

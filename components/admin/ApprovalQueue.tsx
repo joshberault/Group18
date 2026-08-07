@@ -29,7 +29,6 @@ import {
 import { ADMIN_REFERENCE_DATE } from "@/lib/admin/mock-data";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
-import { invoiceApprovedBillableTime } from "@/lib/billing/approved-time-billing";
 import {
   getMergedApprovals,
   isDemoSessionApproval,
@@ -37,6 +36,7 @@ import {
   resolveDemoTimeApproval,
   subscribeTimeWorkflow,
 } from "@/lib/demo/time-workflow-store";
+import { syncTimeApprovalToSupabase } from "@/lib/time/time-entry-supabase";
 import type {
   AdminApproval,
   AdminEmployee,
@@ -132,7 +132,7 @@ export function ApprovalQueue({ variant = "standalone" }: ApprovalQueueProps) {
   const [searchRequester, setSearchRequester] = useState("");
   const [searchMatter, setSearchMatter] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | ApprovalType>("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | ApprovalStatus>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | ApprovalStatus>("pending");
   const [priorityFilter, setPriorityFilter] = useState<"all" | ApprovalPriority>(
     "all",
   );
@@ -327,32 +327,6 @@ export function ApprovalQueue({ variant = "standalone" }: ApprovalQueueProps) {
     let approvedInvoice:
       | { invoiceNumber: string; amount: number; alreadyInvoiced: boolean }
       | undefined;
-    if (
-      decision === "approved" &&
-      selected.type === "time_entry" &&
-      selected.timeEntryBillable
-    ) {
-      const employee = employees.find((row) => row.id === selected.employeeId);
-      const matter = data?.matters.find((row) => row.id === selected.matterId);
-      if (!employee || !matter) {
-        setActionError(
-          "The employee or matter record needed to create the invoice was not found.",
-        );
-        return;
-      }
-
-      const billingResult = await invoiceApprovedBillableTime({
-        approval: selected,
-        employee,
-        matter,
-        invoiceDate: data?.referenceDate ?? ADMIN_REFERENCE_DATE,
-      });
-      if (!billingResult.ok) {
-        setActionError(billingResult.error);
-        return;
-      }
-      approvedInvoice = billingResult;
-    }
 
     processingLock.current = true;
     setProcessingId(selected.id);
@@ -360,13 +334,37 @@ export function ApprovalQueue({ variant = "standalone" }: ApprovalQueueProps) {
     const title = selected.title;
     const reviewerName = actingReviewer.fullName;
 
-    if (isDemoSessionApproval(selected.id) && selected.type === "time_entry") {
-      resolveDemoTimeApproval(
-        selected.id,
+    if (selected.type === "time_entry") {
+      if (isDemoSessionApproval(selected.id)) {
+        resolveDemoTimeApproval(
+          selected.id,
+          decision,
+          reviewerName,
+          reviewNotes.trim() || undefined,
+        );
+      }
+      const syncResult = await syncTimeApprovalToSupabase(
+        {
+          id: selected.id,
+          matterId: selected.matterId,
+          employeeId: selected.employeeId,
+          originalSnapshot: selected.originalSnapshot,
+          timeEntryDate: selected.timeEntryDate,
+          timeEntryHours: selected.timeEntryHours,
+          timeEntryDescription: selected.timeEntryDescription,
+          timeEntryBillable: selected.timeEntryBillable,
+        },
         decision,
-        reviewerName,
-        reviewNotes.trim() || undefined,
       );
+      if (!syncResult.ok && syncResult.error) {
+        setActionError(
+          `Approval saved locally but could not update the time entry record: ${syncResult.error}`,
+        );
+        processingLock.current = false;
+        setProcessingId(null);
+        return;
+      }
+      void refresh();
     }
 
     if (isDemoSessionApproval(selected.id) && selected.type === "expense") {
@@ -439,7 +437,9 @@ export function ApprovalQueue({ variant = "standalone" }: ApprovalQueueProps) {
           "en-US",
           { style: "currency", currency: "USD" },
         ).format(approvedInvoice.amount)}, and the client was notified.`
-      : "";
+      : decision === "approved" && selected.type === "time_entry"
+        ? " Approved time is now available for invoicing."
+        : "";
     setSuccessMessage(
       `${decision === "approved" ? "Approved" : decision === "rejected" ? "Rejected" : "Returned"} “${title}” as ${reviewerName}.${invoiceMessage}`,
     );

@@ -63,7 +63,47 @@ export function getMonthlyCollectionsPaidTotal(invoices: Invoice[]): number {
   return getCollectionsThisMonthTotal(getFullyPaidInvoices(invoices));
 }
 
-/** Trust module is a placeholder — no firm trust ledger exists. */
+/** Sum of client trust ledger balances from Supabase. */
+export async function fetchTrustFundsHeldTotal(): Promise<TrustFundsDisplay> {
+  const supabase = createClientSafe();
+  if (!supabase) {
+    return { kind: "unavailable", message: "No trust data available" };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("trust_client_ledgers")
+      .select("balance");
+
+    if (error) {
+      return { kind: "unavailable", message: "No trust data available" };
+    }
+
+    const total = (data ?? []).reduce(
+      (sum, row) => sum + Number((row as { balance?: number }).balance ?? 0),
+      0,
+    );
+
+    if (total <= 0 && (data ?? []).length === 0) {
+      const { data: accounts } = await supabase
+        .from("trust_accounts")
+        .select("balance");
+      const accountTotal = (accounts ?? []).reduce(
+        (sum, row) => sum + Number((row as { balance?: number }).balance ?? 0),
+        0,
+      );
+      if (accountTotal > 0) {
+        return { kind: "amount", value: accountTotal };
+      }
+    }
+
+    return { kind: "amount", value: total };
+  } catch {
+    return { kind: "unavailable", message: "No trust data available" };
+  }
+}
+
+/** @deprecated Prefer fetchTrustFundsHeldTotal for live dashboards. */
 export function getTrustFundsHeldDisplay(): TrustFundsDisplay {
   return {
     kind: "unavailable",

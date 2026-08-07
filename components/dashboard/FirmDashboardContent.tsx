@@ -56,7 +56,7 @@ import {
 import { formatBillingOperationsSummary } from "@/lib/billing/operations-summary";
 import { useBillingPeriodMetrics } from "@/lib/billing/use-billing-period-metrics";
 import {
-  getTrustFundsHeldDisplay,
+  fetchTrustFundsHeldTotal,
   resolveUnbilledApprovedHours,
   fetchActiveOpenMattersCount,
 } from "@/lib/dashboard/firm-kpis";
@@ -291,7 +291,25 @@ export function FirmDashboardContent() {
     [invoicesInPeriod],
   );
 
-  const trustDisplay = getTrustFundsHeldDisplay();
+  const [trustDisplay, setTrustDisplay] = useState<{
+    kind: "amount";
+    value: number;
+  } | { kind: "unavailable"; message: string }>({
+    kind: "unavailable",
+    message: "Loading trust balances…",
+  });
+
+  useEffect(() => {
+    if (!usesLiveFirmKpis) return;
+    let cancelled = false;
+    void (async () => {
+      const result = await fetchTrustFundsHeldTotal();
+      if (!cancelled) setTrustDisplay(result);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [usesLiveFirmKpis]);
 
   const collectionsChartData = usesLiveFirmKpis
     ? paidMonthlyCollections
@@ -420,7 +438,9 @@ export function FirmDashboardContent() {
     : formatCurrency(dashboardKpis.trustFundsHeld);
 
   const trustFundsSubtitle = usesLiveFirmKpis
-    ? "Trust ledger not connected"
+    ? trustDisplay.kind === "amount"
+      ? "Total client trust held"
+      : "Trust balances"
     : "Client trust balances";
 
   const isManagingPartner = role === "managing_partner";

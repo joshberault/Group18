@@ -74,7 +74,7 @@ export function NewClientView() {
       {!permissions.canCreate ? (
         <EmptyState
           title="Access denied"
-          description="Your demo role cannot create clients. Switch to Attorney, Managing Partner, or Firm Administrator."
+          description="Your role cannot create clients. Switch to Attorney, Managing Partner, or Firm Administrator."
           moduleLabel="Restricted"
         />
       ) : (

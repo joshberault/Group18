@@ -121,7 +121,7 @@ export function BillingOversightView() {
           (record) => record.status === "Approved",
         ).length;
         applyExceptionFilter({ status: "Ready to Send", exceptionsOnly: false });
-        setToast(`${approved} approved bills moved to Ready to Send (session only).`);
+        setToast(`${approved} approved bills moved to Ready to Send.`);
         setConfirmAction(null);
       },
     });

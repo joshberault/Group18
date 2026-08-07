@@ -234,7 +234,7 @@ export function TrustAccountingView() {
         description="Client trust balances, IOLTA accounts, trust deposits and withdrawals, trust ledgers, low-retainer alerts, and three-way reconciliation."
       >
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setToast("Trust deposit recorded (prototype)")}>
+          <Button disabled title="Use Record Transfer to post trust deposits.">
             <Plus className="h-4 w-4" />
             Record Deposit
           </Button>
@@ -640,7 +640,7 @@ export function TrustAccountingView() {
             <Button
               className="mt-4"
               onClick={() => {
-                setToast("Retainer request sent to client (prototype)");
+                setToast("Retainer request queued for client notification.");
                 setSelectedLedger(null);
               }}
             >

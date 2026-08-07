@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Suspense } from "react";
 import { AccountingManagerMattersView } from "@/components/accounting-manager/matters/AccountingManagerMattersView";
 import { BillingSpecialistMattersView } from "@/components/matters/BillingSpecialistMattersView";
@@ -9,7 +8,6 @@ import { ManagingPartnerMattersView } from "@/components/matters/ManagingPartner
 import { MatterRegisterList } from "@/components/matters/MatterRegisterList";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { MatterWorkspace } from "@/components/matters/MatterWorkspace";
-import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 function MattersPageContent() {
@@ -58,12 +56,8 @@ function MattersPageContent() {
       <div className="space-y-6">
         <PageHeader
           title="Matters"
-          description="Open a matter for tasks, documents, client details, and case notes. Case work modules remain below."
-        >
-          <Link href="/attorney/matters">
-            <Button variant="secondary">Open in Attorney Hub</Button>
-          </Link>
-        </PageHeader>
+          description="Open a matter for tasks, documents, client details, and case notes."
+        />
 
         <MatterRegisterList
           title="Assigned matters"
@@ -82,11 +76,7 @@ function MattersPageContent() {
         <PageHeader
           title="Matters"
           description="Open a matter for tasks, documents, client details, and case notes."
-        >
-          <Link href="/attorney/matters">
-            <Button variant="secondary">View matter cards</Button>
-          </Link>
-        </PageHeader>
+        />
 
         <MatterRegisterList
           title="Your matters"

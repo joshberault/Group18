@@ -8,5 +8,6 @@ export {
   NAV_ITEMS,
   getNavItemsForRole,
   getNavRoles,
+  nestBillingCollectionsNav,
 } from "./navigation/index";
 export type { NavItem, RouteKey } from "./navigation/types";
