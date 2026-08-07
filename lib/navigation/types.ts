@@ -25,7 +25,8 @@ export type RouteKey =
   | "revenue_ledger"
   | "banking"
   | "accounts_payable"
-  | "audit_log";
+  | "audit_log"
+  | "intake";
 
 export interface NavItem {
   routeKey: RouteKey;

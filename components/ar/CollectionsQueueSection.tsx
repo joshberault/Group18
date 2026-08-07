@@ -46,6 +46,7 @@ interface CollectionsQueueSectionProps {
   filters: CollectionsQueueFilters;
   onFiltersChange: (filters: CollectionsQueueFilters) => void;
   records?: ArCollectionsRecord[];
+  onRecordsChange?: () => void;
 }
 
 function statusToBadgeKey(status: CollectionStatus): string {
@@ -74,6 +75,7 @@ export function CollectionsQueueSection({
   filters,
   onFiltersChange,
   records = [],
+  onRecordsChange,
 }: CollectionsQueueSectionProps) {
   const [page, setPage] = useState(0);
   const [selectedRecord, setSelectedRecord] =
@@ -253,6 +255,7 @@ export function CollectionsQueueSection({
               <TableHead>Outstanding Balance</TableHead>
               <TableHead>Age</TableHead>
               <TableHead>Collection Status</TableHead>
+              <TableHead>Escalation</TableHead>
               <TableHead>Last Contact</TableHead>
               <TableHead>Next Follow-Up</TableHead>
               <TableHead>Assigned Collector</TableHead>
@@ -262,7 +265,7 @@ export function CollectionsQueueSection({
           <TableBody>
             {pageRecords.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={14} className="text-center text-muted">
+                <TableCell colSpan={15} className="text-center text-muted">
                   No invoices match the current filters.
                 </TableCell>
               </TableRow>
@@ -286,6 +289,9 @@ export function CollectionsQueueSection({
                     <StatusBadge
                       status={statusToBadgeKey(record.collectionStatus)}
                     />
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={record.escalationStage} />
                   </TableCell>
                   <TableCell>{record.lastContact}</TableCell>
                   <TableCell>{record.nextFollowUp}</TableCell>
@@ -336,6 +342,7 @@ export function CollectionsQueueSection({
       <CollectionRecordDetailDrawer
         record={selectedRecord}
         onClose={() => setSelectedRecord(null)}
+        onUpdated={onRecordsChange}
       />
     </section>
   );

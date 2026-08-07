@@ -3,7 +3,6 @@ import {
   Briefcase,
   Calculator,
   Calendar,
-  CheckSquare,
   CircleDollarSign,
   Clock,
   FileText,
@@ -71,14 +70,6 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/dashboard/analytics",
     icon: TrendingUp,
     description: "Revenue, profitability, and collections KPIs",
-    roles: ["managing_partner"],
-  },
-  {
-    routeKey: "approvals",
-    label: "Approval Queue",
-    href: "/dashboard/approvals",
-    icon: CheckSquare,
-    description: "Pending time, expense, vacation, and staffing approvals",
     roles: ["managing_partner"],
   },
   {

@@ -1,5 +1,9 @@
 import type { UserRole } from "@/lib/types";
-import type { ConflictCheckStatus, FirmClient } from "@/lib/clients/types";
+import type {
+  ConflictCheckStatus,
+  ClientFormValues,
+  FirmClient,
+} from "@/lib/clients/types";
 import { CLIENTS_MODULE_ROLES } from "@/lib/clients/types";
 
 /**
@@ -146,6 +150,107 @@ export function canSetConflictStatus(
   if (!permissions.canEditConflict) return false;
   if (status === "cleared" && !permissions.canClearConflict) return false;
   return true;
+}
+
+export type ClientEditableField =
+  | "client_type"
+  | "first_name"
+  | "last_name"
+  | "company_name"
+  | "primary_contact_name"
+  | "email"
+  | "phone"
+  | "address_line_1"
+  | "address_line_2"
+  | "city"
+  | "state"
+  | "postal_code"
+  | "status"
+  | "notes"
+  | "conflict_check_status"
+  | "conflict_check_notes"
+  | "conflict_checked_by"
+  | "conflict_checked_at";
+
+export function canEditClientField(
+  role: UserRole,
+  field: ClientEditableField,
+): boolean {
+  const permissions = getClientPermissions(role);
+  if (!permissions.canAccessModule) return false;
+
+  if (
+    field === "status" ||
+    field === "notes"
+  ) {
+    if (field === "status") return permissions.canEditStatus;
+    if (field === "notes") {
+      return permissions.canViewInternalNotes && permissions.canEditContact;
+    }
+  }
+
+  if (
+    field === "conflict_check_status" ||
+    field === "conflict_check_notes" ||
+    field === "conflict_checked_by" ||
+    field === "conflict_checked_at"
+  ) {
+    if (!permissions.canEditConflict) return false;
+    return true;
+  }
+
+  return permissions.canEditContact;
+}
+
+export function canEditAnyClientFields(role: UserRole): boolean {
+  const permissions = getClientPermissions(role);
+  return (
+    permissions.canEditContact ||
+    permissions.canEditStatus ||
+    permissions.canEditConflict
+  );
+}
+
+/**
+ * Merge submitted form values with the prior record so disallowed fields
+ * cannot be changed through the UI layer.
+ */
+export function mergeClientFormForRole(
+  role: UserRole,
+  initial: ClientFormValues,
+  submitted: ClientFormValues,
+): ClientFormValues {
+  const merged = { ...submitted };
+  const fields: ClientEditableField[] = [
+    "client_type",
+    "first_name",
+    "last_name",
+    "company_name",
+    "primary_contact_name",
+    "email",
+    "phone",
+    "address_line_1",
+    "address_line_2",
+    "city",
+    "state",
+    "postal_code",
+    "status",
+    "notes",
+    "conflict_check_status",
+    "conflict_check_notes",
+    "conflict_checked_by",
+    "conflict_checked_at",
+  ];
+
+  for (const field of fields) {
+    if (!canEditClientField(role, field)) {
+      (merged as Record<ClientEditableField, ClientFormValues[ClientEditableField]>)[
+        field
+      ] = initial[field];
+    }
+  }
+
+  return merged;
 }
 
 export function assertCanUpdateClient(

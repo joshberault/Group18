@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClientSafe } from "@/lib/supabase/client";
+import { checkMatterBillable } from "@/lib/matters/matter-activation-gates";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -43,6 +44,11 @@ export function ExpenseForm({
     e.preventDefault();
 
     if (previewMode) {
+      const gate = await checkMatterBillable(matterId);
+      if (!gate.allowed) {
+        setError(gate.reason ?? "Expense entry is blocked for this matter.");
+        return;
+      }
       if (onDemoSubmit) {
         onDemoSubmit({
           matter_id: matterId,
@@ -63,6 +69,13 @@ export function ExpenseForm({
 
     setLoading(true);
     setError(null);
+
+    const gate = await checkMatterBillable(matterId);
+    if (!gate.allowed) {
+      setError(gate.reason ?? "Expense entry is blocked for this matter.");
+      setLoading(false);
+      return;
+    }
 
     const supabase = createClientSafe();
     if (!supabase) {

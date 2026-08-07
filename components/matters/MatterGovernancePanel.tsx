@@ -10,17 +10,22 @@ import { Select } from "@/components/ui/Select";
 import { CONFLICT_STATUS_LABELS } from "@/lib/clients/types";
 import { BILLING_ROUTES, invoicesHref, receivablesHref } from "@/lib/billing/routes";
 import {
+  ACTIVATION_LABELS,
+  ENGAGEMENT_STATUS_LABELS,
   FEE_TYPE_LABELS,
   formatFeeSummary,
   isAttorneyOverloaded,
   LIFECYCLE_LABELS,
   type EngagementFeeType,
   type FirmPortfolioMatter,
+  type MatterEngagementStatus,
   type MatterLifecycleStatus,
 } from "@/lib/matters/firm-portfolio";
+import { EngagementTermsPanel } from "@/components/matters/EngagementTermsPanel";
 import {
   assignResponsibleAttorney,
   markPartnerReviewed,
+  setMatterEngagementStatus,
   setMatterFeeTerms,
   setMatterLifecycle,
 } from "@/lib/matters/firm-portfolio-store";
@@ -113,6 +118,14 @@ export function MatterGovernancePanel({
     );
   };
 
+  const handleEngagementStatus = (engagementStatus: MatterEngagementStatus) => {
+    setMatterEngagementStatus(matter.id, engagementStatus);
+    onMatterChange();
+    notify(
+      `Engagement status set to ${ENGAGEMENT_STATUS_LABELS[engagementStatus].toLowerCase()}.`,
+    );
+  };
+
   return (
     <div className="space-y-6">
       {matter.needsPartnerReview && (
@@ -161,6 +174,22 @@ export function MatterGovernancePanel({
             </dd>
           </div>
           <div>
+            <dt className="text-muted">Activation</dt>
+            <dd>
+              <Badge variant={matter.activationStatus === "active" ? "success" : "warning"}>
+                {ACTIVATION_LABELS[matter.activationStatus]}
+              </Badge>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted">Engagement letter</dt>
+            <dd>
+              <Badge variant={matter.engagementStatus === "signed" ? "success" : "default"}>
+                {ENGAGEMENT_STATUS_LABELS[matter.engagementStatus]}
+              </Badge>
+            </dd>
+          </div>
+          <div>
             <dt className="text-muted">Conflict</dt>
             <dd>
               <Badge variant={conflictBadgeVariant(matter.conflictStatus)}>
@@ -173,6 +202,29 @@ export function MatterGovernancePanel({
             <dd className="mt-1 text-navy-900">{matter.engagementScope}</dd>
           </div>
         </dl>
+      </section>
+
+      <EngagementTermsPanel
+        matter={matter}
+        onMatterChange={onMatterChange}
+        onToast={notify}
+      />
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-navy-900">
+          Engagement letter status
+        </h3>
+        <Select
+          label="Engagement status"
+          value={matter.engagementStatus}
+          onChange={(e) =>
+            handleEngagementStatus(e.target.value as MatterEngagementStatus)
+          }
+          options={Object.entries(ENGAGEMENT_STATUS_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
       </section>
 
       <section className="space-y-3">

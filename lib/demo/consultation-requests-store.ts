@@ -54,6 +54,35 @@ export type ConsultationRequestPayload = {
   additionalInfo: string;
 };
 
+export type IntakeRequestStatus =
+  | "submitted"
+  | "screened"
+  | "consultation_scheduled"
+  | "declined"
+  | "no_hire"
+  | "converted";
+
+export const INTAKE_STATUS_LABELS: Record<IntakeRequestStatus, string> = {
+  submitted: "Submitted",
+  screened: "Screened",
+  consultation_scheduled: "Consultation scheduled",
+  declined: "Declined",
+  no_hire: "No hire",
+  converted: "Converted",
+};
+
+export const ACTIVE_INTAKE_STATUSES: IntakeRequestStatus[] = [
+  "submitted",
+  "screened",
+  "consultation_scheduled",
+];
+
+export const TERMINAL_INTAKE_STATUSES: IntakeRequestStatus[] = [
+  "declined",
+  "no_hire",
+  "converted",
+];
+
 export type ConsultationRequestRecord = ConsultationRequestPayload & {
   id: string;
   createdAt: string;
@@ -62,8 +91,36 @@ export type ConsultationRequestRecord = ConsultationRequestPayload & {
   matterId: string;
   matterNumber: string;
   matterName: string;
-  status: "pending" | "completed";
+  status: IntakeRequestStatus;
+  declineReason?: string | null;
+  statusNote?: string | null;
+  convertedClientId?: string | null;
+  convertedMatterId?: string | null;
+  statusUpdatedAt?: string | null;
 };
+
+function normalizeIntakeStatus(raw: string): IntakeRequestStatus {
+  if (raw === "pending") return "submitted";
+  if (raw === "completed") return "screened";
+  if (
+    raw === "submitted" ||
+    raw === "screened" ||
+    raw === "consultation_scheduled" ||
+    raw === "declined" ||
+    raw === "no_hire" ||
+    raw === "converted"
+  ) {
+    return raw;
+  }
+  return "submitted";
+}
+
+function normalizeRecord(record: ConsultationRequestRecord): ConsultationRequestRecord {
+  return {
+    ...record,
+    status: normalizeIntakeStatus(record.status),
+  };
+}
 
 export const CONSULTATION_REQUESTS_KEY = "counselflow-consultation-requests";
 export const CONSULTATION_REQUESTS_UPDATE_EVENT =
@@ -99,17 +156,48 @@ function persist(records: ConsultationRequestRecord[]) {
 }
 
 export function getConsultationRequests(): ConsultationRequestRecord[] {
-  return readArray<ConsultationRequestRecord>(CONSULTATION_REQUESTS_KEY).sort(
-    (a, b) => b.createdAt.localeCompare(a.createdAt),
+  return readArray<ConsultationRequestRecord>(CONSULTATION_REQUESTS_KEY)
+    .map(normalizeRecord)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function getActiveIntakeRequests(): ConsultationRequestRecord[] {
+  return getConsultationRequests().filter((item) =>
+    ACTIVE_INTAKE_STATUSES.includes(item.status),
   );
 }
 
 export function getConsultationRequestsForAssignee(
   assignee: "attorney" | "paralegal",
 ): ConsultationRequestRecord[] {
-  return getConsultationRequests().filter(
-    (item) => item.assignedTo === assignee && item.status === "pending",
-  );
+  return getActiveIntakeRequests().filter((item) => item.assignedTo === assignee);
+}
+
+export function updateIntakeRequest(
+  id: string,
+  patch: Partial<
+    Pick<
+      ConsultationRequestRecord,
+      | "status"
+      | "declineReason"
+      | "statusNote"
+      | "convertedClientId"
+      | "convertedMatterId"
+    >
+  >,
+): ConsultationRequestRecord | null {
+  const records = getConsultationRequests();
+  const index = records.findIndex((item) => item.id === id);
+  if (index < 0) return null;
+
+  const updated: ConsultationRequestRecord = {
+    ...records[index],
+    ...patch,
+    statusUpdatedAt: new Date().toISOString(),
+  };
+  records[index] = updated;
+  persist(records);
+  return updated;
 }
 
 export function formatConsultationDetails(
@@ -206,7 +294,7 @@ export function addConsultationRequestRecord(
       route === "paralegal"
         ? "Consultation Intake — Other"
         : matter.matterName,
-    status: "pending",
+    status: "submitted",
   };
 
   const existing = getConsultationRequests();

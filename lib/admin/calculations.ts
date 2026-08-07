@@ -322,6 +322,7 @@ export function buildProductivityMetrics(
         utilizationRate,
         mattersClosed: mattersClosedByEmployee[employee.id] ?? 0,
         capacityStatus,
+        proBonoHours: employee.proBonoHoursWorked ?? 0,
       };
     });
 }

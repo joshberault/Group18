@@ -268,13 +268,17 @@ function matterReference(id: string, index: number): string {
 function mapEmployee(
   profile: ProfileRow,
   practiceAreaName: string,
-  hoursByProfile: Map<string, { assigned: number; actual: number }>,
+  hoursByProfile: Map<string, { assigned: number; actual: number; proBono: number }>,
   index: number,
 ): AdminEmployee {
   const fullName = profile.full_name?.trim() || "Unnamed Staff";
   const { firstName, lastName } = splitName(fullName);
   const roleMeta = mapDbRoleToUi(profile.role);
-  const hours = hoursByProfile.get(profile.id) ?? { assigned: 0, actual: 0 };
+  const hours = hoursByProfile.get(profile.id) ?? {
+    assigned: 0,
+    actual: 0,
+    proBono: 0,
+  };
   const hireDate = profile.created_at
     ? profile.created_at.slice(0, 10)
     : ADMIN_REFERENCE_DATE;
@@ -322,6 +326,7 @@ function mapEmployee(
     availableWorkHours: weeklyCapacity,
     assignedHours,
     actualHoursWorked: actualHours,
+    proBonoHoursWorked: hours.proBono,
     isAttorney: roleMeta.isAttorney,
     profileId: profile.id,
   };
@@ -618,15 +623,23 @@ export async function fetchAdminOperationsDataset(): Promise<AdminOperationsData
   );
 
   const actualHoursByProfile = new Map<string, number>();
+  const proBonoHoursByProfile = new Map<string, number>();
   const actualHoursByAssignmentKey = new Map<string, number>();
   for (const te of timeRows) {
     if (!te.profile_id) continue;
     const hrs = Number(te.hours) || 0;
     if (te.status === "approved" || te.status === "pending") {
-      actualHoursByProfile.set(
-        te.profile_id,
-        (actualHoursByProfile.get(te.profile_id) ?? 0) + hrs,
-      );
+      if (te.is_billable) {
+        actualHoursByProfile.set(
+          te.profile_id,
+          (actualHoursByProfile.get(te.profile_id) ?? 0) + hrs,
+        );
+      } else {
+        proBonoHoursByProfile.set(
+          te.profile_id,
+          (proBonoHoursByProfile.get(te.profile_id) ?? 0) + hrs,
+        );
+      }
     }
     if (te.matter_id) {
       const key = `${te.profile_id}:${te.matter_id}`;
@@ -652,11 +665,15 @@ export async function fetchAdminOperationsDataset(): Promise<AdminOperationsData
     );
   }
 
-  const hoursByProfile = new Map<string, { assigned: number; actual: number }>();
+  const hoursByProfile = new Map<
+    string,
+    { assigned: number; actual: number; proBono: number }
+  >();
   for (const p of profiles) {
     hoursByProfile.set(p.id, {
       assigned: assignedHoursByProfile.get(p.id) ?? 0,
       actual: actualHoursByProfile.get(p.id) ?? 0,
+      proBono: proBonoHoursByProfile.get(p.id) ?? 0,
     });
   }
 

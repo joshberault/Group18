@@ -44,7 +44,6 @@ const ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
     defaultRoute: "/dashboard",
     allowedRoutes: [
       "dashboard",
-      "approvals",
       "clients",
       "matters",
       "attorney_hub",
@@ -309,12 +308,15 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
     return pathname === "/dashboard" || pathname === "/dashboard/";
   }
 
-  // Approval Queue lives on the Managing Partner dashboard.
+  if (pathname === "/intake" || pathname.startsWith("/intake/")) {
+    return role === "managing_partner" || role === "firm_administrator";
+  }
+
   if (
     pathname === "/dashboard/approvals" ||
     pathname.startsWith("/dashboard/approvals/")
   ) {
-    return role === "managing_partner";
+    return role === "managing_partner" || role === "firm_administrator";
   }
 
   // Billing Specialist may open Client Trust Accounts from the firm Dashboard KPI.

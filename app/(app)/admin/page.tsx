@@ -1,4 +1,6 @@
+import { AdminDataProvider } from "@/components/admin/AdminDataProvider";
 import { ManagerDashboard } from "@/components/admin/ManagerDashboard";
+import { FirmOperationsQueues } from "@/components/dashboard/FirmOperationsQueues";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 /** Firm Administrator Dashboard — Person 5 daily action center. */
@@ -15,7 +17,10 @@ export default function AdminDashboardPage() {
         </p>
         <p className="text-sm text-muted">Role: Administrator</p>
       </div>
-      <ManagerDashboard />
+      <AdminDataProvider>
+        <FirmOperationsQueues />
+        <ManagerDashboard />
+      </AdminDataProvider>
     </div>
   );
 }

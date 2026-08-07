@@ -93,6 +93,7 @@ export function NewClientView() {
 
           <ClientForm
             mode="create"
+            role={role}
             initialValues={emptyClientForm()}
             permissions={permissions}
             submitLabel="Create client"

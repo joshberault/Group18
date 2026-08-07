@@ -41,6 +41,7 @@ import type {
 } from "@/lib/admin/types";
 import { USER_ROLE_LABELS } from "@/lib/types";
 import { ProductivityMetrics } from "@/components/admin/ProductivityMetrics";
+import { UtilizationSummaryWidget } from "@/components/admin/UtilizationSummaryWidget";
 
 /** Role filter options for legal staffing on the Workload Board. */
 const WORKLOAD_ROLE_FILTERS = [
@@ -469,6 +470,8 @@ export function WorkloadBoard() {
           </div>
         )}
       </Card>
+
+      <UtilizationSummaryWidget />
 
       <ProductivityMetrics metrics={data.productivity} />
 

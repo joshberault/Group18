@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Approval Queue moved to the Managing Partner dashboard. */
+/** Legacy route — approval queue lives on the Manager Dashboard. */
 export default function AdminApprovalsRedirectPage() {
-  redirect("/dashboard/approvals");
+  redirect("/admin#approval-queue");
 }

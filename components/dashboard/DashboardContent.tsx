@@ -28,8 +28,8 @@ import { JobApplicationsPanel } from "@/components/admin/JobApplicationsPanel";
 import { ParalegalDashboard } from "@/components/dashboard/ParalegalDashboard";
 import { AttorneyDashboard } from "@/components/dashboard/AttorneyDashboard";
 import { ProspectiveClientDashboard } from "@/components/dashboard/ProspectiveClientDashboard";
+import { FirmOperationsQueues } from "@/components/dashboard/FirmOperationsQueues";
 import { AccountingManagerDashboard } from "@/components/accounting-manager/dashboard/AccountingManagerDashboard";
-import { PendingTimeApprovalsPanel } from "@/components/time/PendingTimeApprovalsPanel";
 import { BillingPeriodToolbar } from "@/components/billing/BillingPeriodToolbar";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { KPICard } from "@/components/ui/KPICard";
@@ -471,9 +471,9 @@ export function DashboardContent() {
       )}
 
       {role === "managing_partner" && (
-        <div className="mb-6">
-          <PendingTimeApprovalsPanel adminLink />
-        </div>
+        <AdminDataProvider>
+          <FirmOperationsQueues />
+        </AdminDataProvider>
       )}
 
       <div

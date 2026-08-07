@@ -12,13 +12,17 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Ca
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Modal } from "@/components/ui/Modal";
 import { ConflictBadge } from "@/components/clients/ConflictBadge";
+import { ClientAuditHistory } from "@/components/clients/ClientAuditHistory";
 import { ClientForm } from "@/components/clients/ClientForm";
 import { RelatedMattersSection } from "@/components/clients/RelatedMattersSection";
 import { ClientsAccessGuard } from "@/components/clients/ClientsAccessGuard";
 import {
   assertCanUpdateClient,
+  canEditAnyClientFields,
   getClientPermissions,
+  mergeClientFormForRole,
 } from "@/lib/clients/permissions";
+import { fetchClientAuditEvents } from "@/lib/clients/audit-log";
 import {
   CLIENTS_MODULE_ROLES,
   clientToFormValues,
@@ -39,7 +43,7 @@ import { formatAddress, formatDate } from "@/lib/clients/utils";
 import { USER_ROLE_LABELS } from "@/lib/types";
 
 export function ClientDetailView({ clientId }: { clientId: string }) {
-  const { role } = useDemoRole();
+  const { role, identity } = useDemoRole();
   const permissions = getClientPermissions(role);
   const searchParams = useSearchParams();
   const startInEdit = searchParams.get("edit") === "1";
@@ -54,6 +58,19 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [confirmInactive, setConfirmInactive] = useState(false);
+  const [auditEvents, setAuditEvents] = useState<
+    Awaited<ReturnType<typeof fetchClientAuditEvents>>["data"]
+  >([]);
+  const [auditLoading, setAuditLoading] = useState(true);
+  const [auditError, setAuditError] = useState<string | null>(null);
+
+  async function reloadAudit() {
+    setAuditLoading(true);
+    const result = await fetchClientAuditEvents(clientId);
+    setAuditEvents(result.data);
+    setAuditError(result.error);
+    setAuditLoading(false);
+  }
 
   async function reload() {
     setLoading(true);
@@ -66,6 +83,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
     setMatters(mattersResult.data);
     setMattersError(mattersResult.error);
     setLoading(false);
+    void reloadAudit();
   }
 
   useEffect(() => {
@@ -82,20 +100,26 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
     values: ClientFormValues,
     options: { acknowledgeDuplicate: boolean },
   ) {
+    const mergedValues = mergeClientFormForRole(
+      role,
+      client ? clientToFormValues(client) : emptyClientForm(),
+      values,
+    );
+
     const auth = assertCanUpdateClient(role, {
-      status: values.status,
-      notes: values.notes,
-      conflict_check_status: values.conflict_check_status,
-      conflict_check_notes: values.conflict_check_notes,
-      first_name: values.first_name,
-      email: values.email,
+      status: mergedValues.status,
+      notes: mergedValues.notes,
+      conflict_check_status: mergedValues.conflict_check_status,
+      conflict_check_notes: mergedValues.conflict_check_notes,
+      first_name: mergedValues.first_name,
+      email: mergedValues.email,
     });
     if (!auth.ok) {
       setMessage(auth.message);
       return;
     }
 
-    const duplicates = await findPossibleDuplicates(values, clientId);
+    const duplicates = await findPossibleDuplicates(mergedValues, clientId);
     if (duplicates.length > 0 && !options.acknowledgeDuplicate) {
       setDuplicateWarning(
         `Similar records found: ${duplicates
@@ -107,7 +131,9 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
 
     setBusy(true);
     setMessage(null);
-    const result = await updateClientRecord(clientId, values);
+    const result = await updateClientRecord(clientId, mergedValues, {
+      changedBy: identity.fullName,
+    });
     setBusy(false);
     if (result.error || !result.data) {
       setMessage(result.error ?? "Update failed.");
@@ -169,7 +195,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
             <Link href="/clients">
               <Button variant="secondary">Back to Clients</Button>
             </Link>
-            {permissions.canEditContact && !editing && (
+            {canEditAnyClientFields(role) && !editing && (
               <Button onClick={() => setEditing(true)}>Edit Client</Button>
             )}
             {permissions.canEditStatus && (
@@ -216,6 +242,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
           {editing ? (
             <ClientForm
               mode="edit"
+              role={role}
               initialValues={formValues}
               permissions={permissions}
               submitLabel="Save changes"
@@ -301,6 +328,12 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
           )}
 
           <RelatedMattersSection matters={matters} loadError={mattersError} />
+
+          <ClientAuditHistory
+            events={auditEvents}
+            loading={auditLoading}
+            error={auditError}
+          />
 
           <Modal
             isOpen={confirmInactive}
