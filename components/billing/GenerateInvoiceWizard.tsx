@@ -38,6 +38,11 @@ import {
   BILLING_ROUTES,
   invoicesHref,
 } from "@/lib/billing/routes";
+import { buildReceivablesUrl } from "@/lib/pipeline/contract-to-cash";
+import {
+  PipelineHandoffBanner,
+  PipelineHandoffLink,
+} from "@/components/pipeline/PipelineHandoffBanner";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -1185,21 +1190,25 @@ export function GenerateInvoiceWizard() {
       ) : null}
 
       {successNote ? (
-        <div
-          className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900"
-          role="status"
-        >
-          <p>{successNote}</p>
+        <PipelineHandoffBanner stage="client_billed" title={successNote}>
           {managementLinkNumber ? (
-            <p className="mt-3">
-              <Link href={invoicesHref({ highlight: managementLinkNumber })}>
-                <Button type="button" size="sm">
-                  Open {managementLinkNumber} in Invoice Management
-                </Button>
-              </Link>
+            <p className="mt-1 flex flex-wrap gap-3">
+              <PipelineHandoffLink href={invoicesHref({ highlight: managementLinkNumber })}>
+                Open {managementLinkNumber} in Invoice Management
+              </PipelineHandoffLink>
+              {matter ? (
+                <PipelineHandoffLink
+                  href={buildReceivablesUrl({
+                    matterId: matter.id,
+                    invoiceNumber: managementLinkNumber,
+                  })}
+                >
+                  Collect payment in Accounts Receivable
+                </PipelineHandoffLink>
+              ) : null}
             </p>
           ) : null}
-        </div>
+        </PipelineHandoffBanner>
       ) : null}
 
       <Card aria-label={`Step ${step + 1}: ${STEPS[step]}`}>

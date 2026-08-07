@@ -40,13 +40,25 @@ import {
   updateClientStatus,
 } from "@/lib/clients/queries";
 import { formatAddress, formatDate } from "@/lib/clients/utils";
+import { buildMatterCreationUrl } from "@/lib/matters/matter-creation-flow";
+import { getMatterPermissions } from "@/lib/matters/permissions";
+import {
+  buildConflictCheckUrl,
+} from "@/lib/pipeline/contract-to-cash";
+import {
+  PipelineHandoffBanner,
+  PipelineHandoffLink,
+} from "@/components/pipeline/PipelineHandoffBanner";
 import { USER_ROLE_LABELS } from "@/lib/types";
 
 export function ClientDetailView({ clientId }: { clientId: string }) {
   const { role, identity } = useDemoRole();
   const permissions = getClientPermissions(role);
+  const matterPermissions = getMatterPermissions(role);
   const searchParams = useSearchParams();
   const startInEdit = searchParams.get("edit") === "1";
+  const submittedClient = searchParams.get("submitted") === "client-created";
+  const focusConflict = searchParams.get("focus") === "conflict";
 
   const [client, setClient] = useState<FirmClient | null>(null);
   const [matters, setMatters] = useState<RelatedMatterSummary[]>([]);
@@ -142,7 +154,11 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
     setClient(result.data);
     setDuplicateWarning(null);
     setEditing(false);
-    setMessage("Client updated successfully.");
+    if (values.conflict_check_status === "cleared") {
+      setMessage("Conflict cleared. You can now submit a matter creation request.");
+    } else {
+      setMessage("Client updated successfully.");
+    }
   }
 
   async function handleStatusToggle() {
@@ -198,6 +214,12 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
             {canEditAnyClientFields(role) && !editing && (
               <Button onClick={() => setEditing(true)}>Edit Client</Button>
             )}
+            {matterPermissions.canSubmitCreationRequest &&
+              client.conflict_check_status === "cleared" && (
+                <Link href={buildMatterCreationUrl(client.id)}>
+                  <Button>Create Matter Request</Button>
+                </Link>
+              )}
             {permissions.canEditStatus && (
               <Button
                 variant={client.status === "active" ? "danger" : "primary"}
@@ -209,11 +231,40 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
             )}
           </PageHeader>
 
-          {message && (
+          {submittedClient ? (
+            <PipelineHandoffBanner
+              stage="client_created"
+              title="Client record created."
+            >
+              <p>
+                Switch to the Firm Administrator role and{" "}
+                <PipelineHandoffLink href={buildConflictCheckUrl(client.id)}>
+                  complete the conflict check
+                </PipelineHandoffLink>
+                .
+              </p>
+            </PipelineHandoffBanner>
+          ) : null}
+
+          {focusConflict && permissions.canEditConflict ? (
+            <PipelineHandoffBanner stage="conflict_checked" title="Conflict review required" tone="info">
+              <p>
+                Update conflict status below. Once cleared, the Managing Partner can open a matter request.
+              </p>
+            </PipelineHandoffBanner>
+          ) : null}
+
+          {message && client.conflict_check_status === "cleared" ? (
+            <PipelineHandoffBanner stage="conflict_checked" title={message}>
+              <PipelineHandoffLink href={buildMatterCreationUrl(client.id)}>
+                Create matter request
+              </PipelineHandoffLink>
+            </PipelineHandoffBanner>
+          ) : message ? (
             <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
               {message}
             </div>
-          )}
+          ) : null}
 
           {(client.conflict_check_status === "possible_conflict" ||
             client.conflict_check_status === "pending" ||

@@ -24,11 +24,14 @@ export function MatterRegisterList({
   description = "Select a matter to open the full detail screen.",
   assigneeFullName,
   showAllFirmMatters = false,
+  strictAssigneeFilter,
 }: {
   title?: string;
   description?: string;
   assigneeFullName?: string;
   showAllFirmMatters?: boolean;
+  /** When true, only return matters assigned to the filter (no firm-wide fallback). */
+  strictAssigneeFilter?: boolean;
 }) {
   const { identity } = useDemoRole();
   const [matters, setMatters] = useState<SharedFirmMatter[]>([]);
@@ -39,11 +42,14 @@ export function MatterRegisterList({
     let cancelled = false;
     void (async () => {
       setLoading(true);
+      const assignee = showAllFirmMatters
+        ? undefined
+        : (assigneeFullName ?? identity.fullName);
       const result = await fetchSharedFirmMatters({
         includeWip: false,
-        assigneeFullName: showAllFirmMatters
-          ? undefined
-          : (assigneeFullName ?? identity.fullName),
+        assigneeFullName: assignee,
+        strictAssigneeFilter:
+          strictAssigneeFilter ?? Boolean(assignee),
       });
       if (cancelled) return;
       setMatters(result.matters);
@@ -53,7 +59,7 @@ export function MatterRegisterList({
     return () => {
       cancelled = true;
     };
-  }, [assigneeFullName, identity.fullName, showAllFirmMatters]);
+  }, [assigneeFullName, identity.fullName, showAllFirmMatters, strictAssigneeFilter]);
 
   return (
     <Card>

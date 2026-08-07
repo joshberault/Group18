@@ -23,6 +23,7 @@ import {
   analyticsSectionClass,
 } from "@/components/analytics/analytics-styles";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { PipelineProfitReviewPanel } from "@/components/pipeline/PipelineProfitReviewPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KPICard } from "@/components/ui/KPICard";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -107,6 +108,8 @@ export function ExecutiveDashboardContent() {
       icon={TrendingUp}
       bannerText="Contract-to-cash analytics with matter health scoring — profitability, collections, trust balances, and risk in one view."
     >
+      <PipelineProfitReviewPanel />
+
       {/* TOP: Key Metrics */}
       <section className={analyticsSectionClass}>
         <AnalyticsSectionDivider

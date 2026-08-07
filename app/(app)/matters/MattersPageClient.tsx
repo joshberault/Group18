@@ -39,7 +39,18 @@ function MattersPageContent() {
   }
 
   if (selectedRole === "firm_administrator") {
-    return <FirmAdministratorMattersView />;
+    return (
+      <Suspense
+        fallback={
+          <PageHeader
+            title="Matters"
+            description="Loading matter administration…"
+          />
+        }
+      >
+        <FirmAdministratorMattersView />
+      </Suspense>
+    );
   }
 
   if (selectedRole === "paralegal") {
@@ -57,6 +68,7 @@ function MattersPageContent() {
         <MatterRegisterList
           title="Assigned matters"
           description="Click a matter to open the shared matter detail screen."
+          strictAssigneeFilter
         />
 
         <MatterWorkspace />
@@ -79,6 +91,7 @@ function MattersPageContent() {
         <MatterRegisterList
           title="Your matters"
           description="Click a matter to open the shared matter detail screen."
+          strictAssigneeFilter
         />
 
         <MatterWorkspace />

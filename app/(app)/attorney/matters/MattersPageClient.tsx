@@ -1,41 +1,25 @@
 "use client";
 
-import Link from "next/link";
-import { useAttorneyData } from "@/components/attorney/AttorneyDataProvider";
-import { MatterCard } from "@/components/attorney/MatterCard";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { MatterRegisterList } from "@/components/matters/MatterRegisterList";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { Button } from "@/components/ui/Button";
 
 export function MattersPageClient() {
-  const { matters } = useAttorneyData();
+  const { identity } = useDemoRole();
 
   return (
     <div>
       <PageHeader
         title="My Matters"
-        description="Assigned cases with billing arrangements for your attorney workflow."
+        description="Matters assigned to you in CounselFlow. Open a matter for tasks, documents, and case notes."
       />
 
-      {matters.length === 0 ? (
-        <EmptyState
-          title="No assigned matters yet"
-          description="Sample matter data will appear here in demo mode."
-        />
-      ) : (
-        <div className="mt-6 grid gap-4 xl:grid-cols-2">
-          {matters.map((matter) => (
-            <div key={matter.id} className="space-y-3">
-              <MatterCard matter={matter} />
-              <Link href={`/matters/${matter.id}`}>
-                <Button variant="secondary" size="sm">
-                  Open matter detail
-                </Button>
-              </Link>
-            </div>
-          ))}
-        </div>
-      )}
+      <MatterRegisterList
+        title="Assigned matters"
+        description="Only matters where you are on the assignment roster are shown."
+        assigneeFullName={identity.fullName}
+        strictAssigneeFilter
+      />
     </div>
   );
 }

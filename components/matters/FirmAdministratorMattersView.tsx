@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FileDown, Search } from "lucide-react";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import {
@@ -9,10 +9,16 @@ import {
   toFirmAdminMatterRow,
 } from "@/lib/matters/firm-matters-supabase";
 import type { FirmAdminMatterRow } from "@/lib/matters/shared-matters";
+import { MatterCreationApprovalsPanel } from "@/components/matters/MatterCreationApprovalsPanel";
+import { EngagementApprovalsPanel } from "@/components/matters/EngagementApprovalsPanel";
+import {
+  PipelineHandoffBanner,
+  PipelineHandoffLink,
+} from "@/components/pipeline/PipelineHandoffBanner";
+import { buildEngagementApprovalsUrl } from "@/lib/pipeline/contract-to-cash";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Drawer } from "@/components/ui/Drawer";
 import { Input } from "@/components/ui/Input";
 import { KPICard } from "@/components/ui/KPICard";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -27,12 +33,17 @@ import {
 } from "@/components/ui/Table";
 
 export function FirmAdministratorMattersView() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [rows, setRows] = useState<FirmAdminMatterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selected, setSelected] = useState<FirmAdminMatterRow | null>(null);
+  const [approvedMatterId, setApprovedMatterId] = useState<string | null>(
+    searchParams.get("approvedMatterId"),
+  );
+  const [approvalMessage, setApprovalMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -103,6 +114,37 @@ export function FirmAdministratorMattersView() {
         <KPICard title="Offices" value={loading ? "…" : String(kpis.offices)} subtitle="Active locations" />
       </div>
 
+      <MatterCreationApprovalsPanel
+        onReviewed={(matterId) => {
+          void load();
+          if (matterId) {
+            setApprovedMatterId(matterId);
+            setApprovalMessage(
+              "Matter approved and opened. Continue to engagement agreement approval below.",
+            );
+          }
+        }}
+      />
+
+      <EngagementApprovalsPanel
+        onReviewed={(matterId) => {
+          if (matterId) setApprovedMatterId(matterId);
+        }}
+      />
+
+      {approvalMessage ? (
+        <PipelineHandoffBanner stage="matter_created" title={approvalMessage}>
+          {approvedMatterId ? (
+            <PipelineHandoffLink href={`/matters/${approvedMatterId}`}>
+              Open matter detail
+            </PipelineHandoffLink>
+          ) : null}
+          <PipelineHandoffLink href={buildEngagementApprovalsUrl(approvedMatterId ?? undefined)}>
+            Open engagement approvals
+          </PipelineHandoffLink>
+        </PipelineHandoffBanner>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Matter Administration</CardTitle>
@@ -159,7 +201,13 @@ export function FirmAdministratorMattersView() {
             ) : null}
             {!loading &&
               filtered.map((row) => (
-              <TableRow key={row.id} className="cursor-pointer hover:bg-gray-50" onClick={() => setSelected(row)}>
+              <TableRow
+                key={row.id}
+                className={`cursor-pointer hover:bg-gray-50 ${
+                  row.id === approvedMatterId ? "bg-green-50 ring-1 ring-inset ring-green-200" : ""
+                }`}
+                onClick={() => router.push(`/matters/${row.id}`)}
+              >
                 <TableCell>
                   <p className="font-medium">{row.matterName}</p>
                   <p className="text-xs text-muted">{row.matterNumber}</p>
@@ -178,19 +226,6 @@ export function FirmAdministratorMattersView() {
         </Table>
       </Card>
 
-      <Drawer isOpen={!!selected} onClose={() => setSelected(null)} title={selected?.matterName ?? "Matter"}>
-        {selected ? (
-          <div className="space-y-3 text-sm">
-            <p className="text-muted">{selected.matterNumber} · {selected.practiceArea}</p>
-            <p><span className="text-muted">Staffing:</span> {selected.staffing}</p>
-            <p><span className="text-muted">Matter status:</span> {selected.matterStatus}</p>
-            {selected.setupGap ? (
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-900">{selected.setupGap}</p>
-            ) : null}
-            <Link href="/admin/assignments"><Button size="sm">View Assignments</Button></Link>
-          </div>
-        ) : null}
-      </Drawer>
     </div>
   );
 }

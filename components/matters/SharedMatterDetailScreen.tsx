@@ -28,18 +28,13 @@ import { CONFLICT_STATUS_LABELS } from "@/lib/clients/types";
 import { fetchClientById } from "@/lib/clients/queries";
 import type { FirmClient } from "@/lib/clients/types";
 import {
-  FIRM_PORTFOLIO_ATTORNEYS,
   LIFECYCLE_LABELS,
   type FirmPortfolioMatter,
 } from "@/lib/matters/firm-portfolio";
 import {
-  FIRM_PORTFOLIO_UPDATE_EVENT,
-  getLiveFirmPortfolioMatters,
-  setFirmPortfolioBase,
-} from "@/lib/matters/firm-portfolio-store";
-import {
   fetchSharedFirmMatterById,
   fetchSharedFirmMatters,
+  reassignLeadAttorney,
   toFirmPortfolioMatter,
 } from "@/lib/matters/firm-matters-supabase";
 import {
@@ -47,10 +42,20 @@ import {
   ensureMatterDetailTasks,
   getMatterDetailTasks,
   MATTER_DETAIL_TASKS_UPDATE_EVENT,
-  MATTER_TASK_ASSIGNEES,
   reassignMatterDetailTask,
   type MatterDetailTask,
 } from "@/lib/matters/matter-detail-tasks-store";
+import {
+  assignResponsibleAttorney,
+  FIRM_PORTFOLIO_UPDATE_EVENT,
+  getLiveFirmPortfolioMatters,
+  setFirmPortfolioBase,
+} from "@/lib/matters/firm-portfolio-store";
+import {
+  defaultMatterStaffAssignee,
+  getMatterLeadAttorneySelectOptions,
+  getMatterStaffAssigneeSelectOptions,
+} from "@/lib/matters/matter-staff-assignees";
 import {
   addMatterCaseNote,
   ensureMatterCaseNotes,
@@ -144,6 +149,18 @@ const DOCUMENT_GROUPS = [
 export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
   const { selectedRole, identity } = useDemoRole();
   const isManagingPartner = selectedRole === "managing_partner";
+  const isRestrictedToAssignments =
+    selectedRole === "attorney" || selectedRole === "paralegal";
+
+  const staffAssigneeOptions = useMemo(
+    () => getMatterStaffAssigneeSelectOptions(),
+    [],
+  );
+  const leadAttorneyOptions = useMemo(
+    () => getMatterLeadAttorneySelectOptions(),
+    [],
+  );
+  const defaultStaffAssignee = useMemo(() => defaultMatterStaffAssignee(), []);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -166,11 +183,13 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
   }>({
     title: "",
     description: "",
-    assignedTo: MATTER_TASK_ASSIGNEES[1],
+    assignedTo: defaultStaffAssignee,
     percentComplete: "0",
     dueDate: "",
   });
   const [newNote, setNewNote] = useState("");
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [reassignTarget, setReassignTarget] = useState("");
 
   const refreshPortfolio = useCallback(() => {
     setAllMatters(getLiveFirmPortfolioMatters());
@@ -183,11 +202,7 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
     setTasks(getMatterDetailTasks(portfolioMatter.id));
     setNotes(getMatterCaseNotes(portfolioMatter.id));
     setDocuments(
-      getMatterDocuments().filter(
-        (doc) =>
-          doc.matterId === portfolioMatter.id ||
-          doc.matterNumber === portfolioMatter.matterNumber,
-      ),
+      getMatterDocuments().filter((doc) => doc.matterId === portfolioMatter.id),
     );
   }, [portfolioMatter]);
 
@@ -195,9 +210,21 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
     let cancelled = false;
     void (async () => {
       setLoading(true);
+      const assigneeOptions = isRestrictedToAssignments
+        ? {
+            assigneeFullName: identity.fullName,
+            strictAssigneeFilter: true as const,
+          }
+        : {};
+
       const [matterResult, allResult] = await Promise.all([
-        fetchSharedFirmMatterById(matterId, { includeWip: true }),
-        fetchSharedFirmMatters({ includeWip: true }),
+        fetchSharedFirmMatterById(matterId, {
+          includeWip: true,
+          ...assigneeOptions,
+        }),
+        isRestrictedToAssignments
+          ? Promise.resolve({ matters: [], error: null as string | null })
+          : fetchSharedFirmMatters({ includeWip: true }),
       ]);
       if (cancelled) return;
 
@@ -228,7 +255,6 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
       ensureMatterDocuments(matterResult.matter.id, {
         clientName: matterResult.matter.clientName,
         practiceArea: matterResult.matter.practiceArea,
-        matterNumber: matterResult.matter.matterNumber,
       });
 
       if (matterResult.matter.clientId) {
@@ -241,7 +267,7 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [matterId]);
+  }, [identity.fullName, isRestrictedToAssignments, matterId]);
 
   useEffect(() => {
     refreshLocalData();
@@ -265,13 +291,15 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
   }, [refreshLocalData, refreshPortfolio]);
 
   const attorneys = useMemo(() => {
-    const names = new Set<string>([...FIRM_PORTFOLIO_ATTORNEYS, ...MATTER_TASK_ASSIGNEES]);
+    const names = new Set<string>(
+      leadAttorneyOptions.map((option) => option.value),
+    );
     for (const m of allMatters) {
       if (m.responsibleAttorney) names.add(m.responsibleAttorney);
       if (m.originatingAttorney) names.add(m.originatingAttorney);
     }
     return Array.from(names).sort();
-  }, [allMatters]);
+  }, [allMatters, leadAttorneyOptions]);
 
   const documentsByType = useMemo(() => {
     const groups = new Map<string, MatterDocument[]>();
@@ -298,7 +326,7 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
     setNewTask({
       title: "",
       description: "",
-      assignedTo: MATTER_TASK_ASSIGNEES[1],
+      assignedTo: defaultStaffAssignee,
       percentComplete: "0",
       dueDate: "",
     });
@@ -314,6 +342,21 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
     });
     setNewNote("");
     setToast("Case note added.");
+  };
+
+  const handleReassignMatter = async (attorneyFullName: string) => {
+    if (!portfolioMatter) return;
+    const trimmed = attorneyFullName.trim();
+    if (!trimmed || trimmed === portfolioMatter.responsibleAttorney) return;
+
+    assignResponsibleAttorney(portfolioMatter.id, trimmed);
+    const result = await reassignLeadAttorney(portfolioMatter.id, trimmed);
+    refreshPortfolio();
+    setToast(
+      result.ok
+        ? `Matter reassigned to ${trimmed}.`
+        : (result.error ?? "Could not reassign matter."),
+    );
   };
 
   if (loading) {
@@ -346,15 +389,29 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
         </Link>
       </PageHeader>
 
-      <div className="flex flex-wrap gap-2">
-        <Badge variant="default">{LIFECYCLE_LABELS[portfolioMatter.status]}</Badge>
-        <Badge variant="neutral">
-          Conflict: {CONFLICT_STATUS_LABELS[portfolioMatter.conflictStatus]}
-        </Badge>
-        {portfolioMatter.responsibleAttorney && (
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="default">{LIFECYCLE_LABELS[portfolioMatter.status]}</Badge>
           <Badge variant="neutral">
-            Lead: {portfolioMatter.responsibleAttorney}
+            Conflict: {CONFLICT_STATUS_LABELS[portfolioMatter.conflictStatus]}
           </Badge>
+          {portfolioMatter.responsibleAttorney && (
+            <Badge variant="neutral">
+              Lead: {portfolioMatter.responsibleAttorney}
+            </Badge>
+          )}
+        </div>
+        {isManagingPartner && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setReassignTarget(portfolioMatter.responsibleAttorney ?? "");
+              setReassignModalOpen(true);
+            }}
+          >
+            Reassign matter
+          </Button>
         )}
       </div>
 
@@ -418,10 +475,7 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
                             reassignMatterDetailTask(task.id, e.target.value);
                             setToast(`Task reassigned to ${e.target.value}.`);
                           }}
-                          options={MATTER_TASK_ASSIGNEES.map((name) => ({
-                            value: name,
-                            label: name,
-                          }))}
+                          options={staffAssigneeOptions}
                         />
                       </TableCell>
                     )}
@@ -651,6 +705,40 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
       )}
 
       <Modal
+        isOpen={reassignModalOpen}
+        onClose={() => setReassignModalOpen(false)}
+        title="Reassign entire matter"
+        description="Transfer lead responsibility for this matter to another attorney."
+      >
+        <div className="space-y-4">
+          <Select
+            label="New lead attorney"
+            value={reassignTarget}
+            onChange={(e) => setReassignTarget(e.target.value)}
+            options={leadAttorneyOptions}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setReassignModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                void handleReassignMatter(reassignTarget).then(() =>
+                  setReassignModalOpen(false),
+                );
+              }}
+              disabled={
+                !reassignTarget.trim() ||
+                reassignTarget === portfolioMatter.responsibleAttorney
+              }
+            >
+              Reassign matter
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         isOpen={taskModalOpen}
         onClose={() => setTaskModalOpen(false)}
         title="Create and assign task"
@@ -678,10 +766,7 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
             onChange={(e) =>
               setNewTask((prev) => ({ ...prev, assignedTo: e.target.value }))
             }
-            options={MATTER_TASK_ASSIGNEES.map((name) => ({
-              value: name,
-              label: name,
-            }))}
+            options={staffAssigneeOptions}
           />
           <div className="grid gap-3 sm:grid-cols-2">
             <Input

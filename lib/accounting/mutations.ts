@@ -227,6 +227,34 @@ export async function createJournalEntry(input: {
   };
 }
 
+export async function completeCloseTask(input: {
+  taskId: string;
+  actor: Actor;
+}): Promise<{ ok: boolean; error?: string }> {
+  const supabase = getAccountingSupabase();
+  if (!supabase) return { ok: false, error: "Supabase unavailable" };
+
+  const { data: task, error } = await supabase
+    .from("month_end_close_tasks")
+    .update({ status: "Complete" })
+    .eq("id", input.taskId)
+    .select("task")
+    .single();
+  if (error) return { ok: false, error: error.message };
+
+  await logAuditEvent({
+    actorName: input.actor.name,
+    actorRole: input.actor.role,
+    module: "General Ledger",
+    action: "Complete Close Task",
+    recordType: "month_end_close_task",
+    recordId: input.taskId,
+    description: `Completed "${task.task}"`,
+  });
+
+  return { ok: true };
+}
+
 export async function postJournalEntry(input: {
   entryId: string;
   actor: Actor;
