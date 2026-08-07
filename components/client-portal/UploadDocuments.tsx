@@ -13,28 +13,24 @@ import { useCaseSelection } from "@/components/client-portal/CaseSelectionProvid
 import { addDocumentDeletionNotification } from "@/lib/attorney/notifications-store";
 import { getMatterNameForCaseNumber } from "@/lib/client-portal/case-selection";
 import {
+  addPortalDocument,
+  getPortalDocuments,
+  PORTAL_DOCUMENTS_UPDATE_EVENT,
+  type PortalDocument,
+} from "@/lib/client-portal/documents-store";
+import {
   addClientDocumentDeletionRequest,
   getClientDocumentDeletionRequests,
   MATTER_WORKSPACE_UPDATE_EVENT,
 } from "@/lib/matters/workspace-store";
-import {
-  clientDocuments,
-  documentTypeOptions,
-} from "@/lib/mock-data/client-portal";
+import { documentTypeOptions } from "@/lib/mock-data/client-portal";
 import { recordClientBadgeEvent } from "@/lib/client-portal/badges";
 import { cn } from "@/lib/utils/cn";
 
-interface UploadedDocument {
-  id: string;
-  name: string;
-  uploadedAt: string;
-  uploadedBy: string;
-  sizeLabel: string;
-  documentType: string;
-  caseNumber: string;
+type UploadedDocument = PortalDocument & {
   markedForDeletion?: boolean;
   deletionReason?: string;
-}
+};
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -63,7 +59,7 @@ function resolveDocumentTypeLabel(typeValue: string, otherLabel: string) {
 }
 
 function applyDeletionDecisions(
-  documents: UploadedDocument[],
+  documents: PortalDocument[],
 ): UploadedDocument[] {
   const decisions = getClientDocumentDeletionRequests();
   return documents.flatMap<UploadedDocument>((document) => {
@@ -90,6 +86,10 @@ function applyDeletionDecisions(
   });
 }
 
+function loadDocuments(): UploadedDocument[] {
+  return applyDeletionDecisions(getPortalDocuments());
+}
+
 export function UploadDocuments() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { identity, selectedRole } = useDemoRole();
@@ -98,19 +98,7 @@ export function UploadDocuments() {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [documentType, setDocumentType] = useState("");
   const [otherDocumentType, setOtherDocumentType] = useState("");
-  const [documents, setDocuments] = useState<UploadedDocument[]>(() =>
-    applyDeletionDecisions(
-      clientDocuments.map((document) => ({
-        id: document.id,
-        name: document.name,
-        uploadedAt: document.uploadedAt,
-        uploadedBy: document.uploadedBy,
-        sizeLabel: "—",
-        documentType: document.documentType,
-        caseNumber: document.caseNumber,
-      })),
-    ),
-  );
+  const [documents, setDocuments] = useState<UploadedDocument[]>(loadDocuments);
   const [message, setMessage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [documentPendingDeletion, setDocumentPendingDeletion] =
@@ -122,18 +110,13 @@ export function UploadDocuments() {
   );
 
   useEffect(() => {
-    const refreshDeletionDecisions = () => {
-      setDocuments((current) => applyDeletionDecisions(current));
+    const refresh = () => setDocuments(loadDocuments());
+    window.addEventListener(PORTAL_DOCUMENTS_UPDATE_EVENT, refresh);
+    window.addEventListener(MATTER_WORKSPACE_UPDATE_EVENT, refresh);
+    return () => {
+      window.removeEventListener(PORTAL_DOCUMENTS_UPDATE_EVENT, refresh);
+      window.removeEventListener(MATTER_WORKSPACE_UPDATE_EVENT, refresh);
     };
-    window.addEventListener(
-      MATTER_WORKSPACE_UPDATE_EVENT,
-      refreshDeletionDecisions,
-    );
-    return () =>
-      window.removeEventListener(
-        MATTER_WORKSPACE_UPDATE_EVENT,
-        refreshDeletionDecisions,
-      );
   }, []);
 
   function addFiles(fileList: FileList | null) {
@@ -176,7 +159,11 @@ export function UploadDocuments() {
     const uploadedAt = formatUploadTimestamp();
     const uploadedBy = identity.fullName;
     const uploadCaseNumber =
-      selectedCases[0]?.caseNumber ?? clientDocuments[0]?.caseNumber ?? "N/A";
+      selectedCases[0]?.caseNumber ??
+      getPortalDocuments()[0]?.caseNumber ??
+      "N/A";
+    const uploadMatterId = selectedCases[0]?.id;
+
     const uploaded: UploadedDocument[] = pendingFiles.map((file, index) => ({
       id: `doc-${Date.now()}-${index}`,
       name: file.name,
@@ -188,19 +175,26 @@ export function UploadDocuments() {
       markedForDeletion: false,
     }));
 
-    setDocuments((current) => {
-      const next = [...uploaded, ...current];
-      recordClientBadgeEvent("document_uploaded");
-      const uniqueTypes = new Set(
-        next
-          .filter((doc) => !doc.markedForDeletion)
-          .map((doc) => doc.documentType),
-      );
-      if (uniqueTypes.size >= Math.min(3, documentTypeOptions.length - 1)) {
-        recordClientBadgeEvent("all_docs_submitted");
-      }
-      return next;
-    });
+    for (const document of uploaded) {
+      addPortalDocument({
+        id: document.id,
+        name: document.name,
+        documentType: document.documentType,
+        uploadedBy: document.uploadedBy,
+        uploadedAt: document.uploadedAt,
+        sizeLabel: document.sizeLabel,
+        caseNumber: document.caseNumber,
+        matterId: uploadMatterId,
+      });
+    }
+
+    recordClientBadgeEvent("document_uploaded");
+    const nextDocs = loadDocuments().filter((doc) => !doc.markedForDeletion);
+    const uniqueTypes = new Set(nextDocs.map((doc) => doc.documentType));
+    if (uniqueTypes.size >= Math.min(3, documentTypeOptions.length - 1)) {
+      recordClientBadgeEvent("all_docs_submitted");
+    }
+
     setPendingFiles([]);
     setDocumentType("");
     setOtherDocumentType("");

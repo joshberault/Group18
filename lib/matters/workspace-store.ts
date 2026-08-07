@@ -32,6 +32,8 @@ export type MatterCaseStatus = {
 export type MatterDocument = {
   id: string;
   matterId: string;
+  /** Matter / case number used to share docs with the client portal. */
+  matterNumber?: string;
   name: string;
   documentType: string;
   uploadedBy: string;
@@ -170,6 +172,7 @@ const SEED_DOCUMENTS: MatterDocument[] = [
   {
     id: "matter-doc-1",
     matterId: "matter-1",
+    matterNumber: "M-2401",
     name: "Apex_Answer_Draft_v3.pdf",
     documentType: "Pleading",
     uploadedBy: "Parker Legal",
@@ -179,6 +182,7 @@ const SEED_DOCUMENTS: MatterDocument[] = [
   {
     id: "matter-doc-2",
     matterId: "matter-1",
+    matterNumber: "M-2401",
     name: "Discovery_Document_Index.xlsx",
     documentType: "Discovery",
     uploadedBy: "Parker Legal",
@@ -188,6 +192,7 @@ const SEED_DOCUMENTS: MatterDocument[] = [
   {
     id: "matter-doc-3",
     matterId: "matter-2",
+    matterNumber: "M-2408",
     name: "Santos_Demand_Package_v2.pdf",
     documentType: "Correspondence",
     uploadedBy: "Avery Counsel",
@@ -197,6 +202,7 @@ const SEED_DOCUMENTS: MatterDocument[] = [
   {
     id: "matter-doc-4",
     matterId: "matter-3",
+    matterNumber: "M-2415",
     name: "Northside_Diligence_Checklist.docx",
     documentType: "Due diligence",
     uploadedBy: "Parker Legal",
@@ -206,6 +212,7 @@ const SEED_DOCUMENTS: MatterDocument[] = [
   {
     id: "matter-doc-5",
     matterId: "matter-4",
+    matterNumber: "M-2422",
     name: "Vendor_Agreement_Redline.docx",
     documentType: "Contract",
     uploadedBy: "Avery Counsel",
@@ -378,19 +385,51 @@ export function getMatterDocuments() {
   );
 }
 
+/** Resolve the case / matter number for a document (explicit or via matter id). */
+export function resolveMatterDocumentNumber(document: MatterDocument): string | null {
+  if (document.matterNumber) return document.matterNumber;
+  const fromParalegal = PARALEGAL_ASSIGNED_MATTERS.find(
+    (matter) => matter.id === document.matterId,
+  );
+  return fromParalegal?.matterNumber ?? null;
+}
+
+/** Documents shared for one or more client case / matter numbers. */
+export function getMatterDocumentsForNumbers(matterNumbers: string[]) {
+  const numberSet = new Set(matterNumbers);
+  return getMatterDocuments().filter((document) => {
+    const number = resolveMatterDocumentNumber(document);
+    return number != null && numberSet.has(number);
+  });
+}
+
+/** Documents for a staff matter workspace (by id or matching matter number). */
+export function getMatterDocumentsForMatter(
+  matterId: string,
+  matterNumber?: string,
+) {
+  return getMatterDocuments().filter((document) => {
+    if (document.matterId === matterId) return true;
+    if (!matterNumber) return false;
+    return resolveMatterDocumentNumber(document) === matterNumber;
+  });
+}
+
 /** Seed shared matter documents for Supabase matter IDs on first detail view. */
 export function ensureMatterDocuments(
   matterId: string,
-  meta: { clientName: string; practiceArea: string },
+  meta: { clientName: string; practiceArea: string; matterNumber?: string },
 ) {
   const existing = getMatterDocuments().filter((doc) => doc.matterId === matterId);
   if (existing.length > 0) return existing;
 
   const clientSlug = meta.clientName.replace(/\s+/g, "_").slice(0, 24);
+  const matterNumber = meta.matterNumber;
   const seeded: MatterDocument[] = [
     {
       id: `mdoc-${matterId}-eng`,
       matterId,
+      matterNumber,
       name: `${clientSlug}_Engagement_Letter_Signed.pdf`,
       documentType: "Engagement letter",
       uploadedBy: "Parker Legal",
@@ -400,6 +439,7 @@ export function ensureMatterDocuments(
     {
       id: `mdoc-${matterId}-evidence`,
       matterId,
+      matterNumber,
       name: `${clientSlug}_Evidence_Packet.zip`,
       documentType: "Evidence",
       uploadedBy: "Parker Legal",
@@ -409,6 +449,7 @@ export function ensureMatterDocuments(
     {
       id: `mdoc-${matterId}-diligence`,
       matterId,
+      matterNumber,
       name: `${meta.practiceArea.replace(/\s+/g, "_")}_Diligence_Checklist.xlsx`,
       documentType: "Diligence",
       uploadedBy: "Parker Legal",
@@ -418,6 +459,7 @@ export function ensureMatterDocuments(
     {
       id: `mdoc-${matterId}-contract`,
       matterId,
+      matterNumber,
       name: `${clientSlug}_Master_Services_Agreement.docx`,
       documentType: "Contract",
       uploadedBy: "Avery Counsel",

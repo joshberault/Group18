@@ -598,7 +598,11 @@ function DocumentationPanel({
   const [deletionRequest, setDeletionRequest] =
     useState<ClientDocumentDeletionRequest | null>(null);
   const [deletionTick, setDeletionTick] = useState(0);
-  const visible = documents.filter((item) => item.matterId === matter.id);
+  const visible = documents.filter(
+    (item) =>
+      item.matterId === matter.id ||
+      item.matterNumber === matter.matterNumber,
+  );
   const pendingDeletionRequests = getClientDocumentDeletionRequests().filter(
     (request) =>
       request.status === "pending" &&
@@ -649,6 +653,7 @@ function DocumentationPanel({
     addMatterDocument({
       id: `matter-document-${Date.now()}`,
       matterId: matter.id,
+      matterNumber: matter.matterNumber,
       name: pendingFile.name,
       documentType: resolvedDocumentType,
       uploadedBy,

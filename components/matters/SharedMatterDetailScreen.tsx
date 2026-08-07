@@ -183,7 +183,11 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
     setTasks(getMatterDetailTasks(portfolioMatter.id));
     setNotes(getMatterCaseNotes(portfolioMatter.id));
     setDocuments(
-      getMatterDocuments().filter((doc) => doc.matterId === portfolioMatter.id),
+      getMatterDocuments().filter(
+        (doc) =>
+          doc.matterId === portfolioMatter.id ||
+          doc.matterNumber === portfolioMatter.matterNumber,
+      ),
     );
   }, [portfolioMatter]);
 
@@ -224,6 +228,7 @@ export function SharedMatterDetailScreen({ matterId }: { matterId: string }) {
       ensureMatterDocuments(matterResult.matter.id, {
         clientName: matterResult.matter.clientName,
         practiceArea: matterResult.matter.practiceArea,
+        matterNumber: matterResult.matter.matterNumber,
       });
 
       if (matterResult.matter.clientId) {

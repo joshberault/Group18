@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Briefcase,
   FileSignature,
+  FileText,
   Layers,
   Paperclip,
   Ticket,
@@ -18,6 +19,16 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Ca
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { CASE_TYPE_LABELS } from "@/lib/client-portal/case-task-lists";
 import { recordClientBadgeEvent } from "@/lib/client-portal/badges";
+import { getMatterNameForCaseNumber } from "@/lib/client-portal/case-selection";
+import {
+  getPortalDocumentsForCaseNumbers,
+  PORTAL_DOCUMENTS_UPDATE_EVENT,
+  type PortalDocument,
+} from "@/lib/client-portal/documents-store";
+import {
+  getClientDocumentDeletionRequests,
+  MATTER_WORKSPACE_UPDATE_EVENT,
+} from "@/lib/matters/workspace-store";
 import { caseInformation as initialCaseInformation } from "@/lib/mock-data/client-portal";
 import { formatCurrency, cn } from "@/lib/utils/cn";
 
@@ -27,6 +38,29 @@ type CaseContract = {
   signedAt: string;
   signedBy: string;
 } | null;
+
+type CaseDocumentationItem = PortalDocument & {
+  markedForDeletion?: boolean;
+  deletionReason?: string;
+};
+
+function loadCaseDocumentation(caseNumbers: string[]): CaseDocumentationItem[] {
+  const decisions = getClientDocumentDeletionRequests();
+  return getPortalDocumentsForCaseNumbers(caseNumbers).flatMap((document) => {
+    const decision = decisions.find((item) => item.documentId === document.id);
+    if (decision?.status === "approved") return [];
+    if (decision?.status === "pending") {
+      return [
+        {
+          ...document,
+          markedForDeletion: true,
+          deletionReason: decision.reason,
+        },
+      ];
+    }
+    return [document];
+  });
+}
 
 export function CaseInformation() {
   useEffect(() => {
@@ -39,6 +73,25 @@ export function CaseInformation() {
     initialCaseInformation.contract,
   );
   const [contractMessage, setContractMessage] = useState<string | null>(null);
+  const selectedCaseNumbers = selectedCases.map((item) => item.caseNumber);
+  const selectedCaseKey = selectedCaseNumbers.join("|");
+  const [documents, setDocuments] = useState<CaseDocumentationItem[]>(() =>
+    loadCaseDocumentation(selectedCaseNumbers),
+  );
+
+  useEffect(() => {
+    const caseNumbers = selectedCaseKey
+      ? selectedCaseKey.split("|").filter(Boolean)
+      : [];
+    const refresh = () => setDocuments(loadCaseDocumentation(caseNumbers));
+    refresh();
+    window.addEventListener(PORTAL_DOCUMENTS_UPDATE_EVENT, refresh);
+    window.addEventListener(MATTER_WORKSPACE_UPDATE_EVENT, refresh);
+    return () => {
+      window.removeEventListener(PORTAL_DOCUMENTS_UPDATE_EVENT, refresh);
+      window.removeEventListener(MATTER_WORKSPACE_UPDATE_EVENT, refresh);
+    };
+  }, [selectedCaseKey]);
 
   const primaryCase = selectedCases[0];
   const matter = primaryCase
@@ -154,6 +207,81 @@ export function CaseInformation() {
       </Card>
 
       <CaseImportantDatesCalendar />
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle>Documentation</CardTitle>
+              <CardDescription>
+                All documents associated with{" "}
+                {isMultipleCases
+                  ? "the selected matter numbers"
+                  : `matter ${primaryCase.caseNumber}`}
+                . Files uploaded by the client, attorneys, or paralegals appear
+                here and on Upload Documents.
+              </CardDescription>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-navy-900 text-gold-500">
+              <FileText className="h-5 w-5" />
+            </div>
+          </div>
+        </CardHeader>
+
+        {documents.length === 0 ? (
+          <p className="text-sm text-muted">
+            {isMultipleCases
+              ? "No documentation uploaded for the selected matters yet."
+              : "No documentation uploaded for this matter yet."}
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {documents.map((document) => (
+              <li
+                key={document.id}
+                className={cn(
+                  "flex items-start gap-3 rounded-xl border px-3 py-3",
+                  document.markedForDeletion
+                    ? "border-red-200 bg-red-50"
+                    : "border-gray-200 bg-white",
+                )}
+              >
+                <div
+                  className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
+                    document.markedForDeletion
+                      ? "bg-red-100 text-red-700"
+                      : "bg-navy-900/5 text-navy-900",
+                  )}
+                >
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-navy-900">
+                    {document.name}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    {document.documentType} ·{" "}
+                    {getMatterNameForCaseNumber(document.caseNumber)}
+                    {document.sizeLabel !== "—"
+                      ? ` · ${document.sizeLabel}`
+                      : ""}
+                    {isMultipleCases ? ` · ${document.caseNumber}` : ""}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Uploaded by {document.uploadedBy} · {document.uploadedAt}
+                  </p>
+                  {document.markedForDeletion && document.deletionReason && (
+                    <p className="mt-2 text-xs text-red-700">
+                      Marked for deletion: {document.deletionReason}
+                    </p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
