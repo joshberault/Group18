@@ -68,6 +68,7 @@ function MattersPageContent() {
         <MatterRegisterList
           title="Assigned matters"
           description="Click a matter to open the shared matter detail screen."
+          strictAssigneeFilter
         />
 
         <MatterWorkspace />
@@ -90,6 +91,7 @@ function MattersPageContent() {
         <MatterRegisterList
           title="Your matters"
           description="Click a matter to open the shared matter detail screen."
+          strictAssigneeFilter
         />
 
         <MatterWorkspace />

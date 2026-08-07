@@ -145,6 +145,7 @@ export function MatterWorkspace({
       const result = await fetchSharedFirmMatters({
         includeWip: false,
         assigneeFullName: assigneeFullName ?? identity.fullName,
+        strictAssigneeFilter: true,
       });
       if (cancelled) return;
       const mapped = result.matters.map(toParalegalAssignmentMatter);

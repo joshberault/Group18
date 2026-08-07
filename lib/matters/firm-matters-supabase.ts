@@ -62,6 +62,8 @@ export type FetchFirmMattersOptions = {
   /** When set, keep matters assigned to this profile id (or matching full name). */
   assigneeProfileId?: string | null;
   assigneeFullName?: string | null;
+  /** When true, return only assigned matters (no firm-wide fallback). */
+  strictAssigneeFilter?: boolean;
   /** When true (default), attach unbilled WIP / expenses from time + invoices catalog. */
   includeWip?: boolean;
 };
@@ -430,8 +432,7 @@ export async function fetchSharedFirmMatters(
         }
         return false;
       });
-      // Keep firm-wide list when assignment filter matches nothing (demo identities).
-      if (filtered.length > 0) {
+      if (options.strictAssigneeFilter || filtered.length > 0) {
         matters = filtered;
       }
     }
@@ -796,4 +797,53 @@ export async function fetchSharedFirmMatterById(
         row.title.toLowerCase() === matterId.toLowerCase(),
     ) ?? null;
   return { matter, error: result.error };
+}
+
+export async function reassignLeadAttorney(
+  matterId: string,
+  attorneyFullName: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClientSafe();
+  if (!supabase) {
+    return { ok: false, error: "Supabase is not configured." };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("matter_assignments")
+    .delete()
+    .eq("matter_id", matterId)
+    .in("role_on_matter", ["lead_attorney", "responsible_attorney"]);
+
+  if (deleteError) {
+    return { ok: false, error: deleteError.message };
+  }
+
+  const trimmed = attorneyFullName?.trim();
+  if (!trimmed) return { ok: true };
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("full_name", trimmed)
+    .limit(1)
+    .maybeSingle();
+
+  if (profileError) {
+    return { ok: false, error: profileError.message };
+  }
+  if (!profile?.id) {
+    return { ok: false, error: `No profile found for "${trimmed}".` };
+  }
+
+  const { error: insertError } = await supabase.from("matter_assignments").insert({
+    matter_id: matterId,
+    profile_id: profile.id,
+    role_on_matter: "lead_attorney",
+  });
+
+  if (insertError) {
+    return { ok: false, error: insertError.message };
+  }
+
+  return { ok: true };
 }
