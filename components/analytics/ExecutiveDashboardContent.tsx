@@ -15,6 +15,7 @@ import {
 import { MatterHealthSummary } from "@/components/analytics/MatterHealthSummary";
 import { MonthlyCollectionsChart } from "@/components/analytics/MonthlyCollectionsChart";
 import { MatterProfitabilityTable } from "@/components/analytics/MatterProfitabilityTable";
+import { PipelineProfitReviewPanel } from "@/components/pipeline/PipelineProfitReviewPanel";
 import { analyticsGridGap } from "@/components/analytics/analytics-styles";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KPICard } from "@/components/ui/KPICard";
@@ -78,6 +79,7 @@ export function ExecutiveDashboardContent() {
       icon={TrendingUp}
       bannerText="Contract-to-cash analytics with matter health scoring — profitability, collections, trust balances, and risk in one view."
     >
+      <PipelineProfitReviewPanel />
       <div className={`grid ${analyticsGridGap} sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6`}>
         <KPICard
           title="Billed Revenue"

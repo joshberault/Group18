@@ -42,6 +42,14 @@ import type { Invoice, InvoiceStatus } from "@/lib/billing/invoice-types";
 import { useBillingPeriodMetrics } from "@/lib/billing/use-billing-period-metrics";
 import { BILLING_ROUTES } from "@/lib/billing/routes";
 import { findMatterByClientAndName } from "@/lib/client-related-matters/data";
+import {
+  buildProfitReviewUrl,
+} from "@/lib/pipeline/contract-to-cash";
+import { queueProfitReview } from "@/lib/pipeline/profit-review-store";
+import {
+  PipelineHandoffBanner,
+  PipelineHandoffLink,
+} from "@/components/pipeline/PipelineHandoffBanner";
 import { addPaymentReceivedNotification } from "@/lib/client-related-matters/notifications-store";
 
 type SortKey =
@@ -162,6 +170,9 @@ export function OutstandingReceivablesSection() {
   const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null);
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
   const [actionNote, setActionNote] = useState<string | null>(null);
+  const [paymentHandoffMatterId, setPaymentHandoffMatterId] = useState<string | null>(
+    null,
+  );
   const [highlightNumber, setHighlightNumber] = useState<string | null>(null);
 
   useEffect(() => {
@@ -298,6 +309,14 @@ export function OutstandingReceivablesSection() {
         invoice.client,
         invoice.legalMatter,
       );
+      if (matter && newStatus === "Paid") {
+        queueProfitReview({
+          matterId: matter.id,
+          matterTitle: invoice.legalMatter,
+          clientName: invoice.client,
+        });
+        setPaymentHandoffMatterId(matter.id);
+      }
       addPaymentReceivedNotification({
         notificationId: `crm-notif-${paymentId}`,
         invoiceNumber: invoice.invoiceNumber,
@@ -512,6 +531,17 @@ export function OutstandingReceivablesSection() {
             ]}
           />
         </div>
+
+        {paymentHandoffMatterId ? (
+          <PipelineHandoffBanner
+            stage="payment_collected"
+            title="Payment recorded — invoice paid in full."
+          >
+            <PipelineHandoffLink href={buildProfitReviewUrl(paymentHandoffMatterId)}>
+              Review matter profitability
+            </PipelineHandoffLink>
+          </PipelineHandoffBanner>
+        ) : null}
 
         {actionNote ? (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">

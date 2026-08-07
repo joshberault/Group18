@@ -1,25 +1,17 @@
-import { PIPELINE_STAGE_LABELS } from "@/lib/demo/fifteen-clients";
+export {
+  PIPELINE_TOTAL as MATTER_CREATION_PIPELINE_TOTAL,
+  buildFirmAdminMatterApprovalsUrl as buildFirmAdminApprovalsUrl,
+  buildMatterCreationUrl,
+} from "@/lib/pipeline/contract-to-cash";
+
+import { pipelineNextStepLabel, pipelineStepLabel } from "@/lib/pipeline/contract-to-cash";
 
 export const MATTER_CREATION_PIPELINE_STEP = 3;
-export const MATTER_CREATION_PIPELINE_TOTAL = 9;
 
 export function matterCreationPipelineLabel(): string {
-  return `Step ${MATTER_CREATION_PIPELINE_STEP} of ${MATTER_CREATION_PIPELINE_TOTAL}: ${PIPELINE_STAGE_LABELS.matter_created}`;
+  return pipelineStepLabel("matter_created");
 }
 
 export function matterCreationNextStepLabel(): string {
-  return PIPELINE_STAGE_LABELS.agreement_approved;
-}
-
-export function buildMatterCreationUrl(clientId?: string): string {
-  const params = new URLSearchParams();
-  if (clientId) params.set("clientId", clientId);
-  const query = params.toString();
-  return query ? `/matters/new?${query}` : "/matters/new";
-}
-
-export function buildFirmAdminApprovalsUrl(requestId?: string): string {
-  const params = new URLSearchParams({ focus: "matter-approvals" });
-  if (requestId) params.set("requestId", requestId);
-  return `/matters?${params.toString()}`;
+  return pipelineNextStepLabel("matter_created");
 }

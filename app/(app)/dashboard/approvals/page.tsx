@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AdminDataProvider } from "@/components/admin/AdminDataProvider";
 import { ApprovalQueue } from "@/components/admin/ApprovalQueue";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
+import { ApprovalsPipelineBanner } from "@/components/pipeline/ApprovalsPipelineBanner";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { getDefaultRouteForRole } from "@/lib/roles/role-config";
@@ -34,6 +35,9 @@ export default function ManagingPartnerApprovalsPage() {
         title="Approval Queue"
         description="Review pending time, expense, vacation, and staffing approval requests."
       />
+      <Suspense fallback={null}>
+        <ApprovalsPipelineBanner />
+      </Suspense>
       <AdminDataProvider>
         <ApprovalQueue />
       </AdminDataProvider>

@@ -59,6 +59,14 @@ import {
   buildFirmAdminApprovalsUrl,
   matterCreationPipelineLabel,
 } from "@/lib/matters/matter-creation-flow";
+import {
+  buildMatterCloseUrl,
+  pipelineStepLabel,
+} from "@/lib/pipeline/contract-to-cash";
+import {
+  PipelineHandoffBanner,
+  PipelineHandoffLink,
+} from "@/components/pipeline/PipelineHandoffBanner";
 
 interface MatterFilters {
   search: string;
@@ -104,6 +112,8 @@ export function ManagingPartnerMattersView() {
   const searchParams = useSearchParams();
   const submittedRequest = searchParams.get("submitted") === "matter-request";
   const submittedRequestId = searchParams.get("requestId");
+  const profitReviewed = searchParams.get("submitted") === "profit-reviewed";
+  const closeMatterId = searchParams.get("matterId");
   const [matters, setMatters] = useState<FirmPortfolioMatter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -312,7 +322,13 @@ export function ManagingPartnerMattersView() {
   const handleLifecycle = (status: MatterLifecycleStatus) => {
     if (!selected) return;
     setMatters(setMatterLifecycle(selected.id, status));
-    showToast(`Matter marked ${LIFECYCLE_LABELS[status].toLowerCase()}.`);
+    if (status === "closed") {
+      showToast(
+        `${pipelineStepLabel("matter_closed")} — contract-to-cash pipeline complete for "${selected.title}".`,
+      );
+    } else {
+      showToast(`Matter marked ${LIFECYCLE_LABELS[status].toLowerCase()}.`);
+    }
   };
 
   const handleAssign = (attorney: string) => {
@@ -382,6 +398,17 @@ export function ManagingPartnerMattersView() {
           </Button>
         </div>
       </PageHeader>
+
+      {profitReviewed ? (
+        <PipelineHandoffBanner
+          stage="profit_reviewed"
+          title="Profitability reviewed — close the matter to complete the pipeline."
+        >
+          <PipelineHandoffLink href={buildMatterCloseUrl(closeMatterId ?? undefined)}>
+            Open matter close controls
+          </PipelineHandoffLink>
+        </PipelineHandoffBanner>
+      ) : null}
 
       {submittedRequest ? (
         <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">

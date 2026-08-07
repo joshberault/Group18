@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { TimeEntryForm } from "@/components/attorney/TimeEntryForm";
 import { TimeEntryList } from "@/components/attorney/TimeEntryList";
 import { TimerWidget } from "@/components/attorney/TimerWidget";
@@ -11,6 +12,9 @@ import { Button } from "@/components/ui/Button";
 import { useDemoTimeWorkflow } from "@/hooks/useDemoTimeWorkflow";
 import { profileIdForRole } from "@/lib/demo/time-workflow-store";
 import type { Matter, TimeEntry } from "@/types/database";
+import {
+  PipelineHandoffBanner,
+} from "@/components/pipeline/PipelineHandoffBanner";
 
 type Props = {
   profileId: string;
@@ -24,6 +28,8 @@ export function TimeEntriesPageClient({
   initialMatters,
   previewMode = false,
 }: Props) {
+  const searchParams = useSearchParams();
+  const engagementApproved = searchParams.get("submitted") === "engagement-approved";
   const { selectedRole } = useDemoRole();
   const { timeEntries, profileId: storeProfileId, matters: storeMatters } = useAttorneyData();
   const activeProfileId = previewMode ? profileIdForRole(selectedRole) : storeProfileId;
@@ -55,6 +61,13 @@ export function TimeEntriesPageClient({
           </Button>
         </Link>
       </PageHeader>
+
+      {engagementApproved ? (
+        <PipelineHandoffBanner
+          stage="agreement_approved"
+          title="Engagement approved — you can begin billable work."
+        />
+      ) : null}
 
       {!previewMode && <TimerWidget />}
 

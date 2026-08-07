@@ -26,11 +26,16 @@ import {
 } from "@/lib/matters/matter-creation-queries";
 import type { MatterCreationRequest } from "@/lib/matters/matter-creation-types";
 import { MATTER_BILLING_TYPE_LABELS } from "@/lib/matters/matter-creation-types";
-import {
-  matterCreationNextStepLabel,
-  matterCreationPipelineLabel,
-} from "@/lib/matters/matter-creation-flow";
 import { getMatterPermissions } from "@/lib/matters/permissions";
+import {
+  buildEngagementApprovalsUrl,
+  pipelineStepLabel,
+} from "@/lib/pipeline/contract-to-cash";
+import { queueEngagementApproval } from "@/lib/pipeline/engagement-approval-store";
+import {
+  PipelineHandoffBanner,
+  PipelineHandoffLink,
+} from "@/components/pipeline/PipelineHandoffBanner";
 import { DEMO_IDENTITIES } from "@/lib/roles/role-config";
 import { formatCurrency } from "@/lib/utils/cn";
 
@@ -123,7 +128,14 @@ export function MatterCreationApprovalsPanel({
       setMessage(result.error ?? "Unable to approve request.");
       return;
     }
-    setMessage(`Approved and created matter for "${selected.title}". Next pipeline step: ${matterCreationNextStepLabel()}.`);
+    setMessage(`Approved and created matter for "${selected.title}".`);
+    if (result.matterId) {
+      queueEngagementApproval({
+        matterId: result.matterId,
+        matterTitle: selected.title,
+        clientName: selected.clientName,
+      });
+    }
     setSelectedId(null);
     setReviewNotes("");
     await load();
@@ -152,16 +164,15 @@ export function MatterCreationApprovalsPanel({
   return (
     <div ref={panelRef} className="space-y-4">
       {message ? (
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          {message}
-          <button
-            type="button"
-            className="ml-3 font-medium underline"
-            onClick={() => setMessage(null)}
-          >
-            Dismiss
-          </button>
-        </div>
+        <PipelineHandoffBanner stage="matter_created" title={message}>
+          <p>
+            Continue to{" "}
+            <PipelineHandoffLink href={buildEngagementApprovalsUrl()}>
+              Engagement agreement approvals
+            </PipelineHandoffLink>{" "}
+            to advance the pipeline.
+          </p>
+        </PipelineHandoffBanner>
       ) : null}
 
       <Card>
@@ -172,7 +183,7 @@ export function MatterCreationApprovalsPanel({
               Pending Matter Creation Requests
             </CardTitle>
             <CardDescription>
-              {matterCreationPipelineLabel()} — Managing Partner submissions awaiting your approval before the matter opens. Next step after approval: {matterCreationNextStepLabel()}.
+              {pipelineStepLabel("matter_created")} — Managing Partner submissions awaiting your approval before the matter opens.
             </CardDescription>
           </div>
           <Badge variant="gold">

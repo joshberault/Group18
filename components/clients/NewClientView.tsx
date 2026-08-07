@@ -19,6 +19,9 @@ import {
   createClientRecord,
   findPossibleDuplicates,
 } from "@/lib/clients/queries";
+import {
+  PipelineHandoffBanner,
+} from "@/components/pipeline/PipelineHandoffBanner";
 
 const CREATE_ROLES: UserRole[] = [
   "managing_partner",
@@ -63,7 +66,7 @@ export function NewClientView() {
       return;
     }
 
-    router.push(`/clients/${result.data.id}`);
+    router.push(`/clients/${result.data.id}?submitted=client-created`);
   }
 
   return (
@@ -84,6 +87,12 @@ export function NewClientView() {
               <Button variant="secondary">Cancel</Button>
             </Link>
           </PageHeader>
+
+          <PipelineHandoffBanner
+            stage="client_created"
+            title="Start the contract-to-cash pipeline"
+            tone="info"
+          />
 
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">

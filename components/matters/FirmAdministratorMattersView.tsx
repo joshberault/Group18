@@ -11,6 +11,12 @@ import {
 } from "@/lib/matters/firm-matters-supabase";
 import type { FirmAdminMatterRow } from "@/lib/matters/shared-matters";
 import { MatterCreationApprovalsPanel } from "@/components/matters/MatterCreationApprovalsPanel";
+import { EngagementApprovalsPanel } from "@/components/matters/EngagementApprovalsPanel";
+import {
+  PipelineHandoffBanner,
+  PipelineHandoffLink,
+} from "@/components/pipeline/PipelineHandoffBanner";
+import { buildEngagementApprovalsUrl } from "@/lib/pipeline/contract-to-cash";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -115,15 +121,25 @@ export function FirmAdministratorMattersView() {
           void load();
           if (matterId) {
             setApprovedMatterId(matterId);
-            setApprovalMessage("Matter approved and opened. It now appears in the administration register below.");
+            setApprovalMessage(
+              "Matter approved and opened. Continue to engagement agreement approval below.",
+            );
           }
         }}
       />
 
+      <EngagementApprovalsPanel
+        onReviewed={(matterId) => {
+          if (matterId) setApprovedMatterId(matterId);
+        }}
+      />
+
       {approvalMessage ? (
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          {approvalMessage}
-        </div>
+        <PipelineHandoffBanner stage="matter_created" title={approvalMessage}>
+          <PipelineHandoffLink href={buildEngagementApprovalsUrl(approvedMatterId ?? undefined)}>
+            Open engagement approvals
+          </PipelineHandoffLink>
+        </PipelineHandoffBanner>
       ) : null}
 
       <Card>

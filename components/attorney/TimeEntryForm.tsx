@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useAttorneyData } from "@/components/attorney/AttorneyDataProvider";
 import { createClientSafe } from "@/lib/supabase/client";
@@ -15,6 +16,11 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import type { UserRole } from "@/lib/types";
 import type { Matter, TimeEntry } from "@/types/database";
+import { buildTimeApprovalUrl } from "@/lib/pipeline/contract-to-cash";
+import {
+  PipelineHandoffBanner,
+  PipelineHandoffLink,
+} from "@/components/pipeline/PipelineHandoffBanner";
 
 type Props = {
   matters: Matter[];
@@ -177,7 +183,17 @@ export function TimeEntryForm({
           </div>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
-        {success && <p className="text-sm text-green-700">{success}</p>}
+        {success ? (
+          <PipelineHandoffBanner stage="work_completed" title={success}>
+            <p>
+              Switch to the Managing Partner role and open{" "}
+              <PipelineHandoffLink href={buildTimeApprovalUrl(matterId)}>
+                Time approvals
+              </PipelineHandoffLink>{" "}
+              to approve billable work before invoicing.
+            </p>
+          </PipelineHandoffBanner>
+        ) : null}
         <Button type="submit" disabled={loading || matters.length === 0}>
           {loading ? "Submitting..." : "Submit for Manager Approval"}
         </Button>
