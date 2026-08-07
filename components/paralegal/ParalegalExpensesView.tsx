@@ -14,17 +14,13 @@ import { Toast } from "@/components/ui/Toast";
 import { useParalegalWorkflow } from "@/hooks/useParalegalWorkflow";
 import { PARALEGAL_ASSIGNED_MATTERS } from "@/lib/paralegal/demo-data";
 import { filterExpensesByQuery } from "@/lib/paralegal/filters";
-import {
-  addParalegalExpense,
-  updateParalegalExpense,
-} from "@/lib/paralegal/workflow-store";
+import { addParalegalExpense } from "@/lib/paralegal/workflow-store";
 import {
   getDemoSubmitterContext,
   submitDemoExpense,
 } from "@/lib/demo/time-workflow-store";
+import { readPdfFileAsDataUrl } from "@/lib/demo/expense-receipts";
 import { formatCurrency } from "@/lib/utils/cn";
-
-const RECEIPT_THRESHOLD = 25;
 
 export function ParalegalExpensesView() {
   const searchParams = useSearchParams();
@@ -40,7 +36,8 @@ export function ParalegalExpensesView() {
   );
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [hasReceipt, setHasReceipt] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const visible = useMemo(
     () => filterExpensesByQuery(expenses, filter),
@@ -56,7 +53,7 @@ export function ParalegalExpensesView() {
     }
   }, [action]);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const matter = PARALEGAL_ASSIGNED_MATTERS.find((m) => m.id === matterId);
     if (!matter) return;
@@ -75,7 +72,19 @@ export function ParalegalExpensesView() {
       setToast("Enter a meaningful expense description.");
       return;
     }
-    const receiptMissing = value >= RECEIPT_THRESHOLD && !hasReceipt;
+    if (!receiptFile) {
+      setToast("Attach a PDF receipt or supporting documentation.");
+      return;
+    }
+
+    setSubmitting(true);
+    const receipt = await readPdfFileAsDataUrl(receiptFile);
+    if (!receipt.ok) {
+      setSubmitting(false);
+      setToast(receipt.error);
+      return;
+    }
+
     addParalegalExpense({
       matterId: matter.id,
       matterTitle: matter.title,
@@ -83,11 +92,11 @@ export function ParalegalExpensesView() {
       expenseDate,
       amount: value,
       description: description.trim(),
-      status: receiptMissing ? "draft" : "submitted",
-      receiptMissing,
+      status: "submitted",
+      receiptMissing: false,
     });
 
-    if (!receiptMissing) {
+    try {
       const submitter = getDemoSubmitterContext("paralegal");
       submitDemoExpense({
         profileId: submitter.profileId,
@@ -99,16 +108,25 @@ export function ParalegalExpensesView() {
         expenseDate,
         amount: value,
         description: description.trim(),
+        receipt: {
+          fileName: receipt.fileName,
+          mimeType: receipt.mimeType,
+          dataUrl: receipt.dataUrl,
+        },
       });
+    } catch (err) {
+      setSubmitting(false);
+      setToast(err instanceof Error ? err.message : "Could not save expense.");
+      return;
     }
+
     refresh();
     setAmount("");
     setDescription("");
-    setHasReceipt(false);
+    setReceiptFile(null);
+    setSubmitting(false);
     setToast(
-      receiptMissing
-        ? `Saved as draft — receipt required for expenses ≥ $${RECEIPT_THRESHOLD}.`
-        : "Expense submitted for manager approval. Switch to Managing Partner or Firm Administrator to review.",
+      "Expense submitted with receipt for manager approval. Switch to Managing Partner or Firm Administrator to review.",
     );
   }
 
@@ -116,7 +134,7 @@ export function ParalegalExpensesView() {
     <div className="space-y-6">
       <PageHeader
         title="Reimbursable Expenses"
-        description="Record approved reimbursable expenses on assigned matters. You cannot approve your own expenses."
+        description="Record reimbursable expenses with PDF documentation on assigned matters. You cannot approve your own expenses."
       />
 
       {filter && (
@@ -130,10 +148,10 @@ export function ParalegalExpensesView() {
         </div>
       )}
 
-      <Card padding="md" className="scroll-mt-24" >
+      <Card padding="md" className="scroll-mt-24">
         <div id="paralegal-expense-form">
           <CardTitle className="mb-4">Log reimbursable expense</CardTitle>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <Select
                 label="Assigned matter"
@@ -161,15 +179,13 @@ export function ParalegalExpensesView() {
                 onChange={(e) => setAmount(e.target.value)}
                 required
               />
-              <label className="flex items-end gap-2 pb-2 text-sm text-navy-900">
-                <input
-                  type="checkbox"
-                  checked={hasReceipt}
-                  onChange={(e) => setHasReceipt(e.target.checked)}
-                  className="rounded border-gray-300"
-                />
-                Receipt attached / available (required at ${RECEIPT_THRESHOLD}+)
-              </label>
+              <Input
+                label="Receipt / documentation (PDF)"
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                required
+              />
             </div>
             <Textarea
               label="Description"
@@ -178,7 +194,12 @@ export function ParalegalExpensesView() {
               required
               rows={3}
             />
-            <Button type="submit">Save expense</Button>
+            {receiptFile ? (
+              <p className="text-sm text-muted">Selected: {receiptFile.name}</p>
+            ) : null}
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Submitting…" : "Submit for Manager Approval"}
+            </Button>
           </form>
         </div>
       </Card>
@@ -196,11 +217,11 @@ export function ParalegalExpensesView() {
                   {expense.clientName} · {expense.matterTitle} ·{" "}
                   {expense.expenseDate}
                 </p>
-                {expense.receiptMissing && (
-                  <p className="mt-2 text-sm font-medium text-amber-800">
-                    Receipt missing — attach before final submission.
-                  </p>
-                )}
+                <p className="mt-2 text-sm text-muted">
+                  {expense.receiptMissing
+                    ? "Receipt missing"
+                    : "Receipt documentation on file"}
+                </p>
               </div>
               <Badge
                 variant={
@@ -214,23 +235,6 @@ export function ParalegalExpensesView() {
                 {expense.status}
               </Badge>
             </div>
-            {expense.receiptMissing && (
-              <Button
-                size="sm"
-                className="mt-3"
-                variant="secondary"
-                onClick={() => {
-                  updateParalegalExpense(expense.id, {
-                    receiptMissing: false,
-                    status: "submitted",
-                  });
-                  refresh();
-                  setToast("Receipt marked attached; expense submitted for review.");
-                }}
-              >
-                Mark receipt attached & submit
-              </Button>
-            )}
           </Card>
         ))}
       </section>

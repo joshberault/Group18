@@ -74,6 +74,9 @@ export type ExpenseSubmission = {
   matter?: { title: string } | null;
   /** Demo workflow — specialty attorney who submitted the request */
   requested_by_name?: string;
+  /** Demo workflow — receipt metadata (PDF bytes stored separately) */
+  receipt_file_name?: string | null;
+  has_receipt?: boolean;
 };
 
 export type Task = {

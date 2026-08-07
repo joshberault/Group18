@@ -38,8 +38,9 @@ export type DemoJournalEntry = {
   totalCredit: number;
   createdBy: string;
   postedDate: string;
-  source: "time_approval";
-  timeEntryId: string;
+  source: "time_approval" | "expense_approval";
+  timeEntryId?: string;
+  expenseId?: string;
   lines: Array<{
     id: string;
     accountCode: string;
@@ -114,6 +115,8 @@ import type {
   ApprovalStatus,
 } from "@/types/database";
 import { DEMO_MATTERS } from "@/lib/attorney/demo-data";
+import { saveExpenseReceipt } from "@/lib/demo/expense-receipts";
+import { createJournalEntry } from "@/lib/accounting/mutations";
 
 export type DemoSubmitterContext = {
   profileId: string;
@@ -283,6 +286,10 @@ export function getDemoJournalEntries(): DemoJournalEntry[] {
   return readState().journalEntries.map((row) => ({ ...row }));
 }
 
+export function getDemoExpenseById(expenseId: string): ExpenseSubmission | null {
+  return readState().expenses.find((row) => row.id === expenseId) ?? null;
+}
+
 export type SubmitTimeEntryInput = {
   profileId: string;
   submitterName: string;
@@ -361,6 +368,12 @@ export type SubmitExpenseInput = {
   expenseDate: string;
   amount: number;
   description: string;
+  /** Required PDF receipt (demo — stored in localStorage). */
+  receipt: {
+    fileName: string;
+    mimeType: string;
+    dataUrl: string;
+  };
 };
 
 export function submitDemoExpense(input: SubmitExpenseInput): ExpenseSubmission {
@@ -372,6 +385,11 @@ export function submitDemoExpense(input: SubmitExpenseInput): ExpenseSubmission 
   const amountLabel = `$${input.amount.toFixed(2)}`;
   const employeeId = input.employeeId ?? input.profileId;
 
+  const saved = saveExpenseReceipt(expenseId, input.receipt);
+  if (!saved.ok) {
+    throw new Error(saved.error);
+  }
+
   const expense: ExpenseSubmission = {
     id: expenseId,
     matter_id: input.matterId,
@@ -382,6 +400,8 @@ export function submitDemoExpense(input: SubmitExpenseInput): ExpenseSubmission 
     status: "pending",
     matter: { title: matterTitle },
     requested_by_name: input.submitterName,
+    receipt_file_name: input.receipt.fileName,
+    has_receipt: true,
   };
 
   const approval: AdminApproval = {
@@ -404,6 +424,10 @@ export function submitDemoExpense(input: SubmitExpenseInput): ExpenseSubmission 
     originalSnapshot: `expense|${expenseId}|${input.amount}|${matterTitle}|${input.expenseDate}`,
     expenseAmount: input.amount,
     expensePurpose: input.description.trim(),
+    expenseCategory: "Reimbursable",
+    receiptStatus: "attached",
+    expenseRecordId: expenseId,
+    receiptFileName: input.receipt.fileName,
   };
 
   writeState({
@@ -413,6 +437,101 @@ export function submitDemoExpense(input: SubmitExpenseInput): ExpenseSubmission 
   });
 
   return expense;
+}
+
+function createExpenseReimbursementJournal(
+  approval: AdminApproval,
+  expense: ExpenseSubmission,
+  reviewedAt: string,
+  reviewerName: string,
+  state: DemoTimeWorkflowState,
+): DemoJournalEntry {
+  const amount = Number(expense.amount.toFixed(2));
+  const journalEntryId = crypto.randomUUID();
+  const entryNumber = nextJournalEntryNumber(state);
+  const matterTitle = expense.matter?.title ?? "Matter";
+
+  return {
+    id: journalEntryId,
+    entryNumber,
+    date: reviewedAt.slice(0, 10),
+    description: `Employee reimbursement — ${approval.submittedBy} (${matterTitle})`,
+    status: "Posted",
+    totalDebit: amount,
+    totalCredit: amount,
+    createdBy: reviewerName,
+    postedDate: reviewedAt.slice(0, 10),
+    source: "expense_approval",
+    expenseId: expense.id,
+    lines: [
+      {
+        id: `${journalEntryId}-1`,
+        accountCode: "5300",
+        accountName: "Professional Services",
+        description: `Reimbursable expense — ${expense.description}`,
+        debit: amount,
+        credit: 0,
+      },
+      {
+        id: `${journalEntryId}-2`,
+        accountCode: "2010",
+        accountName: "Accounts Payable",
+        description: `Payable to ${approval.submittedBy}`,
+        debit: 0,
+        credit: amount,
+      },
+    ],
+  };
+}
+
+/** Post expense reimbursement to live Supabase GL when available (demo fallback is local). */
+export async function postExpenseReimbursementToLedger(input: {
+  expense: ExpenseSubmission;
+  approval: AdminApproval;
+  reviewerName: string;
+  reviewerRole: string;
+}): Promise<{ ok: boolean; entryNumber?: string; error?: string; localOnly?: boolean }> {
+  const amount = Number(input.expense.amount.toFixed(2));
+  const matterTitle = input.expense.matter?.title ?? "Matter";
+  const result = await createJournalEntry({
+    entryDate: new Date().toISOString().slice(0, 10),
+    description: `Employee reimbursement — ${input.approval.submittedBy} (${matterTitle})`,
+    createdBy: input.reviewerName,
+    sourceType: "expense_approval",
+    sourceId: input.expense.id,
+    postImmediately: true,
+    actor: {
+      name: input.reviewerName,
+      role: input.reviewerRole,
+    },
+    lines: [
+      {
+        accountCode: "5300",
+        accountName: "Professional Services",
+        description: `Reimbursable expense — ${input.expense.description}`,
+        debit: amount,
+        credit: 0,
+      },
+      {
+        accountCode: "2010",
+        accountName: "Accounts Payable",
+        description: `Payable to ${input.approval.submittedBy}`,
+        debit: 0,
+        credit: amount,
+      },
+    ],
+  });
+
+  if (!result.ok) {
+    return {
+      ok: true,
+      localOnly: true,
+      error: result.error,
+      entryNumber: undefined,
+    };
+  }
+
+  return { ok: true, entryNumber: result.entryNumber };
 }
 
 function createPayrollAccrual(
@@ -557,6 +676,20 @@ function applyApprovalDecision(
     updatedExpenses = state.expenses.map((entry) =>
       entry.id === recordId ? { ...entry, status: nextStatus } : entry,
     );
+
+    if (decision === "approved") {
+      const expense = updatedExpenses.find((entry) => entry.id === recordId);
+      if (expense) {
+        const journal = createExpenseReimbursementJournal(
+          approval,
+          expense,
+          reviewedAt,
+          reviewerName,
+          state,
+        );
+        journalEntries = [journal, ...journalEntries];
+      }
+    }
   }
 
   writeState({

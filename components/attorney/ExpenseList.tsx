@@ -29,6 +29,7 @@ export function ExpenseList({ expenses }: { expenses: ExpenseSubmission[] }) {
           <TableHead>Matter</TableHead>
           <TableHead>Amount</TableHead>
           <TableHead>Description</TableHead>
+          <TableHead>Receipt</TableHead>
           <TableHead>Status</TableHead>
         </TableRow>
       </TableHeader>
@@ -40,6 +41,11 @@ export function ExpenseList({ expenses }: { expenses: ExpenseSubmission[] }) {
             <TableCell>{expense.matter?.title ?? "—"}</TableCell>
             <TableCell>{formatCurrency(expense.amount)}</TableCell>
             <TableCell>{expense.description}</TableCell>
+            <TableCell>
+              {expense.has_receipt || expense.receipt_file_name
+                ? expense.receipt_file_name ?? "Attached"
+                : "—"}
+            </TableCell>
             <TableCell>
               <span className={`rounded-full px-2 py-1 text-xs font-medium capitalize ${statusBadgeClass(expense.status)}`}>
                 {expense.status}

@@ -7,6 +7,7 @@ import {
   notifyApprovalWorkflowChange,
   submitDemoExpense,
 } from "@/lib/demo/time-workflow-store";
+import { readPdfFileAsDataUrl } from "@/lib/demo/expense-receipts";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { checkMatterBillable } from "@/lib/matters/matter-activation-gates";
 import { Button } from "@/components/ui/Button";
@@ -18,7 +19,7 @@ import type { UserRole } from "@/lib/types";
 import type { Matter } from "@/types/database";
 
 const APPROVAL_SUCCESS_MESSAGE =
-  "Expense submitted for manager approval. Switch to Managing Partner or Firm Administrator on the dashboard to review.";
+  "Expense submitted for manager approval with receipt. Switch to Managing Partner or Firm Administrator on the dashboard to review.";
 
 type Props = {
   matters: Matter[];
@@ -37,6 +38,7 @@ export function ExpenseForm({
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -57,6 +59,11 @@ export function ExpenseForm({
       return;
     }
 
+    if (!receiptFile) {
+      setError("Attach a PDF receipt or supporting documentation.");
+      return;
+    }
+
     const gate = await checkMatterBillable(matterId);
     if (!gate.allowed) {
       setError(gate.reason ?? "Expense entry is blocked for this matter.");
@@ -65,6 +72,13 @@ export function ExpenseForm({
 
     setLoading(true);
 
+    const receipt = await readPdfFileAsDataUrl(receiptFile);
+    if (!receipt.ok) {
+      setLoading(false);
+      setError(receipt.error);
+      return;
+    }
+
     const matterTitle =
       matters.find((matter) => matter.id === matterId)?.title ?? undefined;
     const submitter = getDemoSubmitterContext(
@@ -72,17 +86,28 @@ export function ExpenseForm({
       effectiveRole === "attorney" ? attorneySpecialty : null,
     );
 
-    submitDemoExpense({
-      profileId: submitter.profileId,
-      submitterName: submitter.submitterName,
-      submitterRole: effectiveRole,
-      employeeId: submitter.employeeId,
-      matterId,
-      matterTitle,
-      expenseDate,
-      amount: parsedAmount,
-      description: description.trim(),
-    });
+    try {
+      submitDemoExpense({
+        profileId: submitter.profileId,
+        submitterName: submitter.submitterName,
+        submitterRole: effectiveRole,
+        employeeId: submitter.employeeId,
+        matterId,
+        matterTitle,
+        expenseDate,
+        amount: parsedAmount,
+        description: description.trim(),
+        receipt: {
+          fileName: receipt.fileName,
+          mimeType: receipt.mimeType,
+          dataUrl: receipt.dataUrl,
+        },
+      });
+    } catch (err) {
+      setLoading(false);
+      setError(err instanceof Error ? err.message : "Could not save expense.");
+      return;
+    }
 
     const supabase = createClientSafe();
     if (supabase) {
@@ -104,6 +129,7 @@ export function ExpenseForm({
     setLoading(false);
     setAmount("");
     setDescription("");
+    setReceiptFile(null);
     setSuccess(APPROVAL_SUCCESS_MESSAGE);
     onCreated();
   }
@@ -137,6 +163,13 @@ export function ExpenseForm({
             placeholder="125.00"
             required
           />
+          <Input
+            label="Receipt / documentation (PDF)"
+            type="file"
+            accept="application/pdf,.pdf"
+            onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+            required
+          />
           <div className="md:col-span-2">
             <Textarea
               label="Description"
@@ -147,6 +180,9 @@ export function ExpenseForm({
             />
           </div>
         </div>
+        {receiptFile ? (
+          <p className="text-sm text-muted">Selected: {receiptFile.name}</p>
+        ) : null}
         {error && <p className="text-sm text-red-600">{error}</p>}
         {success && <p className="text-sm text-green-700">{success}</p>}
         <Button type="submit" disabled={loading || matters.length === 0}>

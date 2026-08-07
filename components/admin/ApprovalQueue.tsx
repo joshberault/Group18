@@ -31,12 +31,15 @@ import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { invoiceApprovedBillableTime } from "@/lib/billing/approved-time-billing";
 import {
+  getDemoExpenseById,
   getMergedApprovals,
   isDemoSessionApproval,
+  postExpenseReimbursementToLedger,
   resolveDemoExpenseApproval,
   resolveDemoTimeApproval,
   subscribeTimeWorkflow,
 } from "@/lib/demo/time-workflow-store";
+import { getExpenseReceipt } from "@/lib/demo/expense-receipts";
 import type {
   AdminApproval,
   AdminEmployee,
@@ -324,6 +327,32 @@ export function ApprovalQueue({ variant = "standalone" }: ApprovalQueueProps) {
       return;
     }
 
+    if (
+      decision === "approved" &&
+      selected.type === "expense" &&
+      selected.receiptStatus === "missing"
+    ) {
+      setActionError(
+        "Cannot approve reimbursable expenses without attached receipt documentation.",
+      );
+      return;
+    }
+
+    if (
+      decision === "approved" &&
+      selected.type === "expense" &&
+      !(
+        selected.expenseRecordId &&
+        getExpenseReceipt(selected.expenseRecordId)
+      ) &&
+      selected.receiptStatus !== "attached"
+    ) {
+      setActionError(
+        "Receipt PDF is missing. Ask the submitter to re-file with documentation.",
+      );
+      return;
+    }
+
     let approvedInvoice:
       | { invoiceNumber: string; amount: number; alreadyInvoiced: boolean }
       | undefined;
@@ -369,6 +398,7 @@ export function ApprovalQueue({ variant = "standalone" }: ApprovalQueueProps) {
       );
     }
 
+    let glMessage = "";
     if (isDemoSessionApproval(selected.id) && selected.type === "expense") {
       resolveDemoExpenseApproval(
         selected.id,
@@ -376,6 +406,24 @@ export function ApprovalQueue({ variant = "standalone" }: ApprovalQueueProps) {
         reviewerName,
         reviewNotes.trim() || undefined,
       );
+
+      if (decision === "approved" && selected.expenseRecordId) {
+        const expense = getDemoExpenseById(selected.expenseRecordId);
+        if (expense) {
+          const gl = await postExpenseReimbursementToLedger({
+            expense,
+            approval: selected,
+            reviewerName,
+            reviewerRole: selectedRole,
+          });
+          if (gl.ok && gl.entryNumber) {
+            glMessage = ` Posted GL ${gl.entryNumber} (Dr 5300 Professional Services / Cr 2010 Accounts Payable).`;
+          } else if (gl.ok) {
+            glMessage =
+              " Reimbursement journal recorded in the demo ledger (Dr 5300 / Cr 2010).";
+          }
+        }
+      }
     }
 
     setApprovals((prev) =>
@@ -441,7 +489,7 @@ export function ApprovalQueue({ variant = "standalone" }: ApprovalQueueProps) {
         ).format(approvedInvoice.amount)}, and the client was notified.`
       : "";
     setSuccessMessage(
-      `${decision === "approved" ? "Approved" : decision === "rejected" ? "Rejected" : "Returned"} “${title}” as ${reviewerName}.${invoiceMessage}`,
+      `${decision === "approved" ? "Approved" : decision === "rejected" ? "Rejected" : "Returned"} “${title}” as ${reviewerName}.${invoiceMessage}${glMessage}`,
     );
     processingLock.current = false;
     setProcessingId(null);
@@ -876,6 +924,10 @@ export function ApprovalQueue({ variant = "standalone" }: ApprovalQueueProps) {
                     ["Business purpose", selected.expensePurpose ?? "—"],
                     ["Receipt status", selected.receiptStatus ?? "—"],
                     [
+                      "Receipt file",
+                      selected.receiptFileName ?? "—",
+                    ],
+                    [
                       "Related matter",
                       selected.matterReference
                         ? `${selected.matterLabel} (${selected.matterReference})`
@@ -883,8 +935,30 @@ export function ApprovalQueue({ variant = "standalone" }: ApprovalQueueProps) {
                     ],
                   ]}
                 />
-                {selected.receiptStatus === "missing" && (
+                {selected.expenseRecordId &&
+                getExpenseReceipt(selected.expenseRecordId) ? (
+                  <div className="mt-3">
+                    <a
+                      href={
+                        getExpenseReceipt(selected.expenseRecordId)?.dataUrl
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-9 items-center justify-center rounded-lg border border-navy-900 bg-white px-3 text-sm font-semibold text-navy-900 transition-colors hover:bg-navy-50"
+                    >
+                      View receipt PDF
+                      {selected.receiptFileName
+                        ? ` (${selected.receiptFileName})`
+                        : ""}
+                    </a>
+                  </div>
+                ) : selected.receiptStatus === "missing" ? (
                   <Alert>Warning: supporting documentation is missing.</Alert>
+                ) : (
+                  <Alert>
+                    Receipt metadata is present, but the PDF could not be loaded
+                    from demo storage.
+                  </Alert>
                 )}
                 {(selected.expenseAmount ?? 0) >= LARGE_EXPENSE && (
                   <Alert>

@@ -312,6 +312,9 @@ export interface AdminApproval {
   expenseCategory?: string;
   expensePurpose?: string;
   receiptStatus?: "attached" | "missing" | "not_required";
+  /** Demo receipt — linked expense id + file name for viewing */
+  expenseRecordId?: string;
+  receiptFileName?: string;
   /** Vacation details */
   vacationStartDate?: string;
   vacationEndDate?: string;

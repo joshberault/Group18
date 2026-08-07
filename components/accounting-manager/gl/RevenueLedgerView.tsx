@@ -42,6 +42,11 @@ import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { formatCurrency } from "@/lib/utils/cn";
+import {
+  getDemoJournalEntries,
+  subscribeTimeWorkflow,
+} from "@/lib/demo/time-workflow-store";
+import type { DemoJournalEntry } from "@/lib/demo/time-workflow-store";
 
 type GlTab =
   | "overview"
@@ -78,6 +83,34 @@ function emptyLine(defaultCode = "1010"): DraftLine {
   };
 }
 
+function mapDemoJournal(entry: DemoJournalEntry): JournalEntry {
+  return {
+    id: entry.id,
+    entryNumber: entry.entryNumber,
+    date: entry.date,
+    description: entry.description,
+    status: entry.status,
+    totalDebit: entry.totalDebit,
+    totalCredit: entry.totalCredit,
+    createdBy: entry.createdBy,
+    postedDate: entry.postedDate,
+    lines: entry.lines.map((line) => ({ ...line })),
+  };
+}
+
+function mergeJournalEntries(
+  remote: JournalEntry[],
+  demo: DemoJournalEntry[],
+): JournalEntry[] {
+  const mapped = demo.map(mapDemoJournal);
+  const remoteIds = new Set(remote.map((row) => row.id));
+  const remoteNumbers = new Set(remote.map((row) => row.entryNumber));
+  const extras = mapped.filter(
+    (row) => !remoteIds.has(row.id) && !remoteNumbers.has(row.entryNumber),
+  );
+  return [...extras, ...remote];
+}
+
 function closeTaskVariant(status: string) {
   if (status === "Complete") return "success" as const;
   if (status === "In Progress") return "warning" as const;
@@ -102,9 +135,18 @@ export function RevenueLedgerView() {
   const [tasks, setTasks] = useState<CloseTask[]>([]);
   useEffect(() => {
     if (workspace) {
-      setEntries(workspace.journalEntries);
+      setEntries(
+        mergeJournalEntries(workspace.journalEntries, getDemoJournalEntries()),
+      );
       setTasks(workspace.closeTasks);
     }
+  }, [workspace]);
+
+  useEffect(() => {
+    return subscribeTimeWorkflow(() => {
+      const remote = workspace?.journalEntries ?? [];
+      setEntries(mergeJournalEntries(remote, getDemoJournalEntries()));
+    });
   }, [workspace]);
   const [showJeForm, setShowJeForm] = useState(false);
   const [jeDate, setJeDate] = useState("2026-08-05");
