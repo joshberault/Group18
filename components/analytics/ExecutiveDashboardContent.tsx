@@ -15,7 +15,9 @@ import {
 import { MatterHealthSummary } from "@/components/analytics/MatterHealthSummary";
 import { MonthlyCollectionsChart } from "@/components/analytics/MonthlyCollectionsChart";
 import { MatterProfitabilityTable } from "@/components/analytics/MatterProfitabilityTable";
+import { ReportsContent } from "@/components/analytics/ReportsContent";
 import { analyticsGridGap } from "@/components/analytics/analytics-styles";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KPICard } from "@/components/ui/KPICard";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -24,6 +26,8 @@ import { useExecutiveDashboard } from "@/hooks/useExecutiveDashboard";
 import { formatCurrency } from "@/lib/utils/cn";
 
 export function ExecutiveDashboardContent() {
+  const { selectedRole } = useDemoRole();
+  const isManagingPartner = selectedRole === "managing_partner";
   const { data, matterHealthScores, loading, error, refresh } =
     useExecutiveDashboard();
 
@@ -153,6 +157,21 @@ export function ExecutiveDashboardContent() {
         variant="executive"
         healthByMatterId={healthByMatterId}
       />
+
+      {isManagingPartner ? (
+        <>
+          <AnalyticsSectionDivider />
+          <div>
+            <h2 className="text-xl font-semibold text-navy-900">Reports</h2>
+            <p className="mt-1 text-sm text-muted">
+              Practice area performance and matter-level profitability
+            </p>
+            <div className="mt-6">
+              <ReportsContent embedded />
+            </div>
+          </div>
+        </>
+      ) : null}
     </AnalyticsPageShell>
   );
 }

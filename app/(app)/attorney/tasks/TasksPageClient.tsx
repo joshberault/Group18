@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { CalendarPageClient } from "@/app/(app)/attorney/calendar/CalendarPageClient";
 import { useAttorneyData } from "@/components/attorney/AttorneyDataProvider";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { todayIsoDate, isPastDate, isDueSoon } from "@/lib/attorney/dates";
 import { formatDate, statusBadgeClass } from "@/lib/attorney/format";
 import { Button } from "@/components/ui/Button";
@@ -16,6 +18,7 @@ import { Textarea } from "@/components/ui/Textarea";
 
 type Tab = "today" | "all" | "deadlines";
 type ListFilter = "overdue" | "deadlines_7" | "waiting_on_attorney" | null;
+type MpView = "list" | "calendar";
 
 function parseTab(value: string | null, filter: ListFilter): Tab {
   if (filter === "deadlines_7") return "deadlines";
@@ -35,6 +38,10 @@ function parseFilter(value: string | null): ListFilter {
   return null;
 }
 
+function parseMpView(value: string | null): MpView {
+  return value === "calendar" ? "calendar" : "list";
+}
+
 const FILTER_LABELS: Record<NonNullable<ListFilter>, string> = {
   overdue: "Overdue tasks",
   deadlines_7: "Deadlines within 7 days",
@@ -44,6 +51,9 @@ const FILTER_LABELS: Record<NonNullable<ListFilter>, string> = {
 export function TasksPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { selectedRole } = useDemoRole();
+  const isManagingPartner = selectedRole === "managing_partner";
+  const mpView = parseMpView(searchParams.get("view"));
   const matterFilter = searchParams.get("matter");
   const listFilter = parseFilter(searchParams.get("filter"));
   const { tasks, deadlines, matters, profileId, addTask, addDeadline, completeTask } =
@@ -98,14 +108,29 @@ export function TasksPageClient() {
   function updateTasksUrl(nextTab: Tab, clearFilters = false) {
     setTab(nextTab);
     const params = new URLSearchParams();
+    if (isManagingPartner) params.set("view", "list");
     params.set("tab", nextTab);
     if (matterFilter) params.set("matter", matterFilter);
     if (!clearFilters && listFilter) params.set("filter", listFilter);
     router.replace(`/attorney/tasks?${params.toString()}`);
   }
 
+  function setMpView(next: MpView) {
+    const params = new URLSearchParams();
+    params.set("view", next);
+    if (next === "list") {
+      params.set("tab", tab);
+      if (listFilter) params.set("filter", listFilter);
+    }
+    if (matterFilter) params.set("matter", matterFilter);
+    const date = searchParams.get("date");
+    if (next === "calendar" && date) params.set("date", date);
+    router.replace(`/attorney/tasks?${params.toString()}`);
+  }
+
   function clearListFilter() {
     const params = new URLSearchParams();
+    if (isManagingPartner) params.set("view", "list");
     params.set("tab", tab);
     if (matterFilter) params.set("matter", matterFilter);
     router.replace(`/attorney/tasks?${params.toString()}`);
@@ -156,6 +181,29 @@ export function TasksPageClient() {
         description="Track daily work, completion status, and filing deadlines."
       />
 
+      {isManagingPartner ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={mpView === "list" ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setMpView("list")}
+          >
+            List
+          </Button>
+          <Button
+            variant={mpView === "calendar" ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setMpView("calendar")}
+          >
+            Calendar
+          </Button>
+        </div>
+      ) : null}
+
+      {isManagingPartner && mpView === "calendar" ? (
+        <CalendarPageClient embedded dateQueryBase="tasks" />
+      ) : (
+        <>
       {matterFilterLabel && (
         <Card padding="md" className="border-gold-500/30 bg-gold-50/40">
           <p className="text-sm text-navy-900">
@@ -338,7 +386,11 @@ export function TasksPageClient() {
                     )}
                   </Link>
                   <Link
-                    href={`/attorney/calendar?date=${deadline.due_date}`}
+                    href={
+                      isManagingPartner
+                        ? `/attorney/tasks?view=calendar&date=${deadline.due_date}`
+                        : `/attorney/calendar?date=${deadline.due_date}`
+                    }
                     className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium transition hover:opacity-80 ${
                       isPastDate(deadline.due_date)
                         ? "bg-red-100 text-red-800"
@@ -352,6 +404,8 @@ export function TasksPageClient() {
             ))}
           </div>
         </section>
+      )}
+        </>
       )}
     </div>
   );

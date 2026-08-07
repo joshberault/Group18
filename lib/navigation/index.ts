@@ -255,7 +255,8 @@ function getFirmAdminSectionChildren(): NavItem[] {
  * Role-aware nav: attorneys get "My Dashboard" instead of firm dashboard;
  * firm administrators get "Manager Dashboard" (/admin) with nested section links;
  * Billing Specialist: Dashboard → Billing Dashboard at /billing; hide separate Billing.
- * Managing Partner: never show Time & Expenses or Client Portal.
+ * Managing Partner: hide Time, Client Portal, Attorney Hub, Calendar, Notes, Reports, Risk.
+ * (Final MP filter also lives in getNavigationForRole.)
  */
 export function getNavItemsForRole(role: UserRole): NavItem[] {
   return NAV_ITEMS.filter((item) => canAccessNavItem(role, item.roles ?? []))
@@ -264,7 +265,17 @@ export function getNavItemsForRole(role: UserRole): NavItem[] {
         role === "managing_partner" &&
         (item.routeKey === "time" ||
           item.routeKey === "client_portal" ||
+          item.routeKey === "attorney_hub" ||
+          item.routeKey === "calendar" ||
+          item.routeKey === "notes" ||
+          item.routeKey === "reports" ||
+          item.routeKey === "risk_center" ||
           item.href === "/attorney/time" ||
+          item.href === "/attorney/dashboard" ||
+          item.href === "/attorney/calendar" ||
+          item.href === "/attorney/notes" ||
+          item.href === "/reports" ||
+          item.href === "/risk-center" ||
           item.href.startsWith("/client-portal"))
       ) {
         return null;

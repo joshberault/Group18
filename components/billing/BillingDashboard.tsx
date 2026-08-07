@@ -38,6 +38,7 @@ import {
   receivablesHref,
 } from "@/lib/billing/routes";
 import type { BillingDashboardData } from "@/lib/billing/types";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 
 type Props = {
   data: BillingDashboardData;
@@ -69,6 +70,8 @@ function formatDate(iso: string): string {
 export function BillingDashboard({ data }: Props) {
   const { source } = data;
   const router = useRouter();
+  const { selectedRole } = useDemoRole();
+  const isManagingPartner = selectedRole === "managing_partner";
 
   const {
     period,
@@ -136,8 +139,8 @@ export function BillingDashboard({ data }: Props) {
               : undefined
           }
           icon={FileText}
-          actionLabel="View Invoices"
-          actionHref={BILLING_ROUTES.invoices}
+          actionLabel={isManagingPartner ? undefined : "View Invoices"}
+          actionHref={isManagingPartner ? undefined : BILLING_ROUTES.invoices}
         />
         <MetricCard
           eyebrow="Receivables"
@@ -146,8 +149,8 @@ export function BillingDashboard({ data }: Props) {
           detail="Open A/R in period"
           tone="attention"
           icon={CircleDollarSign}
-          actionLabel="View Accounts"
-          actionHref={BILLING_ROUTES.receivables}
+          actionLabel={isManagingPartner ? undefined : "View Accounts"}
+          actionHref={isManagingPartner ? undefined : BILLING_ROUTES.receivables}
         />
         <MetricCard
           eyebrow="Collections"
@@ -155,8 +158,10 @@ export function BillingDashboard({ data }: Props) {
           value={formatCurrency(collectionsInPeriod)}
           tone="positive"
           icon={Wallet}
-          actionLabel="View completed"
-          actionHref={invoicesHref({ view: "completed" })}
+          actionLabel={isManagingPartner ? undefined : "View completed"}
+          actionHref={
+            isManagingPartner ? undefined : invoicesHref({ view: "completed" })
+          }
         />
         <MetricCard
           eyebrow="Overdue"
@@ -165,8 +170,10 @@ export function BillingDashboard({ data }: Props) {
           detail="Overdue among period invoices"
           tone={overdueInvoices > 0 ? "attention" : "default"}
           icon={AlertTriangle}
-          actionLabel="View Overdue"
-          actionHref={receivablesHref({ view: "overdue" })}
+          actionLabel={isManagingPartner ? undefined : "View Overdue"}
+          actionHref={
+            isManagingPartner ? undefined : receivablesHref({ view: "overdue" })
+          }
         />
       </section>
 

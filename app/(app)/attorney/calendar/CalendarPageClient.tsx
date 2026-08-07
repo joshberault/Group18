@@ -23,7 +23,14 @@ function parseIsoDate(value: string | null): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-export function CalendarPageClient() {
+export function CalendarPageClient({
+  embedded = false,
+  dateQueryBase = "calendar",
+}: {
+  embedded?: boolean;
+  /** Path used when selecting a date in the URL. */
+  dateQueryBase?: "calendar" | "tasks";
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tasks, deadlines } = useAttorneyData();
@@ -79,7 +86,14 @@ export function CalendarPageClient() {
 
   function selectDate(iso: string) {
     setSelectedDate(iso);
-    router.replace(`/attorney/calendar?date=${iso}`, { scroll: false });
+    if (dateQueryBase === "tasks") {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("view", "calendar");
+      params.set("date", iso);
+      router.replace(`/attorney/tasks?${params.toString()}`, { scroll: false });
+    } else {
+      router.replace(`/attorney/calendar?date=${iso}`, { scroll: false });
+    }
   }
 
   function shiftMonth(delta: number) {
@@ -99,10 +113,12 @@ export function CalendarPageClient() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Calendar"
-        description="Tasks and deadlines across your assigned matters."
-      />
+      {!embedded ? (
+        <PageHeader
+          title="Calendar"
+          description="Tasks and deadlines across your assigned matters."
+        />
+      ) : null}
 
       <Card padding="md">
         <div className="mb-4 flex items-center justify-between">

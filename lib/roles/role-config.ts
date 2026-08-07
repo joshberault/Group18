@@ -350,15 +350,35 @@ export function getNavigationForRole(role: UserRole): NavItem[] {
 
   const items = getNavItemsForRole(role);
 
-  // Managing Partner demo: never show Time & Expenses or Client Portal.
+  // Managing Partner demo: declutter sidebar (ops/oversight home only).
   if (role === "managing_partner") {
-    return items.filter(
-      (item) =>
-        item.routeKey !== "time" &&
-        item.routeKey !== "client_portal" &&
-        item.href !== "/attorney/time" &&
-        !item.href.startsWith("/client-portal"),
-    );
+    return items
+      .filter(
+        (item) =>
+          item.routeKey !== "time" &&
+          item.routeKey !== "client_portal" &&
+          item.routeKey !== "attorney_hub" &&
+          item.routeKey !== "calendar" &&
+          item.routeKey !== "notes" &&
+          item.routeKey !== "reports" &&
+          item.routeKey !== "risk_center" &&
+          item.href !== "/attorney/time" &&
+          item.href !== "/attorney/dashboard" &&
+          item.href !== "/attorney/calendar" &&
+          item.href !== "/attorney/notes" &&
+          item.href !== "/reports" &&
+          item.href !== "/risk-center" &&
+          !item.href.startsWith("/client-portal"),
+      )
+      .map((item) =>
+        item.routeKey === "tasks"
+          ? {
+              ...item,
+              label: "Tasks & Deadlines",
+              description: "Task list and deadlines calendar",
+            }
+          : item,
+      );
   }
 
   return items;
