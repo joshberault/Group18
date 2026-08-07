@@ -1,5 +1,5 @@
 /**
- * Staff/Admin Operations domain types (Person 5 — Reagan Weeks).
+ * Staff/Admin Operations domain types (Person 5 — Jordan Admin).
  * UI/view-model types for the Admin section only.
  * Do not redefine shared CounselFlow tables (profiles, matters,
  * matter_assignments, time_entries). Supabase will map into these later.
