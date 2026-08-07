@@ -463,11 +463,12 @@ export function DashboardContent() {
       ) : null}
 
       {role === "firm_administrator" && (
-        <div className="mb-6">
-          <AdminDataProvider>
+        <AdminDataProvider>
+          <div className="mb-6">
             <JobApplicationsPanel />
-          </AdminDataProvider>
-        </div>
+          </div>
+          <FirmOperationsQueues />
+        </AdminDataProvider>
       )}
 
       {role === "managing_partner" && (

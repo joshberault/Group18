@@ -1,50 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { ExpenseForm } from "@/components/attorney/ExpenseForm";
 import { ExpenseList } from "@/components/attorney/ExpenseList";
+import { useAttorneyData } from "@/components/attorney/AttorneyDataProvider";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
-import type { ExpenseSubmission, Matter } from "@/types/database";
+import { useDemoTimeWorkflow } from "@/hooks/useDemoTimeWorkflow";
+import { getDemoSubmitterContext } from "@/lib/demo/time-workflow-store";
+import type { Matter } from "@/types/database";
 
 type Props = {
-  profileId: string;
   initialMatters: Matter[];
-  initialExpenses: ExpenseSubmission[];
-  previewMode?: boolean;
 };
 
-export function ExpensesPageClient({
-  profileId,
-  initialMatters,
-  initialExpenses,
-  previewMode = false,
-}: Props) {
-  const [expenses, setExpenses] = useState(initialExpenses);
+export function ExpensesPageClient({ initialMatters }: Props) {
+  const { selectedRole, attorneySpecialty } = useDemoRole();
+  const { matters: storeMatters } = useAttorneyData();
+  const submitter = getDemoSubmitterContext(
+    selectedRole,
+    selectedRole === "attorney" ? attorneySpecialty : null,
+  );
+  const { expenses, refresh } = useDemoTimeWorkflow(submitter.profileId);
 
-  function handleDemoSubmit(payload: {
-    matter_id: string;
-    profile_id: string;
-    expense_date: string;
-    amount: number;
-    description: string;
-  }) {
-    const matter = initialMatters.find((item) => item.id === payload.matter_id);
-    setExpenses((prev) => [
-      {
-        id: `exp-${Date.now()}`,
-        matter_id: payload.matter_id,
-        profile_id: payload.profile_id,
-        expense_date: payload.expense_date,
-        amount: payload.amount,
-        description: payload.description,
-        status: "pending",
-        matter: { title: matter?.title ?? "Assigned matter" },
-      },
-      ...prev,
-    ]);
-  }
+  const formMatters = storeMatters.length > 0 ? storeMatters : initialMatters;
 
   return (
     <div className="space-y-6">
@@ -60,11 +40,9 @@ export function ExpensesPageClient({
       </PageHeader>
 
       <ExpenseForm
-        matters={initialMatters}
-        profileId={profileId}
-        onCreated={() => undefined}
-        previewMode={previewMode}
-        onDemoSubmit={previewMode ? handleDemoSubmit : undefined}
+        matters={formMatters}
+        submitterRole={selectedRole}
+        onCreated={refresh}
       />
 
       <div>

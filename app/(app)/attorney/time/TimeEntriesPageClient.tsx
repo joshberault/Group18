@@ -9,39 +9,23 @@ import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { useDemoTimeWorkflow } from "@/hooks/useDemoTimeWorkflow";
-import { profileIdForRole } from "@/lib/demo/time-workflow-store";
-import type { Matter, TimeEntry } from "@/types/database";
+import { getDemoSubmitterContext } from "@/lib/demo/time-workflow-store";
+import type { Matter } from "@/types/database";
 
 type Props = {
-  profileId: string;
   initialMatters: Matter[];
-  initialEntries: TimeEntry[];
-  previewMode?: boolean;
 };
 
-export function TimeEntriesPageClient({
-  profileId,
-  initialMatters,
-  previewMode = false,
-}: Props) {
-  const { selectedRole } = useDemoRole();
-  const { timeEntries, profileId: storeProfileId, matters: storeMatters } = useAttorneyData();
-  const activeProfileId = previewMode ? profileIdForRole(selectedRole) : storeProfileId;
-  const { timeEntries: demoEntries, refresh } = useDemoTimeWorkflow(
-    previewMode ? activeProfileId : undefined,
+export function TimeEntriesPageClient({ initialMatters }: Props) {
+  const { selectedRole, attorneySpecialty } = useDemoRole();
+  const { matters: storeMatters } = useAttorneyData();
+  const submitter = getDemoSubmitterContext(
+    selectedRole,
+    selectedRole === "attorney" ? attorneySpecialty : null,
   );
+  const { timeEntries, refresh } = useDemoTimeWorkflow(submitter.profileId);
 
-  const entries = previewMode
-    ? demoEntries
-    : timeEntries.filter((entry) => entry.profile_id === storeProfileId);
-
-  const formMatters = previewMode ? initialMatters : storeMatters;
-
-  function refreshEntries() {
-    if (previewMode) {
-      refresh();
-    }
-  }
+  const formMatters = storeMatters.length > 0 ? storeMatters : initialMatters;
 
   return (
     <div className="space-y-6">
@@ -56,20 +40,17 @@ export function TimeEntriesPageClient({
         </Link>
       </PageHeader>
 
-      {!previewMode && <TimerWidget />}
+      <TimerWidget onSaved={refresh} />
 
       <TimeEntryForm
         matters={formMatters}
-        profileId={activeProfileId}
         submitterRole={selectedRole}
-        onCreated={refreshEntries}
-        previewMode={previewMode}
-        useProviderStore={!previewMode}
+        onCreated={refresh}
       />
 
       <div>
         <h2 className="mb-3 text-lg font-semibold text-navy-900">Your entries</h2>
-        <TimeEntryList entries={entries} editable={!previewMode} />
+        <TimeEntryList entries={timeEntries} editable />
       </div>
     </div>
   );

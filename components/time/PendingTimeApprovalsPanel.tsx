@@ -128,7 +128,7 @@ export function PendingTimeApprovalsPanel({
           <TableHeader>
             <TableRow>
               <TableHead>Submitted</TableHead>
-              <TableHead>Employee</TableHead>
+              <TableHead>Requested by</TableHead>
               <TableHead>Matter</TableHead>
               <TableHead>Hours</TableHead>
               <TableHead>Status</TableHead>

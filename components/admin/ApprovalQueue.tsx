@@ -32,6 +32,7 @@ import { invoiceApprovedBillableTime } from "@/lib/billing/approved-time-billing
 import {
   getMergedApprovals,
   isDemoSessionApproval,
+  resolveDemoExpenseApproval,
   resolveDemoTimeApproval,
   subscribeTimeWorkflow,
 } from "@/lib/demo/time-workflow-store";
@@ -347,6 +348,15 @@ export function ApprovalQueue() {
 
     if (isDemoSessionApproval(selected.id) && selected.type === "time_entry") {
       resolveDemoTimeApproval(
+        selected.id,
+        decision,
+        reviewerName,
+        reviewNotes.trim() || undefined,
+      );
+    }
+
+    if (isDemoSessionApproval(selected.id) && selected.type === "expense") {
+      resolveDemoExpenseApproval(
         selected.id,
         decision,
         reviewerName,
