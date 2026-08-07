@@ -18,6 +18,8 @@ interface AnalyticsPageShellProps {
   bannerText: string;
   icon: LucideIcon;
   children: React.ReactNode;
+  /** Skip page chrome when nested inside another analytics page. */
+  embedded?: boolean;
 }
 
 export function AnalyticsPageShell({
@@ -27,7 +29,12 @@ export function AnalyticsPageShell({
   bannerText,
   icon: Icon,
   children,
+  embedded = false,
 }: AnalyticsPageShellProps) {
+  if (embedded) {
+    return <div className="space-y-6">{children}</div>;
+  }
+
   return (
     <div className={analyticsPageClass}>
       <PageHeader

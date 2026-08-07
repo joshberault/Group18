@@ -30,6 +30,7 @@ import { AttorneyDashboard } from "@/components/dashboard/AttorneyDashboard";
 import { ProspectiveClientDashboard } from "@/components/dashboard/ProspectiveClientDashboard";
 import { FirmOperationsQueues } from "@/components/dashboard/FirmOperationsQueues";
 import { AccountingManagerDashboard } from "@/components/accounting-manager/dashboard/AccountingManagerDashboard";
+import { RiskCenterContent } from "@/components/analytics/RiskCenterContent";
 import { BillingPeriodToolbar } from "@/components/billing/BillingPeriodToolbar";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { KPICard } from "@/components/ui/KPICard";
@@ -100,7 +101,7 @@ const MANAGING_PARTNER_KPI_HREFS = {
   unbilledTime: "/billing",
   outstandingAR: "/receivables",
   trustFunds: "/accounting/trust",
-  monthlyCollections: "/reports",
+  monthlyCollections: "/dashboard/analytics",
 } as const;
 
 const BILLING_SPECIALIST_QUICK_ACTIONS = [
@@ -133,6 +134,7 @@ function DashboardKpiCard({
   href,
   interactive,
   variant = "default",
+  showViewDetailsLink = true,
 }: {
   title: string;
   value: string;
@@ -142,6 +144,8 @@ function DashboardKpiCard({
   href?: string;
   interactive: boolean;
   variant?: "default" | "success";
+  /** Second "View Details" button under the card — off for Managing Partner declutter. */
+  showViewDetailsLink?: boolean;
 }) {
   const card = (
     <KPICard
@@ -168,12 +172,14 @@ function DashboardKpiCard({
       >
         {card}
       </Link>
-      <Link
-        href={href}
-        className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-gray-200 bg-white text-sm font-semibold text-navy-900 transition-colors hover:bg-gray-50"
-      >
-        View Details
-      </Link>
+      {showViewDetailsLink ? (
+        <Link
+          href={href}
+          className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-gray-200 bg-white text-sm font-semibold text-navy-900 transition-colors hover:bg-gray-50"
+        >
+          View Details
+        </Link>
+      ) : null}
     </div>
   );
 }
@@ -491,6 +497,8 @@ export function DashboardContent() {
           icon={Briefcase}
           href={firmKpiHref("activeMatters")}
           interactive={kpiInteractive}
+          variant="success"
+          showViewDetailsLink={!isManagingPartner}
         />
         <DashboardKpiCard
           title="Unbilled Time"
@@ -499,6 +507,7 @@ export function DashboardContent() {
           icon={Clock}
           href={firmKpiHref("unbilledTime")}
           interactive={kpiInteractive}
+          showViewDetailsLink={!isManagingPartner}
         />
         <DashboardKpiCard
           title="Outstanding A/R"
@@ -507,6 +516,7 @@ export function DashboardContent() {
           icon={DollarSign}
           href={firmKpiHref("outstandingAR")}
           interactive={kpiInteractive}
+          showViewDetailsLink={!isManagingPartner}
         />
         <DashboardKpiCard
           title="Trust Funds Held"
@@ -515,6 +525,7 @@ export function DashboardContent() {
           icon={Landmark}
           href={firmKpiHref("trustFunds")}
           interactive={kpiInteractive}
+          showViewDetailsLink={!isManagingPartner}
         />
         <DashboardKpiCard
           title="Monthly Collections"
@@ -524,6 +535,7 @@ export function DashboardContent() {
           icon={TrendingUp}
           href={firmKpiHref("monthlyCollections")}
           interactive={kpiInteractive}
+          showViewDetailsLink={!isManagingPartner}
         />
         {isBillingSpecialist ? (
           <DashboardKpiCard
@@ -536,6 +548,22 @@ export function DashboardContent() {
           />
         ) : null}
       </div>
+
+      {isManagingPartner ? (
+        <div className="mb-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Risk Center</CardTitle>
+              <CardDescription>
+                Financial risk alerts and exceptions across the firm
+              </CardDescription>
+            </CardHeader>
+            <div className="px-4 pb-4">
+              <RiskCenterContent embedded />
+            </div>
+          </Card>
+        </div>
+      ) : null}
 
       <div className="mb-6 grid gap-6 lg:grid-cols-2">
         <Card>

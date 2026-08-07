@@ -17,10 +17,12 @@ import {
 import { MatterHealthSummary } from "@/components/analytics/MatterHealthSummary";
 import { MonthlyCollectionsChart } from "@/components/analytics/MonthlyCollectionsChart";
 import { MatterProfitabilityTable } from "@/components/analytics/MatterProfitabilityTable";
+import { ReportsContent } from "@/components/analytics/ReportsContent";
 import {
   analyticsGridGap,
   analyticsSectionClass,
 } from "@/components/analytics/analytics-styles";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KPICard } from "@/components/ui/KPICard";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -30,6 +32,8 @@ import { computeExecutiveKpiTrends } from "@/lib/analytics/dashboard-utils";
 import { formatCurrency } from "@/lib/utils/cn";
 
 export function ExecutiveDashboardContent() {
+  const { selectedRole } = useDemoRole();
+  const isManagingPartner = selectedRole === "managing_partner";
   const { data, matterHealthScores, loading, error, refresh } =
     useExecutiveDashboard();
 
@@ -236,6 +240,17 @@ export function ExecutiveDashboardContent() {
           />
         </div>
       </section>
+
+      {isManagingPartner ? (
+        <section className={analyticsSectionClass}>
+          <AnalyticsSectionDivider
+            title="Reports"
+            description="Practice area performance and matter-level profitability"
+            icon={BarChart3}
+          />
+          <ReportsContent embedded />
+        </section>
+      ) : null}
     </AnalyticsPageShell>
   );
 }

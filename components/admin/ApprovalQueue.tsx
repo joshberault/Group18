@@ -28,6 +28,7 @@ import {
 } from "@/lib/admin/calculations";
 import { ADMIN_REFERENCE_DATE } from "@/lib/admin/mock-data";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
+import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { invoiceApprovedBillableTime } from "@/lib/billing/approved-time-billing";
 import {
   getMergedApprovals,
@@ -81,6 +82,8 @@ function typeLabel(type: ApprovalType) {
 }
 
 export function ApprovalQueue() {
+  const { selectedRole } = useDemoRole();
+  const isManagingPartner = selectedRole === "managing_partner";
   const { data, loading, error, refresh } = useAdminData();
   const [approvals, setApprovals] = useState<AdminApproval[]>([]);
 
@@ -659,26 +662,46 @@ export function ApprovalQueue() {
                     </TableCell>
                     <TableCell>{typeLabel(row.type)}</TableCell>
                     <TableCell>
-                      <Link
-                        href={`/admin/employees/${row.employeeId}`}
-                        className="font-medium text-navy-900 underline-offset-2 hover:text-gold-500 hover:underline"
-                      >
-                        {row.submittedBy}
-                      </Link>
+                      {isManagingPartner ? (
+                        <span className="font-medium text-navy-900">
+                          {row.submittedBy}
+                        </span>
+                      ) : (
+                        <Link
+                          href={`/admin/employees/${row.employeeId}`}
+                          className="font-medium text-navy-900 underline-offset-2 hover:text-gold-500 hover:underline"
+                        >
+                          {row.submittedBy}
+                        </Link>
+                      )}
                     </TableCell>
                     <TableCell>
                       {row.matterReference ? (
-                        <Link
-                          href="/admin/assignments"
-                          className="text-navy-900 underline-offset-2 hover:text-gold-500 hover:underline"
-                        >
-                          <div className="font-medium">
-                            {row.matterLabel}
-                          </div>
-                          <div className="text-xs text-muted">
-                            {row.matterReference}
-                          </div>
-                        </Link>
+                        isManagingPartner ? (
+                          <Link
+                            href="/matters"
+                            className="text-navy-900 underline-offset-2 hover:text-gold-500 hover:underline"
+                          >
+                            <div className="font-medium">
+                              {row.matterLabel}
+                            </div>
+                            <div className="text-xs text-muted">
+                              {row.matterReference}
+                            </div>
+                          </Link>
+                        ) : (
+                          <Link
+                            href="/admin/assignments"
+                            className="text-navy-900 underline-offset-2 hover:text-gold-500 hover:underline"
+                          >
+                            <div className="font-medium">
+                              {row.matterLabel}
+                            </div>
+                            <div className="text-xs text-muted">
+                              {row.matterReference}
+                            </div>
+                          </Link>
+                        )
                       ) : (
                         "—"
                       )}

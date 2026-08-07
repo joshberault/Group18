@@ -12,7 +12,12 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useMatterProfitabilityReport } from "@/hooks/useMatterProfitabilityReport";
 
-export function ReportsContent() {
+type Props = {
+  /** Nested under Executive Analytics — skip outer page chrome. */
+  embedded?: boolean;
+};
+
+export function ReportsContent({ embedded = false }: Props) {
   const {
     rows,
     rowCount,
@@ -27,6 +32,9 @@ export function ReportsContent() {
   } = useMatterProfitabilityReport();
 
   if (loading) {
+    if (embedded) {
+      return <LoadingState message="Loading matter profitability report..." />;
+    }
     return (
       <>
         <PageHeader
@@ -39,6 +47,25 @@ export function ReportsContent() {
   }
 
   if (error) {
+    const retry = (
+      <div className="mt-4 flex justify-center">
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-medium text-white hover:bg-navy-800"
+        >
+          Retry
+        </button>
+      </div>
+    );
+    if (embedded) {
+      return (
+        <>
+          <EmptyState title="Unable to load report" description={error} />
+          {retry}
+        </>
+      );
+    }
     return (
       <>
         <PageHeader
@@ -46,15 +73,7 @@ export function ReportsContent() {
           description="Profitability and operational analytics across the firm"
         />
         <EmptyState title="Unable to load report" description={error} />
-        <div className="mt-4 flex justify-center">
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-medium text-white hover:bg-navy-800"
-          >
-            Retry
-          </button>
-        </div>
+        {retry}
       </>
     );
   }
@@ -65,6 +84,7 @@ export function ReportsContent() {
       description="Matter-level profitability and practice area performance from live Supabase data"
       icon={BarChart3}
       bannerText="Full profitability breakdown with practice area insights — revenue, collections, expenses, margins, and matter health scores."
+      embedded={embedded}
     >
       <PracticeAreaBreakdown summaries={practiceAreaSummaries} />
 

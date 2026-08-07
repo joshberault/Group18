@@ -13,7 +13,12 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useRiskAlerts } from "@/hooks/useRiskAlerts";
 
-export function RiskCenterContent() {
+type Props = {
+  /** Nested on Dashboard — skip outer page chrome. */
+  embedded?: boolean;
+};
+
+export function RiskCenterContent({ embedded = false }: Props) {
   const {
     alertCount,
     severityCounts,
@@ -27,6 +32,9 @@ export function RiskCenterContent() {
   } = useRiskAlerts();
 
   if (loading) {
+    if (embedded) {
+      return <LoadingState message="Loading risk alerts from Supabase..." />;
+    }
     return (
       <>
         <PageHeader
@@ -39,6 +47,25 @@ export function RiskCenterContent() {
   }
 
   if (error) {
+    const retry = (
+      <div className="mt-4 flex justify-center">
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-medium text-white hover:bg-navy-800"
+        >
+          Retry
+        </button>
+      </div>
+    );
+    if (embedded) {
+      return (
+        <>
+          <EmptyState title="Unable to load risk alerts" description={error} />
+          {retry}
+        </>
+      );
+    }
     return (
       <>
         <PageHeader
@@ -46,15 +73,7 @@ export function RiskCenterContent() {
           description="Financial risk alerts and exceptions across the firm"
         />
         <EmptyState title="Unable to load risk alerts" description={error} />
-        <div className="mt-4 flex justify-center">
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-medium text-white hover:bg-navy-800"
-          >
-            Retry
-          </button>
-        </div>
+        {retry}
       </>
     );
   }
@@ -65,6 +84,7 @@ export function RiskCenterContent() {
       description={`${alertCount} active alert${alertCount === 1 ? "" : "s"} from invoices, matters, trust, and write-downs`}
       icon={ShieldAlert}
       bannerText="Tabbed severity views with alert action history — track review status, escalations, and resolution timestamps."
+      embedded={embedded}
     >
       <div className={`grid ${analyticsGridGap} sm:grid-cols-3`}>
         <KPICard
