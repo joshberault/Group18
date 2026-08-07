@@ -71,6 +71,7 @@ export function MatterCreationApprovalsPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [approvedMatterId, setApprovedMatterId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -130,6 +131,7 @@ export function MatterCreationApprovalsPanel({
     }
     setMessage(`Approved and created matter for "${selected.title}".`);
     if (result.matterId) {
+      setApprovedMatterId(result.matterId);
       queueEngagementApproval({
         matterId: result.matterId,
         matterTitle: selected.title,
@@ -165,6 +167,11 @@ export function MatterCreationApprovalsPanel({
     <div ref={panelRef} className="space-y-4">
       {message ? (
         <PipelineHandoffBanner stage="matter_created" title={message}>
+          {approvedMatterId ? (
+            <PipelineHandoffLink href={`/matters/${approvedMatterId}`}>
+              Open matter detail
+            </PipelineHandoffLink>
+          ) : null}
           <p>
             Continue to{" "}
             <PipelineHandoffLink href={buildEngagementApprovalsUrl()}>

@@ -18,7 +18,6 @@ import { formatCurrency } from "@/lib/utils/cn";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Drawer } from "@/components/ui/Drawer";
 import { Input } from "@/components/ui/Input";
 import { KPICard } from "@/components/ui/KPICard";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -59,9 +58,6 @@ export function BillingSpecialistMattersView() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [prebillFilter, setPrebillFilter] = useState("all");
-  const [selected, setSelected] = useState<BillingSpecialistMatterRow | null>(
-    null,
-  );
   const [actionNote, setActionNote] = useState<string | null>(null);
 
   const loadRows = useCallback(async (opts?: { silent?: boolean }) => {
@@ -215,7 +211,7 @@ export function BillingSpecialistMattersView() {
             ) : null}
             {!loading &&
               filtered.map((row) => (
-              <TableRow key={row.id} className="cursor-pointer hover:bg-gray-50" onClick={() => setSelected(row)}>
+              <TableRow key={row.id} className="cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/matters/${row.id}`)}>
                 <TableCell>
                   <p className="font-medium">{row.matterName}</p>
                   <p className="text-xs text-muted">{row.matterNumber}</p>
@@ -274,7 +270,7 @@ export function BillingSpecialistMattersView() {
                           ? "col-span-2 w-full justify-center"
                           : "w-full max-w-[14.5rem] justify-center"
                       }
-                      onClick={() => setSelected(row)}
+                      onClick={() => router.push(`/matters/${row.id}`)}
                     >
                       Details
                     </Button>
@@ -286,81 +282,6 @@ export function BillingSpecialistMattersView() {
         </Table>
       </Card>
 
-      <Drawer isOpen={!!selected} onClose={() => setSelected(null)} title={selected?.matterName ?? "Matter"}>
-        {selected ? (
-          <div className="space-y-4 text-sm">
-            <p className="text-muted">{selected.matterNumber} · {selected.client}</p>
-            <div className="grid grid-cols-2 gap-2">
-              <div><span className="text-muted">Billing attorney</span><p className="font-medium">{selected.billingAttorney}</p></div>
-              <div><span className="text-muted">Cycle</span><p className="font-medium">{selected.billingCycle}</p></div>
-              <div><span className="text-muted">Rate status</span><p className="font-medium">{selected.rateStatus}</p></div>
-              <div><span className="text-muted">Last invoice</span><p className="font-medium">{selected.lastInvoice}</p></div>
-              <div><span className="text-muted">Invoices on file</span><p className="font-medium">{selected.invoiceCount}</p></div>
-              {selected.hourlyRate != null ? (
-                <div><span className="text-muted">Hourly rate</span><p className="font-medium">{formatCurrency(selected.hourlyRate)}</p></div>
-              ) : null}
-              {selected.retainerBalance != null ? (
-                <div><span className="text-muted">Retainer balance</span><p className="font-medium">{formatCurrency(selected.retainerBalance)}</p></div>
-              ) : null}
-            </div>
-            {selected.unbilledTime + selected.unbilledExpenses <= 0 ? (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-                No new approved unbilled time or expenses for this matter. You can still create a
-                manual invoice; already-billed lines will not reappear as selectable WIP.
-              </p>
-            ) : null}
-            <div
-              className={
-                selected.hasInvoices
-                  ? "grid grid-cols-2 gap-2 sm:grid-cols-3"
-                  : "flex flex-col items-center gap-2 sm:flex-row sm:justify-center"
-              }
-            >
-              <Button
-                size="sm"
-                type="button"
-                className={
-                  selected.hasInvoices
-                    ? "w-full justify-center whitespace-nowrap"
-                    : "min-w-[7.5rem] justify-center whitespace-nowrap sm:w-auto"
-                }
-                onClick={() => goCreateInvoice(selected)}
-              >
-                Create Invoice
-              </Button>
-              {selected.hasInvoices ? (
-                <Link href={viewInvoicesPath(selected)} className="block min-w-0">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    type="button"
-                    className="w-full justify-center whitespace-nowrap"
-                  >
-                    View Invoice
-                  </Button>
-                </Link>
-              ) : null}
-              <Button
-                size="sm"
-                variant="secondary"
-                type="button"
-                className={
-                  selected.hasInvoices
-                    ? "w-full justify-center whitespace-nowrap"
-                    : "min-w-[7.5rem] justify-center whitespace-nowrap sm:w-auto"
-                }
-                onClick={() =>
-                  router.push(
-                    `/billing?matter=${encodeURIComponent(selected.matterNumber)}`,
-                  )
-                }
-              >
-                Open Billing
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </Drawer>
     </div>
   );
 }

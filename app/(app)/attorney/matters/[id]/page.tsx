@@ -1,15 +1,11 @@
-import { Suspense } from "react";
-import { MatterDetailClient } from "./MatterDetailClient";
+import { redirect } from "next/navigation";
 
-export default async function MatterDetailPage({
+/** Attorney Hub detail route — unified with shared matter detail screen. */
+export default async function AttorneyMatterDetailRedirect({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return (
-    <Suspense fallback={null}>
-      <MatterDetailClient matterId={id} />
-    </Suspense>
-  );
+  redirect(`/matters/${id}`);
 }
