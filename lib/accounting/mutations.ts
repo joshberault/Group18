@@ -132,12 +132,122 @@ export async function decideWriteOff(input: {
   return { ok: true };
 }
 
+type JournalLineInput = {
+  accountCode: string;
+  accountName: string;
+  description: string;
+  debit: number;
+  credit: number;
+};
+
+export async function createJournalEntry(input: {
+  entryDate: string;
+  description: string;
+  createdBy: string;
+  lines: JournalLineInput[];
+  sourceType?: string;
+  sourceId?: string;
+  postImmediately?: boolean;
+  actor: Actor;
+}): Promise<{ ok: boolean; error?: string; entryId?: string; entryNumber?: string }> {
+  const supabase = getAccountingSupabase();
+  if (!supabase) return { ok: false, error: "Supabase unavailable" };
+
+  const totalDebit = input.lines.reduce((sum, line) => sum + line.debit, 0);
+  const totalCredit = input.lines.reduce((sum, line) => sum + line.credit, 0);
+  if (totalDebit <= 0 || totalDebit !== totalCredit) {
+    return { ok: false, error: "Journal entry must balance with debits greater than zero." };
+  }
+
+  const { data: latest } = await supabase
+    .from("journal_entries")
+    .select("entry_number")
+    .order("entry_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const latestNumber = String(latest?.entry_number ?? "JE-2026-0842");
+  const suffix = Number(latestNumber.replace(/\D/g, "")) || 842;
+  const entryNumber = `JE-2026-${String(suffix + 1).padStart(4, "0")}`;
+  const postNow = input.postImmediately ?? false;
+
+  const { data: header, error: headerError } = await supabase
+    .from("journal_entries")
+    .insert({
+      entry_number: entryNumber,
+      entry_date: input.entryDate,
+      description: input.description.trim(),
+      status: postNow ? "Posted" : "Draft",
+      total_debit: totalDebit,
+      total_credit: totalCredit,
+      created_by: input.createdBy,
+      posted_at: postNow ? new Date().toISOString() : null,
+      source_type: input.sourceType ?? null,
+      source_id: input.sourceId ?? null,
+    })
+    .select("id, entry_number")
+    .single();
+
+  if (headerError || !header) {
+    return { ok: false, error: headerError?.message ?? "Failed to create journal entry." };
+  }
+
+  const lineRows = input.lines.map((line, index) => ({
+    journal_entry_id: header.id,
+    account_code: line.accountCode,
+    account_name: line.accountName,
+    description: line.description.trim() || input.description.trim(),
+    debit: line.debit,
+    credit: line.credit,
+    sort_order: index + 1,
+  }));
+
+  const { error: lineError } = await supabase.from("journal_entry_lines").insert(lineRows);
+  if (lineError) {
+    await supabase.from("journal_entries").delete().eq("id", header.id);
+    return { ok: false, error: lineError.message };
+  }
+
+  await logAuditEvent({
+    actorName: input.actor.name,
+    actorRole: input.actor.role,
+    module: "General Ledger",
+    action: postNow ? "Create and Post Journal Entry" : "Create Journal Entry",
+    recordType: "journal_entry",
+    recordId: header.id,
+    description: `${postNow ? "Posted" : "Drafted"} ${entryNumber} — ${input.description.trim()}`,
+    afterValue: String(totalDebit),
+    riskLevel: postNow ? "Medium" : "Low",
+  });
+
+  return {
+    ok: true,
+    entryId: header.id,
+    entryNumber: header.entry_number as string,
+  };
+}
+
 export async function postJournalEntry(input: {
   entryId: string;
   actor: Actor;
 }): Promise<{ ok: boolean; error?: string }> {
   const supabase = getAccountingSupabase();
   if (!supabase) return { ok: false, error: "Supabase unavailable" };
+
+  const { data: existing, error: readError } = await supabase
+    .from("journal_entries")
+    .select("status, total_debit, total_credit")
+    .eq("id", input.entryId)
+    .single();
+  if (readError || !existing) {
+    return { ok: false, error: readError?.message ?? "Journal entry not found." };
+  }
+  if (existing.status === "Posted") {
+    return { ok: false, error: "Journal entry is already posted." };
+  }
+  if (asNumber(existing.total_debit) !== asNumber(existing.total_credit)) {
+    return { ok: false, error: "Cannot post an unbalanced journal entry." };
+  }
 
   const { data: entry, error } = await supabase
     .from("journal_entries")

@@ -104,7 +104,7 @@ export async function fetchRevenueLedgerWorkspace(): Promise<
     period: (r.period_label as string) ?? "",
   }));
 
-  const trialBalance: TrialBalanceRow[] = (coaRes.data ?? []).map((a) => ({
+  const trialBalanceSeed: TrialBalanceRow[] = (coaRes.data ?? []).map((a) => ({
     id: a.id as string,
     accountCode: a.account_code as string,
     accountName: a.account_name as string,
@@ -112,6 +112,10 @@ export async function fetchRevenueLedgerWorkspace(): Promise<
     debit: 0,
     credit: 0,
   }));
+
+  const postedEntries = journalEntries.filter((entry) => entry.status === "Posted");
+  const glLines = buildGeneralLedgerLines(postedEntries);
+  const trialBalance = applyTrialBalanceTotals(trialBalanceSeed, postedEntries);
 
   const closeTasks: CloseTask[] = (tasksRes.data ?? []).map((t) => ({
     id: t.id as string,
@@ -151,7 +155,7 @@ export async function fetchRevenueLedgerWorkspace(): Promise<
       kpis,
       journalEntries,
       revenueItems,
-      glLines: [],
+      glLines,
       trialBalance,
       closeTasks,
       chartOfAccounts,
@@ -159,4 +163,60 @@ export async function fetchRevenueLedgerWorkspace(): Promise<
     error: null,
     empty: journalEntries.length === 0 && closeTasks.length === 0,
   };
+}
+
+function buildGeneralLedgerLines(postedEntries: JournalEntry[]): GlLine[] {
+  const chronological = [...postedEntries].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) || a.entryNumber.localeCompare(b.entryNumber),
+  );
+  const balanceByAccount = new Map<string, number>();
+  const lines: GlLine[] = [];
+
+  for (const entry of chronological) {
+    for (const line of entry.lines) {
+      const previous = balanceByAccount.get(line.accountCode) ?? 0;
+      const next = previous + line.debit - line.credit;
+      balanceByAccount.set(line.accountCode, next);
+      lines.push({
+        id: `${entry.id}-${line.id}`,
+        date: entry.date,
+        entryNumber: entry.entryNumber,
+        accountCode: line.accountCode,
+        accountName: line.accountName,
+        description: line.description,
+        debit: line.debit,
+        credit: line.credit,
+        balance: next,
+      });
+    }
+  }
+
+  return lines.reverse();
+}
+
+function applyTrialBalanceTotals(
+  rows: TrialBalanceRow[],
+  postedEntries: JournalEntry[],
+): TrialBalanceRow[] {
+  const totals = new Map<string, { debit: number; credit: number }>();
+
+  for (const entry of postedEntries) {
+    for (const line of entry.lines) {
+      const current = totals.get(line.accountCode) ?? { debit: 0, credit: 0 };
+      current.debit += line.debit;
+      current.credit += line.credit;
+      totals.set(line.accountCode, current);
+    }
+  }
+
+  return rows.map((row) => {
+    const accountTotals = totals.get(row.accountCode);
+    if (!accountTotals) return row;
+    return {
+      ...row,
+      debit: accountTotals.debit,
+      credit: accountTotals.credit,
+    };
+  });
 }

@@ -29,6 +29,7 @@ import {
 import { Toast } from "@/components/ui/Toast";
 import { exportToCsv } from "@/lib/accounting-manager/export-csv";
 import {
+  createJournalEntry,
   fetchRevenueLedgerWorkspace,
   postJournalEntry,
   useSupabaseQuery,
@@ -36,7 +37,6 @@ import {
 import type {
   CloseTask,
   JournalEntry,
-  JournalEntryLine,
 } from "@/lib/mock-data/accounting-manager/gl";
 import { useDemoRole } from "@/components/layout/DemoRoleProvider";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -139,7 +139,7 @@ export function RevenueLedgerView() {
     const debits = trialBalance.reduce((s, r) => s + r.debit, 0);
     const credits = trialBalance.reduce((s, r) => s + r.credit, 0);
     return { debits, credits, balanced: debits === credits };
-  }, []);
+  }, [trialBalance]);
 
   const closeProgress = useMemo(() => {
     const complete = tasks.filter((t) => t.status === "Complete").length;
@@ -162,35 +162,35 @@ export function RevenueLedgerView() {
   const submitJournalEntry = () => {
     if (!isBalanced || !jeDescription.trim()) return;
 
-    const lines: JournalEntryLine[] = jeLines.map((l, i) => {
-      const account = chartOfAccounts.find((a) => a.code === l.accountCode)!;
-      return {
-        id: `jel-new-${i}`,
-        accountCode: l.accountCode,
-        accountName: account.name,
-        description: l.description || jeDescription,
-        debit: parseFloat(l.debit) || 0,
-        credit: parseFloat(l.credit) || 0,
-      };
-    });
+    void (async () => {
+      const result = await createJournalEntry({
+        entryDate: jeDate,
+        description: jeDescription.trim(),
+        createdBy: "Alex Morgan",
+        lines: jeLines.map((line) => {
+          const account = chartOfAccounts.find((a) => a.code === line.accountCode);
+          return {
+            accountCode: line.accountCode,
+            accountName: account?.name ?? line.accountCode,
+            description: line.description || jeDescription.trim(),
+            debit: parseFloat(line.debit) || 0,
+            credit: parseFloat(line.credit) || 0,
+          };
+        }),
+        actor: { name: "Alex Morgan", role: selectedRole },
+      });
 
-    const newEntry: JournalEntry = {
-      id: `je-new-${Date.now()}`,
-      entryNumber: `JE-2026-${String(entries.length + 840).padStart(4, "0")}`,
-      date: jeDate,
-      description: jeDescription,
-      status: "Draft",
-      totalDebit: totalDebits,
-      totalCredit: totalCredits,
-      createdBy: "Alex Morgan",
-      lines,
-    };
+      if (!result.ok) {
+        setToast(result.error ?? "Failed to save journal entry");
+        return;
+      }
 
-    setEntries((prev) => [newEntry, ...prev]);
-    setShowJeForm(false);
-    setJeDescription("");
-    setJeLines([emptyLine(defaultAccountCode), emptyLine(defaultAccountCode)]);
-    setToast("Journal entry created as draft");
+      setShowJeForm(false);
+      setJeDescription("");
+      setJeLines([emptyLine(defaultAccountCode), emptyLine(defaultAccountCode)]);
+      setToast(`${result.entryNumber} saved as draft`);
+      await refresh();
+    })();
   };
 
   const postEntry = (entry: JournalEntry) => {
